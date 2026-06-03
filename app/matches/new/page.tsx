@@ -194,7 +194,7 @@ await Promise.all(
   }
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
+    <main className="mx-auto max-w-6xl w-full p-6">
       <h1 className="mb-8 text-center text-3xl font-bold">Add Match History</h1>
 
       <div className="mb-6 rounded border p-4">
