@@ -21,6 +21,20 @@ export default function Home() {
           </Button>
         </Link>
       </div>
+      <div className="p-6">
+        <Link href="/matches">
+          <Button className="w-full" size="lg">
+            View Match History
+          </Button>
+        </Link>
+      </div>
+      <div className="p-6">
+        <Link href="/leaderboard">
+          <Button className="w-full" size="lg">
+            MMR Leaderboard
+          </Button>
+        </Link>
+      </div>
     </main>
   );
 }
