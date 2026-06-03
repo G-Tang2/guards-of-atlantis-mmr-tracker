@@ -10,7 +10,7 @@ import { calculateMMR } from "@/lib/mmr";
 type Player = {
   id: string;
   name: string;
-  elo: number;
+  mmr: number;
 };
 
 type Team = "atlantis" | "titans";
@@ -145,15 +145,15 @@ const { data: match, error } = await supabaseClient
       match_id: match.id,
       player_id: p.id,
       team: "atlantis",
-      elo_before: atlantis.find((x) => x.id === p.id)?.elo,
-      elo_after: p.newElo,
+      mmr_before: atlantis.find((x) => x.id === p.id)?.mmr,
+      mmr_after: p.newmmr,
     })),
     ...result.titans.map((p) => ({
       match_id: match.id,
       player_id: p.id,
       team: "titans",
-      elo_before: titans.find((x) => x.id === p.id)?.elo,
-      elo_after: p.newElo,
+      mmr_before: titans.find((x) => x.id === p.id)?.mmr,
+      mmr_after: p.newmmr,
     })),
   ];
 
@@ -163,20 +163,20 @@ const { data: match, error } = await supabaseClient
 
   if (mpError) throw mpError;
 
-  // 3. update player Elo in DB
+  // 3. update player mmr in DB
 const updates = [...result.atlantis, ...result.titans];
-console.log("Elo updates to apply:", updates);
+console.log("mmr updates to apply:", updates);
 
 await Promise.all(
   updates.map((p) =>
     supabaseClient
       .from("players")
-      .update({ elo: Math.round(p.newElo) })
+      .update({ mmr: Math.round(p.newmmr) })
       .eq("id", p.id)
   )
 );
 
-  console.log("Match saved with Elo updates!");
+  console.log("Match saved with mmr updates!");
 };
 
   // ---------------------------

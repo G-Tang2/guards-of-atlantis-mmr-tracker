@@ -6,7 +6,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 type Player = {
   id: string;
   name: string;
-  elo: number;
+  mmr: number;
 };
 
 type Match = {
@@ -22,8 +22,8 @@ type Match = {
     team: "atlantis" | "titans";
     players: Player;
 
-    elo_before: number;
-    elo_after: number;
+    mmr_before: number;
+    mmr_after: number;
   }[];
 };
 
@@ -43,11 +43,11 @@ const formatDate = (dateString: string) => {
 const avg = (arr: number[]) =>
   arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
-const teamAvgElo = (team: Match["match_players"]) =>
-  avg(team.map((p) => p.players.elo));
+const teamAvgmmr = (team: Match["match_players"]) =>
+  avg(team.map((p) => p.players.mmr));
 
 const teamChange = (team: Match["match_players"]) =>
-  team.reduce((sum, p) => sum + (p.elo_after - p.elo_before), 0);
+  team.reduce((sum, p) => sum + (p.mmr_after - p.mmr_before), 0);
 
 // ---------------------------
 // PAGE
@@ -74,12 +74,12 @@ export default function MatchHistoryPage() {
           match_players (
             player_id,
             team,
-            elo_before,
-            elo_after,
+            mmr_before,
+            mmr_after,
             players (
               id,
               name,
-              elo
+              mmr
             )
           )
         `,
@@ -88,7 +88,7 @@ export default function MatchHistoryPage() {
 
       const { data: playersData } = await supabaseClient
         .from("players")
-        .select("id, name, elo");
+        .select("id, name, mmr");
 
       setMatches(matchesData ?? []);
       setPlayers(playersData ?? []);
@@ -139,7 +139,7 @@ export default function MatchHistoryPage() {
       wins,
       losses,
       winRate,
-      elo: player?.elo ?? 1000,
+      mmr: player?.mmr ?? 1000,
       name: player?.name ?? "Unknown",
     };
   }, [filteredMatches, filterPlayerId, players]);
@@ -181,7 +181,7 @@ export default function MatchHistoryPage() {
 
           <div className="flex flex-wrap gap-6 text-sm">
             <div>
-              <span className="font-medium">Elo:</span> {playerStats.elo}
+              <span className="font-medium">mmr:</span> {playerStats.mmr}
             </div>
 
             <div>Wins: {playerStats.wins}</div>
@@ -245,7 +245,7 @@ export default function MatchHistoryPage() {
                   <h3 className="font-semibold text-blue-600 mb-2">Atlantis</h3>
 
                   <div className="text-xs text-muted-foreground mb-2">
-                    Avg Elo: {atlantisAvg.toFixed(0)} <br />
+                    Avg mmr: {atlantisAvg.toFixed(0)} <br />
                     <span
                       className={
                         atlantisChange >= 0 ? "text-green-600" : "text-red-600"
@@ -262,15 +262,15 @@ export default function MatchHistoryPage() {
                           <span>{p.players.name}</span>
 
                           <span className="text-xs text-muted-foreground">
-                            {p.elo_before} → {p.elo_after} (
+                            {p.mmr_before} → {p.mmr_after} (
                             <span
                               className={
-                                p.elo_after - p.elo_before >= 0
+                                p.mmr_after - p.mmr_before >= 0
                                   ? "text-green-600"
                                   : "text-red-600"
                               }
                             >
-                              {p.elo_after - p.elo_before}
+                              {p.mmr_after - p.mmr_before}
                             </span>
                             )
                           </span>
@@ -285,7 +285,7 @@ export default function MatchHistoryPage() {
                   <h3 className="font-semibold text-red-600 mb-2">Titans</h3>
 
                   <div className="text-xs text-muted-foreground mb-2">
-                    Avg Elo: {titansAvg.toFixed(0)} <br />
+                    Avg mmr: {titansAvg.toFixed(0)} <br />
                     <span
                       className={
                         titansChange >= 0 ? "text-green-600" : "text-red-600"
@@ -302,15 +302,15 @@ export default function MatchHistoryPage() {
                           <span>{p.players.name}</span>
 
                           <span className="text-xs text-muted-foreground">
-                            {p.elo_before} → {p.elo_after} (
+                            {p.mmr_before} → {p.mmr_after} (
                             <span
                               className={
-                                p.elo_after - p.elo_before >= 0
+                                p.mmr_after - p.mmr_before >= 0
                                   ? "text-green-600"
                                   : "text-red-600"
                               }
                             >
-                              {p.elo_after - p.elo_before}
+                              {p.mmr_after - p.mmr_before}
                             </span>
                             )
                           </span>

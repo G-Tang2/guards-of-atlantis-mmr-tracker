@@ -6,7 +6,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 type Player = {
   id: string;
   name: string;
-  elo: number;
+  mmr: number;
 };
 
 type Match = {
@@ -21,28 +21,28 @@ type Match = {
 type PlayerStats = {
   id: string;
   name: string;
-  elo: number;
+  mmr: number;
   wins: number;
   losses: number;
   matches: number;
   winRate: number;
 };
 
-type SortKey = "rank" | "name" | "elo" | "winRate" | "wl" | "matches";
+type SortKey = "rank" | "name" | "mmr" | "winRate" | "wl" | "matches";
 
 export default function LeaderboardPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [sortKey, setSortKey] = useState<SortKey>("elo");
+  const [sortKey, setSortKey] = useState<SortKey>("mmr");
   const [sortAsc, setSortAsc] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       const { data: playersData } = await supabaseClient
         .from("players")
-        .select("id, name, elo");
+        .select("id, name, mmr");
 
       const { data: matchesData } = await supabaseClient.from("matches").select(
         `
@@ -88,7 +88,7 @@ export default function LeaderboardPage() {
       return {
         id: player.id,
         name: player.name,
-        elo: player.elo,
+        mmr: player.mmr,
         wins,
         losses,
         matches: matchesPlayed,
@@ -98,21 +98,21 @@ export default function LeaderboardPage() {
   }, [players, matches]);
 
   // ---------------------------
-  // STABLE RANK (BASED ON ELO ONLY)
+  // STABLE RANK (BASED ON mmr ONLY)
   // ---------------------------
-  const rankedByElo = useMemo(() => {
-    return [...leaderboard].sort((a, b) => b.elo - a.elo);
+  const rankedBymmr = useMemo(() => {
+    return [...leaderboard].sort((a, b) => b.mmr - a.mmr);
   }, [leaderboard]);
 
   const rankMap = useMemo(() => {
     const map = new Map<string, number>();
 
-    rankedByElo.forEach((p, index) => {
+    rankedBymmr.forEach((p, index) => {
       map.set(p.id, index + 1);
     });
 
     return map;
-  }, [rankedByElo]);
+  }, [rankedBymmr]);
 
   // ---------------------------
   // SORTING
@@ -140,9 +140,9 @@ export default function LeaderboardPage() {
       let valB = 0;
 
       switch (sortKey) {
-        case "elo":
-          valA = a.elo;
-          valB = b.elo;
+        case "mmr":
+          valA = a.mmr;
+          valB = b.mmr;
           break;
 
         case "winRate":
@@ -208,9 +208,9 @@ export default function LeaderboardPage() {
 
               <th
                 className="p-2 text-left cursor-pointer"
-                onClick={() => handleSort("elo")}
+                onClick={() => handleSort("mmr")}
               >
-                Elo {sortKey === "elo" ? (sortAsc ? "▲" : "▼") : ""}
+                MMR {sortKey === "mmr" ? (sortAsc ? "▲" : "▼") : ""}
               </th>
 
               <th
@@ -269,7 +269,7 @@ export default function LeaderboardPage() {
 
                   <td className="p-2 font-medium">{p.name}</td>
 
-                  <td className="p-2">{p.elo}</td>
+                  <td className="p-2">{p.mmr}</td>
 
                   <td className="p-2">{p.winRate.toFixed(1)}%</td>
 

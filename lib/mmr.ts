@@ -1,19 +1,19 @@
 export type Player = {
   id: string;
   name: string;
-  elo: number;
+  mmr: number;
 };
 
 const K = 40;
 
-// Expected probability (Elo formula)
+// Expected probability (mmr formula)
 const expectedWin = (a: number, b: number) => {
   return 1 / (1 + Math.pow(10, (b - a) / 400));
 };
 
-// Team average Elo
+// Team average mmr
 const teamAvg = (team: Player[]) =>
-  team.reduce((sum, p) => sum + p.elo, 0) / team.length;
+  team.reduce((sum, p) => sum + p.mmr, 0) / team.length;
 
 export const calculateMMR = (
   atlantis: Player[],
@@ -29,7 +29,7 @@ export const calculateMMR = (
   const scoreA = winner === "atlantis" ? 1 : 0;
   const scoreB = 1 - scoreA;
 
-  // Team-level Elo change (same for everyone)
+  // Team-level mmr change (same for everyone)
   const atlantisDelta = K * (scoreA - expectedA);
   const titansDelta = K * (scoreB - expectedB);
 
@@ -38,8 +38,8 @@ export const calculateMMR = (
 
     return team.map((p) => ({
       ...p,
-      eloChange: roundedDelta,
-      newElo: p.elo + roundedDelta,
+      mmrChange: roundedDelta,
+      newmmr: p.mmr + roundedDelta,
     }));
   };
 

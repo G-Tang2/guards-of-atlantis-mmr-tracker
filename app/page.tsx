@@ -9,7 +9,7 @@ export default function Home() {
       {/* Center Title */}
       <div className="flex flex-1 items-center justify-center">
         <h1 className="text-center text-4xl font-bold md:text-6xl">
-          Guards of Atlantis 2 Elo Tracker
+          Guards of Atlantis 2 MMR Tracker
         </h1>
       </div>
 

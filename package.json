@@ -1,5 +1,5 @@
 {
-  "name": "guards-of-atlantis-elo-tracker",
+  "name": "guards-of-atlantis-mmr-tracker",
   "version": "0.1.0",
   "private": true,
   "scripts": {
