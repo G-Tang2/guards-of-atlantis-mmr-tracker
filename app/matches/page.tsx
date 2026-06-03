@@ -9,68 +9,51 @@ type Player = {
   mmr: number;
 };
 
+type Team = "atlantis" | "titans";
+
+type MatchPlayer = {
+  player_id: string;
+  team: Team;
+  players: Player;
+  mmr_before: number;
+  mmr_after: number;
+};
+
 type Match = {
   id: string;
-  winner: "atlantis" | "titans";
+  winner: Team;
   played_at: string;
   atlantis_avg_mmr: number;
   titans_avg_mmr: number;
   atlantis_mmr_change: number;
   titans_mmr_change: number;
-  match_players: {
-    player_id: string;
-    team: "atlantis" | "titans";
-    players: Player;
-
-    mmr_before: number;
-    mmr_after: number;
-  }[];
+  match_players: MatchPlayer[];
 };
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
-
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = String(date.getFullYear()).slice(-2);
-
   return `${day}/${month}/${year}`;
 };
 
-// ---------------------------
-// HELPERS
-// ---------------------------
-const avg = (arr: number[]) =>
-  arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-
-const teamAvgmmr = (team: Match["match_players"]) =>
-  avg(team.map((p) => p.players.mmr));
-
-const teamChange = (team: Match["match_players"]) =>
-  team.reduce((sum, p) => sum + (p.mmr_after - p.mmr_before), 0);
-
-// ---------------------------
-// PAGE
-// ---------------------------
 export default function MatchHistoryPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [filterPlayerId, setFilterPlayerId] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
-      const { data: matchesData } = await supabaseClient
+      const { data: matchesData, error: matchesError } = await supabaseClient
         .from("matches")
-        .select(
-          `
+        .select(`
           id,
           winner,
           played_at,
           atlantis_avg_mmr,
           titans_avg_mmr,
-          expected_atlantis_win,
           match_players (
             player_id,
             team,
@@ -82,15 +65,61 @@ export default function MatchHistoryPage() {
               mmr
             )
           )
-        `,
-        )
+        `)
         .order("played_at", { ascending: false });
 
-      const { data: playersData } = await supabaseClient
+      const { data: playersData, error: playersError } = await supabaseClient
         .from("players")
         .select("id, name, mmr");
 
-      setMatches(matchesData ?? []);
+      if (matchesError || playersError) {
+        console.error({ matchesError, playersError });
+        setLoading(false);
+        return;
+      }
+
+      const normalizedMatches: Match[] = (matchesData ?? []).map((match) => {
+        const normalizedMatchPlayers: MatchPlayer[] = (match.match_players ?? [])
+          .map((mp) => {
+            const player = Array.isArray(mp.players) ? mp.players[0] : mp.players;
+
+            if (!player) return null;
+
+            return {
+              player_id: mp.player_id,
+              team: mp.team as Team,
+              mmr_before: mp.mmr_before,
+              mmr_after: mp.mmr_after,
+              players: {
+                id: player.id,
+                name: player.name,
+                mmr: player.mmr,
+              },
+            };
+          })
+          .filter((mp): mp is MatchPlayer => mp !== null);
+
+        const atlantis_mmr_change = normalizedMatchPlayers
+          .filter((p) => p.team === "atlantis")
+          .reduce((sum, p) => sum + (p.mmr_after - p.mmr_before), 0);
+
+        const titans_mmr_change = normalizedMatchPlayers
+          .filter((p) => p.team === "titans")
+          .reduce((sum, p) => sum + (p.mmr_after - p.mmr_before), 0);
+
+        return {
+          id: match.id,
+          winner: match.winner as Team,
+          played_at: match.played_at,
+          atlantis_avg_mmr: match.atlantis_avg_mmr,
+          titans_avg_mmr: match.titans_avg_mmr,
+          atlantis_mmr_change,
+          titans_mmr_change,
+          match_players: normalizedMatchPlayers,
+        };
+      });
+
+      setMatches(normalizedMatches);
       setPlayers(playersData ?? []);
       setLoading(false);
     };
@@ -98,9 +127,6 @@ export default function MatchHistoryPage() {
     loadData();
   }, []);
 
-  // ---------------------------
-  // FILTER MATCHES
-  // ---------------------------
   const filteredMatches = useMemo(() => {
     if (!filterPlayerId) return matches;
 
@@ -109,9 +135,6 @@ export default function MatchHistoryPage() {
     );
   }, [matches, filterPlayerId]);
 
-  // ---------------------------
-  // PLAYER STATS
-  // ---------------------------
   const playerStats = useMemo(() => {
     if (!filterPlayerId) return null;
 
@@ -130,9 +153,7 @@ export default function MatchHistoryPage() {
     });
 
     const total = wins + losses;
-
     const winRate = total === 0 ? 0 : (wins / total) * 100;
-
     const player = players.find((p) => p.id === filterPlayerId);
 
     return {
@@ -153,10 +174,9 @@ export default function MatchHistoryPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl w-80">
+    <main className="mx-auto w-80 max-w-5xl">
       <h1 className="mb-6 text-center text-3xl font-bold">Match History</h1>
 
-      {/* FILTER */}
       <div className="mb-6">
         <select
           className="w-full rounded border p-2"
@@ -172,53 +192,35 @@ export default function MatchHistoryPage() {
         </select>
       </div>
 
-      {/* STATS PANEL */}
       {playerStats && (
         <div className="mb-6 rounded border p-4">
-          <h2 className="mb-2 text-lg font-semibold">
-            {playerStats.name} Stats
-          </h2>
+          <h2 className="mb-2 text-lg font-semibold">{playerStats.name} Stats</h2>
 
           <div className="flex flex-wrap gap-6 text-sm">
             <div>
-              <span className="font-medium">mmr:</span> {playerStats.mmr}
+              <span className="font-medium">MMR:</span> {playerStats.mmr}
             </div>
-
             <div>Wins: {playerStats.wins}</div>
             <div>Losses: {playerStats.losses}</div>
-
             <div>
               Win Rate:{" "}
-              <span className="font-bold">
-                {playerStats.winRate.toFixed(1)}%
-              </span>
+              <span className="font-bold">{playerStats.winRate.toFixed(1)}%</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* MATCH LIST */}
       <div className="space-y-6">
         {filteredMatches.length === 0 && (
           <p className="text-center text-muted-foreground">No matches found</p>
         )}
 
         {filteredMatches.map((match) => {
-          const atlantis = match.match_players.filter(
-            (p) => p.team === "atlantis",
-          );
-
+          const atlantis = match.match_players.filter((p) => p.team === "atlantis");
           const titans = match.match_players.filter((p) => p.team === "titans");
-
-          const atlantisAvg = match.atlantis_avg_mmr;
-          const titansAvg = match.titans_avg_mmr;
-
-          const atlantisChange = match.atlantis_mmr_change;
-          const titansChange = match.titans_mmr_change;
 
           return (
             <div key={match.id} className="rounded border p-4 shadow-sm">
-              {/* HEADER */}
               <div className="mb-3 flex justify-between">
                 <span className="text-xs text-muted-foreground">
                   {formatDate(match.played_at)}
@@ -228,9 +230,7 @@ export default function MatchHistoryPage() {
                   Winner:{" "}
                   <span
                     className={
-                      match.winner === "atlantis"
-                        ? "text-blue-600"
-                        : "text-red-600"
+                      match.winner === "atlantis" ? "text-blue-600" : "text-red-600"
                     }
                   >
                     {match.winner}
@@ -238,24 +238,15 @@ export default function MatchHistoryPage() {
                 </span>
               </div>
 
-              {/* TEAMS */}
               <div className="grid gap-4 md:grid-cols-2">
-                {/* ATLANTIS */}
                 <div className="rounded border p-3">
-                  <h3 className="font-semibold text-blue-600 mb-2">Atlantis</h3>
+                  <h3 className="mb-2 font-semibold text-blue-600">Atlantis</h3>
 
-                  <div className="text-xs text-muted-foreground mb-2">
-                    Avg mmr: {atlantisAvg.toFixed(0)} <br />
-                    <span
-                      className={
-                        atlantisChange >= 0 ? "text-green-600" : "text-red-600"
-                      }
-                    >
-                      {atlantisChange}
-                    </span>
+                  <div className="mb-2 text-xs text-muted-foreground">
+                    Avg MMR: {match.atlantis_avg_mmr.toFixed(0)} <br />
                   </div>
 
-                  <ul className="text-sm space-y-1">
+                  <ul className="space-y-1 text-sm">
                     {atlantis.map((p) => (
                       <li key={p.player_id}>
                         <div className="flex justify-between">
@@ -280,22 +271,14 @@ export default function MatchHistoryPage() {
                   </ul>
                 </div>
 
-                {/* TITANS */}
                 <div className="rounded border p-3">
-                  <h3 className="font-semibold text-red-600 mb-2">Titans</h3>
+                  <h3 className="mb-2 font-semibold text-red-600">Titans</h3>
 
-                  <div className="text-xs text-muted-foreground mb-2">
-                    Avg mmr: {titansAvg.toFixed(0)} <br />
-                    <span
-                      className={
-                        titansChange >= 0 ? "text-green-600" : "text-red-600"
-                      }
-                    >
-                      {titansChange}
-                    </span>
+                  <div className="mb-2 text-xs text-muted-foreground">
+                    Avg MMR: {match.titans_avg_mmr.toFixed(0)} <br />
                   </div>
 
-                  <ul className="text-sm space-y-1">
+                  <ul className="space-y-1 text-sm">
                     {titans.map((p) => (
                       <li key={p.player_id}>
                         <div className="flex justify-between">
