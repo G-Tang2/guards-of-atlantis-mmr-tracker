@@ -48,12 +48,15 @@ export default function MatchHistoryPage() {
     const loadData = async () => {
       const { data: matchesData, error: matchesError } = await supabaseClient
         .from("matches")
-        .select(`
+        .select(
+          `
           id,
           winner,
           created_at,
           atlantis_avg_mmr,
           titans_avg_mmr,
+          atlantis_mmr_change,
+          titans_mmr_change,
           match_players (
             player_id,
             team,
@@ -65,7 +68,8 @@ export default function MatchHistoryPage() {
               mmr
             )
           )
-        `)
+        `,
+        )
         .order("created_at", { ascending: false });
 
       const { data: playersData, error: playersError } = await supabaseClient
@@ -79,9 +83,13 @@ export default function MatchHistoryPage() {
       }
 
       const normalizedMatches: Match[] = (matchesData ?? []).map((match) => {
-        const normalizedMatchPlayers: MatchPlayer[] = (match.match_players ?? [])
+        const normalizedMatchPlayers: MatchPlayer[] = (
+          match.match_players ?? []
+        )
           .map((mp) => {
-            const player = Array.isArray(mp.players) ? mp.players[0] : mp.players;
+            const player = Array.isArray(mp.players)
+              ? mp.players[0]
+              : mp.players;
             if (!player) return null;
             return {
               player_id: mp.player_id,
@@ -93,22 +101,14 @@ export default function MatchHistoryPage() {
           })
           .filter((mp): mp is MatchPlayer => mp !== null);
 
-        const atlantis_mmr_change = normalizedMatchPlayers
-          .filter((p) => p.team === "atlantis")
-          .reduce((sum, p) => sum + (p.mmr_after - p.mmr_before), 0);
-
-        const titans_mmr_change = normalizedMatchPlayers
-          .filter((p) => p.team === "titans")
-          .reduce((sum, p) => sum + (p.mmr_after - p.mmr_before), 0);
-
         return {
           id: match.id,
           winner: match.winner as Team,
           created_at: match.created_at,
           atlantis_avg_mmr: match.atlantis_avg_mmr,
           titans_avg_mmr: match.titans_avg_mmr,
-          atlantis_mmr_change,
-          titans_mmr_change,
+          atlantis_mmr_change: match.atlantis_mmr_change,
+          titans_mmr_change: match.titans_mmr_change,
           match_players: normalizedMatchPlayers,
         };
       });
@@ -124,7 +124,7 @@ export default function MatchHistoryPage() {
   const filteredMatches = useMemo(() => {
     if (!filterPlayerId) return matches;
     return matches.filter((match) =>
-      match.match_players.some((mp) => mp.player_id === filterPlayerId)
+      match.match_players.some((mp) => mp.player_id === filterPlayerId),
     );
   }, [matches, filterPlayerId]);
 
@@ -134,7 +134,7 @@ export default function MatchHistoryPage() {
     let losses = 0;
     filteredMatches.forEach((match) => {
       const playerTeam = match.match_players.find(
-        (mp) => mp.player_id === filterPlayerId
+        (mp) => mp.player_id === filterPlayerId,
       )?.team;
       if (!playerTeam) return;
       if (playerTeam === match.winner) wins++;
@@ -143,15 +143,37 @@ export default function MatchHistoryPage() {
     const total = wins + losses;
     const winRate = total === 0 ? 0 : (wins / total) * 100;
     const player = players.find((p) => p.id === filterPlayerId);
-    return { wins, losses, winRate, mmr: player?.mmr ?? 1000, name: player?.name ?? "Unknown" };
+    return {
+      wins,
+      losses,
+      winRate,
+      mmr: player?.mmr ?? 1000,
+      name: player?.name ?? "Unknown",
+    };
   }, [filteredMatches, filterPlayerId, players]);
 
   if (loading) {
     return (
-      <div className="goa-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+      <div
+        className="goa-root"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+        }}
+      >
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📜</div>
-          <p style={{ fontFamily: "'Cinzel', serif", fontSize: "0.75rem", letterSpacing: "0.2em", color: "var(--muted)", textTransform: "uppercase" }}>
+          <p
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontSize: "0.75rem",
+              letterSpacing: "0.2em",
+              color: "var(--muted)",
+              textTransform: "uppercase",
+            }}
+          >
             Consulting the archives…
           </p>
         </div>
@@ -198,16 +220,24 @@ export default function MatchHistoryPage() {
             </div>
             <div className="goa-stat">
               <div className="goa-stat-label">Win Rate</div>
-              <div className="goa-stat-value">{playerStats.winRate.toFixed(1)}%</div>
-              <div className="goa-stat-sub">{playerStats.wins + playerStats.losses} battles</div>
+              <div className="goa-stat-value">
+                {playerStats.winRate.toFixed(1)}%
+              </div>
+              <div className="goa-stat-sub">
+                {playerStats.wins + playerStats.losses} battles
+              </div>
             </div>
             <div className="goa-stat">
               <div className="goa-stat-label">Victories</div>
-              <div className="goa-stat-value" style={{ color: "var(--gain)" }}>{playerStats.wins}</div>
+              <div className="goa-stat-value" style={{ color: "var(--gain)" }}>
+                {playerStats.wins}
+              </div>
             </div>
             <div className="goa-stat">
               <div className="goa-stat-label">Defeats</div>
-              <div className="goa-stat-value" style={{ color: "var(--loss)" }}>{playerStats.losses}</div>
+              <div className="goa-stat-value" style={{ color: "var(--loss)" }}>
+                {playerStats.losses}
+              </div>
             </div>
           </div>
         </div>
@@ -223,16 +253,20 @@ export default function MatchHistoryPage() {
         )}
 
         {filteredMatches.map((match) => {
-          const atlantis = match.match_players.filter((p) => p.team === "atlantis");
+          const atlantis = match.match_players.filter(
+            (p) => p.team === "atlantis",
+          );
           const titans = match.match_players.filter((p) => p.team === "titans");
 
           return (
             <div key={match.id} className="goa-match-card">
               <div className="goa-match-header">
-                <span className="goa-match-date">{formatDate(match.created_at)}</span>
+                <span className="goa-match-date">
+                  {formatDate(match.created_at)}
+                </span>
                 <span className="goa-match-winner">
                   <span className={`goa-winner-badge ${match.winner}`}>
-                    {match.winner === "atlantis" ? "🌊" : "🔥"} {match.winner}
+                    {match.winner} VICTORY
                   </span>
                 </span>
               </div>
@@ -240,17 +274,26 @@ export default function MatchHistoryPage() {
               <div className="goa-teams">
                 {/* Atlantis */}
                 <div className="goa-team">
-                  <div className="goa-team-head atl">🌊 Atlantis</div>
-                  <div className="goa-avg-mmr">Avg {Math.round(match.atlantis_avg_mmr)} MMR</div>
+                  <div className="flex justify-between">
+                    <span className="goa-team-head atl">Atlantis</span>
+                    <span
+                      className={`goa-delta ${match.atlantis_mmr_change >= 0 ? "pos" : "neg"}`}
+                    >
+                      {match.atlantis_mmr_change >= 0 ? "▲" : "▼"}
+                      {Math.abs(match.atlantis_mmr_change)}
+                    </span>
+                  </div>
+                  <div className="goa-avg-mmr">
+                    Avg {Math.round(match.atlantis_avg_mmr)} MMR
+                  </div>
                   {atlantis.map((p) => {
-                    const delta = p.mmr_after - p.mmr_before;
                     return (
                       <div key={p.player_id} className="goa-player-entry">
-                        <span className="goa-player-name">{p.players.name}</span>
+                        <span className="goa-player-name">
+                          {p.players.name}
+                        </span>
                         <span className="goa-mmr-change">
-                          <span className={`goa-delta ${delta >= 0 ? "pos" : "neg"}`}>
-                            {delta >= 0 ? "▲" : "▼"}{Math.abs(delta)}
-                          </span>
+                          {p.mmr_before} → {p.mmr_after}
                         </span>
                       </div>
                     );
@@ -259,17 +302,26 @@ export default function MatchHistoryPage() {
 
                 {/* Titans */}
                 <div className="goa-team">
-                  <div className="goa-team-head tit">🔥 Titans</div>
-                  <div className="goa-avg-mmr">Avg {Math.round(match.titans_avg_mmr)} MMR</div>
+                  <div className="flex justify-between">
+                    <span className="goa-team-head tit">Titans</span>
+                    <span
+                      className={`goa-delta ${match.titans_mmr_change >= 0 ? "pos" : "neg"}`}
+                    >
+                      {match.titans_mmr_change >= 0 ? "▲" : "▼"}
+                      {Math.abs(match.titans_mmr_change)}
+                    </span>
+                  </div>
+                  <div className="goa-avg-mmr">
+                    Avg {Math.round(match.titans_avg_mmr)} MMR
+                  </div>
                   {titans.map((p) => {
-                    const delta = p.mmr_after - p.mmr_before;
                     return (
                       <div key={p.player_id} className="goa-player-entry">
-                        <span className="goa-player-name">{p.players.name}</span>
+                        <span className="goa-player-name">
+                          {p.players.name}
+                        </span>
                         <span className="goa-mmr-change">
-                          <span className={`goa-delta ${delta >= 0 ? "pos" : "neg"}`}>
-                            {delta >= 0 ? "▲" : "▼"}{Math.abs(delta)}
-                          </span>
+                          {p.mmr_before} → {p.mmr_after}
                         </span>
                       </div>
                     );

@@ -177,7 +177,6 @@ export default function NewMatchPage() {
 
   return (
     <div className="goa-root goa-bg">
-
       {/* Header */}
       <header className="goa-header">
         <h1 className="goa-title">Record of Battle</h1>
@@ -220,7 +219,7 @@ export default function NewMatchPage() {
         )}
         <div className="goa-players">
           {atlantis.length === 0 && (
-            <p className="empty-state">No guardians assembled</p>
+            <p className="empty-state">No Atlanteans assembled</p>
           )}
           {atlantis.map((p) => (
             <div key={p.id} className="goa-player-row">
@@ -256,7 +255,7 @@ export default function NewMatchPage() {
         <div className="goa-search-wrap">
           <input
             className="goa-search"
-            placeholder="Summon a titan…"
+            placeholder="Summon a Titan…"
             value={titansSearch}
             onChange={(e) => setTitansSearch(e.target.value)}
           />
@@ -284,7 +283,7 @@ export default function NewMatchPage() {
         )}
         <div className="goa-players">
           {titans.length === 0 && (
-            <p className="empty-state">No titans assembled</p>
+            <p className="empty-state">No Titans assembled</p>
           )}
           {titans.map((p) => (
             <div key={p.id} className="goa-player-row">
