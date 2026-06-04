@@ -1,5 +1,3 @@
-// app/page.tsx
-
 import Link from "next/link";
 import Image from "next/image";
 
@@ -12,12 +10,6 @@ export default function Home() {
       <div className="goa-hero">
         <div className="goa-emblem"><Image src="/goa-logo.png" alt="logo" width={500} height={500} /></div>
         <p className="goa-hero-sub">MMR Tracker</p>
-
-        {/* <div className="goa-factions">
-          <span className="goa-faction-atl">🌊 titans</span>
-          <span className="goa-faction-sep">✦</span>
-          <span className="goa-faction-tit">🔥 Titans</span>
-        </div> */}
       </div>
 
       {/* Navigation */}
