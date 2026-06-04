@@ -1,11 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabaseClient } from "@/lib/supabase/client";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { calculateMMR } from "@/lib/mmr";
+import React, { useEffect, useState } from "react";
 
 type Player = {
   id: string;
@@ -13,50 +8,39 @@ type Player = {
   mmr: number;
 };
 
-type Team = "atlantis" | "titans";
+type Winner = "" | "atlantis" | "titans";
+import { supabaseClient } from "@/lib/supabase/client";
+import { calculateMMR } from "@/lib/mmr";
 
 export default function NewMatchPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [atlantisSearch, setAtlantisSearch] = useState("");
   const [titansSearch, setTitansSearch] = useState("");
-
   const [atlantis, setAtlantis] = useState<Player[]>([]);
   const [titans, setTitans] = useState<Player[]>([]);
+  const [winner, setWinner] = useState<Winner>("");
+  const [toast, setToast] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const [winner, setWinner] = useState<Team | "">("");
-
-  const [playedAt, setPlayedAt] = useState(() => {
-    return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  });
-
-  // ---------------------------
-  // Load players
-  // ---------------------------
   useEffect(() => {
     const loadPlayers = async () => {
-      const { data, error } = await supabaseClient
+      const result = await supabaseClient
         .from("players")
         .select("*")
         .order("name");
-
-      if (error) {
-        console.error(error);
-        return;
-      }
-
-      setPlayers(data ?? []);
-      console.log("Loaded players:", data);
+      const { data, error } = await result;
+      if (!error) setPlayers(data ?? []);
       setLoading(false);
     };
-
     loadPlayers();
   }, []);
 
-  // ---------------------------
-  // Helpers
-  // ---------------------------
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const availablePlayers = players.filter(
     (p) =>
       !atlantis.some((a) => a.id === p.id) &&
@@ -64,25 +48,19 @@ export default function NewMatchPage() {
   );
 
   const upsertPlayer = async (name: string): Promise<Player> => {
-    const { data, error } = await supabaseClient
+    const res = await supabaseClient
       .from("players")
       .upsert({ name }, { onConflict: "name" })
       .select()
       .single();
-
+    const { data, error } = await res;
     if (error) throw error;
-
     return data;
   };
 
-  // ---------------------------
-  // Add player
-  // ---------------------------
-  const addPlayer = async (name: string, team: Team) => {
+  const addPlayer = async (name: string, team: "atlantis" | "titans") => {
     if (!name.trim()) return;
-
     const player = await upsertPlayer(name.trim());
-
     if (team === "atlantis") {
       setAtlantis((prev) =>
         prev.find((p) => p.id === player.id) ? prev : [...prev, player],
@@ -94,254 +72,274 @@ export default function NewMatchPage() {
       );
       setTitansSearch("");
     }
-
-    // refresh local cache so future searches include new players
-    setPlayers((prev) => {
-      if (prev.find((p) => p.id === player.id)) return prev;
-      return [...prev, player];
-    });
+    setPlayers((prev) =>
+      prev.find((p) => p.id === player.id) ? prev : [...prev, player],
+    );
   };
 
-  const removePlayer = (id: string, team: Team) => {
-    if (team === "atlantis") {
+  const removePlayer = (id: string, team: "atlantis" | "titans") => {
+    if (team === "atlantis")
       setAtlantis((prev) => prev.filter((p) => p.id !== id));
-    } else {
-      setTitans((prev) => prev.filter((p) => p.id !== id));
+    else setTitans((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const filterPlayers = (list: Player[], query: string): Player[] =>
+    list.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
+
+  const handleSave = async () => {
+    if (!winner || atlantis.length === 0 || titans.length === 0 || saving)
+      return;
+    setSaving(true);
+    try {
+      const result = calculateMMR(atlantis, titans, winner);
+      const matchRes = await supabaseClient
+        .from("matches")
+        .insert({
+          winner,
+          atlantis_avg_mmr: result.meta.atlantisAvg,
+          titans_avg_mmr: result.meta.titansAvg,
+          atlantis_mmr_change: result.meta.atlantisDelta,
+          titans_mmr_change: result.meta.titansDelta,
+          expected_atlantis_win: result.meta.expectedA,
+        })
+        .select()
+        .single();
+      const { data: match, error } = await matchRes;
+      if (error) throw error;
+
+      const matchPlayers = [
+        ...result.atlantis.map((p) => ({
+          match_id: match.id,
+          player_id: p.id,
+          team: "atlantis",
+          mmr_before: atlantis.find((x) => x.id === p.id)?.mmr,
+          mmr_after: p.newmmr,
+        })),
+        ...result.titans.map((p) => ({
+          match_id: match.id,
+          player_id: p.id,
+          team: "titans",
+          mmr_before: titans.find((x) => x.id === p.id)?.mmr,
+          mmr_after: p.newmmr,
+        })),
+      ];
+      await supabaseClient.from("match_players").insert(matchPlayers);
+      await Promise.all(
+        [...result.atlantis, ...result.titans].map((p) =>
+          supabaseClient
+            .from("players")
+            .update({ mmr: Math.round(p.newmmr) })
+            .eq("id", p.id),
+        ),
+      );
+
+      showToast("⚔ Victory inscribed in the archives");
+      setAtlantis([]);
+      setTitans([]);
+      setWinner("");
+    } catch (e) {
+      showToast("✦ An error darkened the records");
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ---------------------------
-  // Save match
-  // ---------------------------
-const handleSave = async () => {
-  if (!winner || atlantis.length === 0 || titans.length === 0) return;
-  console.log(atlantis, titans)
-
-  const result = calculateMMR(atlantis, titans, winner);
-
-  // 1. create match
-const { data: match, error } = await supabaseClient
-  .from("matches")
-  .insert({
-    winner,
-    played_at: new Date(playedAt).toISOString(),
-
-    atlantis_avg_mmr: result.meta.atlantisAvg,
-    titans_avg_mmr: result.meta.titansAvg,
-
-    atlantis_mmr_change: result.meta.atlantisDelta,
-    titans_mmr_change: result.meta.titansDelta,
-
-    expected_atlantis_win: result.meta.expectedA,
-  })
-  .select()
-  .single();
-
-  if (error) throw error;
-
-  // 2. build match_players insert
-  const matchPlayers = [
-    ...result.atlantis.map((p) => ({
-      match_id: match.id,
-      player_id: p.id,
-      team: "atlantis",
-      mmr_before: atlantis.find((x) => x.id === p.id)?.mmr,
-      mmr_after: p.newmmr,
-    })),
-    ...result.titans.map((p) => ({
-      match_id: match.id,
-      player_id: p.id,
-      team: "titans",
-      mmr_before: titans.find((x) => x.id === p.id)?.mmr,
-      mmr_after: p.newmmr,
-    })),
-  ];
-
-  const { error: mpError } = await supabaseClient
-    .from("match_players")
-    .insert(matchPlayers);
-
-  if (mpError) throw mpError;
-
-  // 3. update player mmr in DB
-const updates = [...result.atlantis, ...result.titans];
-console.log("mmr updates to apply:", updates);
-
-await Promise.all(
-  updates.map((p) =>
-    supabaseClient
-      .from("players")
-      .update({ mmr: Math.round(p.newmmr) })
-      .eq("id", p.id)
-  )
-);
-
-  console.log("Match saved with mmr updates!");
-};
-
-  // ---------------------------
-  // UI filter
-  // ---------------------------
-  const filterPlayers = (list: Player[], query: string) =>
-    list.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
-
   if (loading) {
     return (
-      <main className="p-6">
-        <p>Loading players...</p>
-      </main>
+      <div
+        className="goa-root goa-bg"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚔️</div>
+          <p
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontSize: "0.8rem",
+              letterSpacing: "0.2em",
+              color: "var(--text-muted)",
+              textTransform: "uppercase",
+            }}
+          >
+            Loading existing players…
+          </p>
+        </div>
+      </div>
     );
   }
 
+  const canSave = winner && atlantis.length > 0 && titans.length > 0;
+
   return (
-    <main className="mx-auto max-w-6xl w-full p-6">
-      <h1 className="mb-8 text-center text-3xl font-bold">Add Match History</h1>
+    <div className="goa-root goa-bg">
 
-      <div className="mb-6 rounded border p-4">
-        <h2 className="mb-2 text-lg font-semibold">Match Date</h2>
+      {/* Header */}
+      <header className="goa-header">
+        <h1 className="goa-title">Record of Battle</h1>
+        <p className="goa-subtitle">Guards of Atlantis II</p>
+      </header>
 
-        <input
-          type="date"
-          className="rounded border p-2"
-          value={playedAt}
-          onChange={(e) => setPlayedAt(e.target.value)}
-        />
-      </div>
-      <div className="grid gap-8 md:grid-cols-2">
-        {/* ---------------- ATLANTIS ---------------- */}
-        <div className="rounded-lg border p-4">
-          <h2 className="mb-4 text-xl font-semibold">Atlantis</h2>
-
-          <Input
-            placeholder="Search or add player..."
+      {/* Atlantis */}
+      <div className="goa-section">
+        <div className="goa-section-header atlantis-header">
+          <h2 className="goa-section-title">Atlantis</h2>
+        </div>
+        <div className="goa-search-wrap">
+          <input
+            className="goa-search"
+            placeholder="Summon an Atlantean…"
             value={atlantisSearch}
             onChange={(e) => setAtlantisSearch(e.target.value)}
           />
-
-          {atlantisSearch && (
-            <div className="mt-2 max-h-48 overflow-y-auto rounded border">
-              {filterPlayers(availablePlayers, atlantisSearch).map((p) => (
-                <button
-                  key={p.id}
-                  className="w-full border-b px-3 py-2 text-left hover:bg-muted"
-                  onClick={() => addPlayer(p.name, "atlantis")}
-                >
-                  {p.name}
-                </button>
-              ))}
-
-              {filterPlayers(availablePlayers, atlantisSearch).length === 0 && (
-                <button
-                  className="w-full px-3 py-2 text-left text-sm text-blue-600 hover:bg-muted"
-                  onClick={() => addPlayer(atlantisSearch, "atlantis")}
-                >
-                  + Create &quot;{atlantisSearch}&quot;
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="mt-4 space-y-2">
-            {atlantis.map((p) => (
-              <div
-                key={p.id}
-                className="flex justify-between rounded border p-2"
-              >
-                {p.name}
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => removePlayer(p.id, "atlantis")}
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
-          </div>
         </div>
+        {atlantisSearch && (
+          <div className="goa-dropdown">
+            {filterPlayers(availablePlayers, atlantisSearch).map((p) => (
+              <button
+                key={p.id}
+                className="goa-option"
+                onClick={() => addPlayer(p.name, "atlantis")}
+              >
+                ⚔ {p.name}
+              </button>
+            ))}
+            {filterPlayers(availablePlayers, atlantisSearch).length === 0 && (
+              <button
+                className="goa-option goa-option-new"
+                onClick={() => addPlayer(atlantisSearch, "atlantis")}
+              >
+                ✦ Recruit &quot;{atlantisSearch}&quot;
+              </button>
+            )}
+          </div>
+        )}
+        <div className="goa-players">
+          {atlantis.length === 0 && (
+            <p className="empty-state">No guardians assembled</p>
+          )}
+          {atlantis.map((p) => (
+            <div key={p.id} className="goa-player-row">
+              <span className="goa-player-name">
+                <span
+                  style={{
+                    color: "var(--atlantis-light)",
+                    fontSize: "0.75rem",
+                  }}
+                >
+                  ◆
+                </span>
+                {p.name}
+                {p.mmr && <span className="goa-player-mmr">{p.mmr}</span>}
+              </span>
+              <button
+                className="goa-remove"
+                onClick={() => removePlayer(p.id, "atlantis")}
+                aria-label="Remove"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
 
-        {/* ---------------- TITANS ---------------- */}
-        <div className="rounded-lg border p-4">
-          <h2 className="mb-4 text-xl font-semibold">Titans</h2>
-
-          <Input
-            placeholder="Search or add player..."
+      {/* Titans */}
+      <div className="goa-section">
+        <div className="goa-section-header titans-header">
+          <h2 className="goa-section-title">Titans</h2>
+        </div>
+        <div className="goa-search-wrap">
+          <input
+            className="goa-search"
+            placeholder="Summon a titan…"
             value={titansSearch}
             onChange={(e) => setTitansSearch(e.target.value)}
           />
-
-          {titansSearch && (
-            <div className="mt-2 max-h-48 overflow-y-auto rounded border">
-              {filterPlayers(availablePlayers, titansSearch).map((p) => (
-                <button
-                  key={p.id}
-                  className="w-full border-b px-3 py-2 text-left hover:bg-muted"
-                  onClick={() => addPlayer(p.name, "titans")}
-                >
-                  {p.name}
-                </button>
-              ))}
-
-              {filterPlayers(availablePlayers, titansSearch).length === 0 && (
-                <button
-                  className="w-full px-3 py-2 text-left text-sm text-blue-600 hover:bg-muted"
-                  onClick={() => addPlayer(titansSearch, "titans")}
-                >
-                  + Create &quot;{titansSearch}&quot;
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="mt-4 space-y-2">
-            {titans.map((p) => (
-              <div
+        </div>
+        {titansSearch && (
+          <div className="goa-dropdown">
+            {filterPlayers(availablePlayers, titansSearch).map((p) => (
+              <button
                 key={p.id}
-                className="flex justify-between rounded border p-2"
+                className="goa-option"
+                onClick={() => addPlayer(p.name, "titans")}
               >
-                {p.name}
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => removePlayer(p.id, "titans")}
-                >
-                  Remove
-                </Button>
-              </div>
+                ⚔ {p.name}
+              </button>
             ))}
+            {filterPlayers(availablePlayers, titansSearch).length === 0 && (
+              <button
+                className="goa-option goa-option-new"
+                onClick={() => addPlayer(titansSearch, "titans")}
+              >
+                ✦ Recruit &quot;{titansSearch}&quot;
+              </button>
+            )}
           </div>
+        )}
+        <div className="goa-players">
+          {titans.length === 0 && (
+            <p className="empty-state">No titans assembled</p>
+          )}
+          {titans.map((p) => (
+            <div key={p.id} className="goa-player-row">
+              <span className="goa-player-name">
+                <span
+                  style={{ color: "var(--titans-light)", fontSize: "0.75rem" }}
+                >
+                  ◆
+                </span>
+                {p.name}
+                {p.mmr && <span className="goa-player-mmr">{p.mmr}</span>}
+              </span>
+              <button
+                className="goa-remove"
+                onClick={() => removePlayer(p.id, "titans")}
+                aria-label="Remove"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ---------------- WINNER ---------------- */}
-      <div className="mt-8 rounded border p-4">
-        <h2 className="mb-4 text-lg font-semibold">Winner</h2>
-
-        <div className="flex gap-4">
-          <Button
-            variant={winner === "atlantis" ? "default" : "outline"}
-            onClick={() => setWinner("atlantis")}
-          >
-            Atlantis
-          </Button>
-
-          <Button
-            variant={winner === "titans" ? "default" : "outline"}
-            onClick={() => setWinner("titans")}
-          >
-            Titans
-          </Button>
-        </div>
+      {/* Winner */}
+      <p className="winner-label">Declare the victor</p>
+      <div className="goa-winner-section">
+        <button
+          className={`goa-faction-btn goa-faction-btn-a ${winner === "atlantis" ? "selected" : ""}`}
+          onClick={() => setWinner(winner === "atlantis" ? "" : "atlantis")}
+        >
+          <span className="goa-faction-label">Atlantis</span>
+        </button>
+        <button
+          className={`goa-faction-btn goa-faction-btn-t ${winner === "titans" ? "selected" : ""}`}
+          onClick={() => setWinner(winner === "titans" ? "" : "titans")}
+        >
+          <span className="goa-faction-label">Titans</span>
+        </button>
       </div>
 
-      {/* ---------------- SAVE ---------------- */}
-      <Button
-        className="mt-8 w-full"
-        onClick={handleSave}
-        disabled={!winner || atlantis.length === 0 || titans.length === 0}
-      >
-        Save Match
-      </Button>
-    </main>
+      <div className="goa-divider" />
+
+      {/* Save */}
+      <div className="goa-save-wrap">
+        <button
+          className="goa-save-btn"
+          onClick={handleSave}
+          disabled={!canSave || saving}
+        >
+          {saving ? "✦ Inscribing…" : "⚔ Inscribe to the Archives"}
+        </button>
+      </div>
+
+      {toast && <div className="goa-toast">{toast}</div>}
+    </div>
   );
 }
