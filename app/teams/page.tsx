@@ -511,7 +511,7 @@ export default function TeamSplitterPage() {
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚔️</div>
           <p style={{ fontFamily: "'Cinzel', serif", fontSize: "0.75rem", letterSpacing: "0.2em", color: "var(--muted)", textTransform: "uppercase" }}>
-            Summoning warriors…
+            Summoning players…
           </p>
         </div>
       </div>
@@ -524,7 +524,7 @@ export default function TeamSplitterPage() {
 
       <header className="goa-header">
         <div className="goa-crown">⚔️</div>
-        <h1 className="goa-title">Divide the Host</h1>
+        <h1 className="goa-title">Divide the Players</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
 
@@ -605,7 +605,7 @@ export default function TeamSplitterPage() {
 
       {!canSplit && (
         <p style={{ textAlign: "center", fontFamily: "'Cinzel', serif", fontSize: "0.62rem", letterSpacing: "0.12em", color: "var(--muted)", textTransform: "uppercase", margin: "0 0.75rem 0.75rem" }}>
-          Add at least 2 warriors to split
+          Add at least 2 players to split
         </p>
       )}
 
@@ -624,13 +624,13 @@ export default function TeamSplitterPage() {
 
             <div className="goa-result-teams">
               <div className="goa-result-team">
-                <div className="goa-result-team-head atl">
-                  <span>🌊 Atlantis</span>
+                <div className="goa-result-team-head tit">
+                  <span>Atlantis</span>
                 </div>
                 <div className="goa-result-avg">Avg {result.atlantisAvg} MMR</div>
                 {result.atlantis.map((p) => (
                   <div key={p.id} className="goa-result-player">
-                    <span className="goa-dot-atl">◆</span>
+                    <span className="goa-dot-tit">◆</span>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
                     <span className="goa-result-player-mmr">{p.mmr}</span>
                   </div>
@@ -638,13 +638,13 @@ export default function TeamSplitterPage() {
               </div>
 
               <div className="goa-result-team">
-                <div className="goa-result-team-head tit">
-                  <span>🔥 Titans</span>
+                <div className="goa-result-team-head atl">
+                  <span>Titans</span>
                 </div>
                 <div className="goa-result-avg">Avg {result.titansAvg} MMR</div>
                 {result.titans.map((p) => (
                   <div key={p.id} className="goa-result-player">
-                    <span className="goa-dot-tit">◆</span>
+                    <span className="goa-dot-atl">◆</span>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
                     <span className="goa-result-player-mmr">{p.mmr}</span>
                   </div>
@@ -667,9 +667,6 @@ export default function TeamSplitterPage() {
           )}
         </>
       )}
-
-      <div className="goa-divider" />
-      <div className="goa-footer">✦ &nbsp; Let the tides decide &nbsp; ✦</div>
     </main>
   );
 }
