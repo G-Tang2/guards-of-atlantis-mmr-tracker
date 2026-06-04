@@ -1128,6 +1128,14 @@
   background: linear-gradient(180deg, #f0c96a, #cd7f32);
 }
 
+.goa-nav-btn.tm .goa-nav-accent {
+  background: linear-gradient(
+    180deg,
+    #8b5cf6,  /* violet */
+    rgba(139, 92, 246, 0.25)
+  );
+}
+
 .goa-nav-inner {
   padding: 0.9rem 1rem;
   flex: 1;
