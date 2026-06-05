@@ -1003,6 +1003,8 @@
     margin-bottom: 0;
   }
 
+  .goa-hero-wrap { padding: 0.3rem 0.55rem 0.45rem; }
+
   /* Faction Strip UI */
   .goa-factions {
     display: flex;

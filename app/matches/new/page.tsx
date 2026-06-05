@@ -18,131 +18,9 @@ type Team = "atlantis" | "titans";
 type Winner = "" | "atlantis" | "titans";
 import { supabaseClient } from "@/lib/supabase/client";
 import { calculateMMR } from "@/lib/mmr";
-import { HEROES, ROLE_COLORS, Hero } from "@/lib/heroes";
+import { HeroPicker } from "@/components/HeroPicker";
+import { Hero } from "@/lib/heroes";
 
-const ROLES = [
-  "Guardian",
-  "Warrior",
-  "Mage",
-  "Support",
-  "Assassin",
-  "Tank",
-] as const;
-
-// ── Hero picker sub-component ─────────────────────────────────────────────────
-
-function HeroPicker({
-  selected,
-  onSelect,
-}: {
-  selected: Hero | null;
-  onSelect: (h: Hero | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [roleFilter, setRoleFilter] = useState<string>("All");
-
-  const filtered =
-    roleFilter === "All" ? HEROES : HEROES.filter((h) => h.role === roleFilter);
-
-  if (!open) {
-    return (
-      <div className="goa-hero-picker">
-        <div className="goa-hero-picker-label">Hero played</div>
-        {selected ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <span className="goa-selected-hero">
-              {selected.emoji} {selected.name}
-              <span
-                className="goa-hero-chip-role"
-                style={{
-                  background: ROLE_COLORS[selected.role],
-                  color: "#1C1A14",
-                }}
-              >
-                {selected.role}
-              </span>
-            </span>
-            <button className="goa-change-hero" onClick={() => setOpen(true)}>
-              Change
-            </button>
-          </div>
-        ) : (
-          <button
-            className="goa-hero-chip"
-            onClick={() => setOpen(true)}
-            style={{ fontSize: "0.82rem", padding: "0.28rem 0.6rem" }}
-          >
-            + Select hero
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="goa-hero-picker">
-      <div className="goa-hero-picker-label">
-        Select hero
-        <button
-          onClick={() => setOpen(false)}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--muted)",
-            cursor: "pointer",
-            fontFamily: "'Cinzel', serif",
-            fontSize: "0.55rem",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            marginLeft: "0.75rem",
-            textDecoration: "underline",
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-
-      {/* Role filter */}
-      <div className="goa-role-bar">
-        {["All", ...ROLES].map((r) => (
-          <button
-            key={r}
-            className={`goa-role-chip ${roleFilter === r ? "active" : ""}`}
-            onClick={() => setRoleFilter(r)}
-          >
-            {r}
-          </button>
-        ))}
-      </div>
-
-      {/* Hero chips */}
-      <div className="goa-hero-grid">
-        {filtered.map((h) => (
-          <button
-            key={h.id}
-            className={`goa-hero-chip ${selected?.id === h.id ? "selected" : ""}`}
-            onClick={() => {
-              onSelect(h);
-              setOpen(false);
-            }}
-          >
-            <span>{h.emoji}</span>
-            <span>{h.name}</span>
-            <span
-              className="goa-hero-chip-role"
-              style={{
-                background: ROLE_COLORS[h.role] + "33",
-                color: ROLE_COLORS[h.role],
-              }}
-            >
-              {h.role[0]}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function NewMatchPage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -476,10 +354,12 @@ export default function NewMatchPage() {
                   ✕
                 </button>
               </div>
+                              <div className="goa-hero-wrap">
               <HeroPicker
                 selected={p.hero}
                 onSelect={(h) => setHero(p.player.id, "titans", h)}
               />
+              </div>
             </div>
           ))}
         </div>

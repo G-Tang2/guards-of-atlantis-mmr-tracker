@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -470,7 +471,7 @@ export default function PlayerProfilePage() {
   const playerId = params?.id as string;
 
   const [player, setPlayer] = useState<Player | null>(null);
-  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  // const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"matches" | "h2h">("matches");
@@ -495,8 +496,6 @@ export default function PlayerProfilePage() {
       ]);
 
       setPlayer(pData ?? null);
-      setAllPlayers(allData ?? []);
-
       // Normalize match_players
       const normalized: Match[] = (mData ?? [])
         .filter((m: any) => m.match_players.some((mp: any) => mp.player_id === playerId))
