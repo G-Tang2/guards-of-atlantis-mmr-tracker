@@ -8,17 +8,149 @@ type Player = {
   mmr: number;
 };
 
+type PoolEntry = {
+  player: Player;
+  hero: Hero | null;
+};
+
+type Team = "atlantis" | "titans";
+
 type Winner = "" | "atlantis" | "titans";
 import { supabaseClient } from "@/lib/supabase/client";
 import { calculateMMR } from "@/lib/mmr";
+import { HEROES, ROLE_COLORS, Hero } from "@/lib/heroes";
+
+const ROLES = [
+  "Guardian",
+  "Warrior",
+  "Mage",
+  "Support",
+  "Assassin",
+  "Tank",
+] as const;
+
+// ── Hero picker sub-component ─────────────────────────────────────────────────
+
+function HeroPicker({
+  selected,
+  onSelect,
+}: {
+  selected: Hero | null;
+  onSelect: (h: Hero | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<string>("All");
+
+  const filtered =
+    roleFilter === "All" ? HEROES : HEROES.filter((h) => h.role === roleFilter);
+
+  if (!open) {
+    return (
+      <div className="goa-hero-picker">
+        <div className="goa-hero-picker-label">Hero played</div>
+        {selected ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            <span className="goa-selected-hero">
+              {selected.emoji} {selected.name}
+              <span
+                className="goa-hero-chip-role"
+                style={{
+                  background: ROLE_COLORS[selected.role],
+                  color: "#1C1A14",
+                }}
+              >
+                {selected.role}
+              </span>
+            </span>
+            <button className="goa-change-hero" onClick={() => setOpen(true)}>
+              Change
+            </button>
+          </div>
+        ) : (
+          <button
+            className="goa-hero-chip"
+            onClick={() => setOpen(true)}
+            style={{ fontSize: "0.82rem", padding: "0.28rem 0.6rem" }}
+          >
+            + Select hero
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="goa-hero-picker">
+      <div className="goa-hero-picker-label">
+        Select hero
+        <button
+          onClick={() => setOpen(false)}
+          style={{
+            background: "none",
+            border: "none",
+            color: "var(--muted)",
+            cursor: "pointer",
+            fontFamily: "'Cinzel', serif",
+            fontSize: "0.55rem",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            marginLeft: "0.75rem",
+            textDecoration: "underline",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+
+      {/* Role filter */}
+      <div className="goa-role-bar">
+        {["All", ...ROLES].map((r) => (
+          <button
+            key={r}
+            className={`goa-role-chip ${roleFilter === r ? "active" : ""}`}
+            onClick={() => setRoleFilter(r)}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+
+      {/* Hero chips */}
+      <div className="goa-hero-grid">
+        {filtered.map((h) => (
+          <button
+            key={h.id}
+            className={`goa-hero-chip ${selected?.id === h.id ? "selected" : ""}`}
+            onClick={() => {
+              onSelect(h);
+              setOpen(false);
+            }}
+          >
+            <span>{h.emoji}</span>
+            <span>{h.name}</span>
+            <span
+              className="goa-hero-chip-role"
+              style={{
+                background: ROLE_COLORS[h.role] + "33",
+                color: ROLE_COLORS[h.role],
+              }}
+            >
+              {h.role[0]}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function NewMatchPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [atlantisSearch, setAtlantisSearch] = useState("");
   const [titansSearch, setTitansSearch] = useState("");
-  const [atlantis, setAtlantis] = useState<Player[]>([]);
-  const [titans, setTitans] = useState<Player[]>([]);
+  const [atlantis, setAtlantis] = useState<PoolEntry[]>([]);
+  const [titans, setTitans] = useState<PoolEntry[]>([]);
   const [winner, setWinner] = useState<Winner>("");
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -43,8 +175,8 @@ export default function NewMatchPage() {
 
   const availablePlayers = players.filter(
     (p) =>
-      !atlantis.some((a) => a.id === p.id) &&
-      !titans.some((t) => t.id === p.id),
+      !atlantis.some((e) => e.player.id === p.id) &&
+      !titans.some((e) => e.player.id === p.id),
   );
 
   const upsertPlayer = async (name: string): Promise<Player> => {
@@ -58,41 +190,60 @@ export default function NewMatchPage() {
     return data;
   };
 
-  const addPlayer = async (name: string, team: "atlantis" | "titans") => {
+  const addPlayer = async (name: string, team: Team) => {
     if (!name.trim()) return;
     const player = await upsertPlayer(name.trim());
+    const entry: PoolEntry = { player, hero: null };
+
     if (team === "atlantis") {
       setAtlantis((prev) =>
-        prev.find((p) => p.id === player.id) ? prev : [...prev, player],
+        prev.find((e) => e.player.id === player.id) ? prev : [...prev, entry],
       );
       setAtlantisSearch("");
     } else {
       setTitans((prev) =>
-        prev.find((p) => p.id === player.id) ? prev : [...prev, player],
+        prev.find((e) => e.player.id === player.id) ? prev : [...prev, entry],
       );
       setTitansSearch("");
     }
+
     setPlayers((prev) =>
       prev.find((p) => p.id === player.id) ? prev : [...prev, player],
     );
   };
 
-  const removePlayer = (id: string, team: "atlantis" | "titans") => {
+  const removePlayer = (id: string, team: Team) => {
     if (team === "atlantis")
-      setAtlantis((prev) => prev.filter((p) => p.id !== id));
-    else setTitans((prev) => prev.filter((p) => p.id !== id));
+      setAtlantis((prev) => prev.filter((e) => e.player.id !== id));
+    else setTitans((prev) => prev.filter((e) => e.player.id !== id));
   };
 
   const filterPlayers = (list: Player[], query: string): Player[] =>
     list.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
 
+  const setHero = (playerId: string, team: Team, hero: Hero | null) => {
+    if (team === "atlantis") {
+      setAtlantis((prev) =>
+        prev.map((e) => (e.player.id === playerId ? { ...e, hero } : e)),
+      );
+    } else {
+      setTitans((prev) =>
+        prev.map((e) => (e.player.id === playerId ? { ...e, hero } : e)),
+      );
+    }
+  };
+
   const handleSave = async () => {
     if (!winner || atlantis.length === 0 || titans.length === 0 || saving)
       return;
     setSaving(true);
+
     try {
-      const result = calculateMMR(atlantis, titans, winner);
-      const matchRes = await supabaseClient
+      const atlPlayers = atlantis.map((e) => e.player);
+      const titPlayers = titans.map((e) => e.player);
+      const result = calculateMMR(atlPlayers, titPlayers, winner);
+
+      const { data: match, error } = await supabaseClient
         .from("matches")
         .insert({
           winner,
@@ -104,7 +255,7 @@ export default function NewMatchPage() {
         })
         .select()
         .single();
-      const { data: match, error } = await matchRes;
+
       if (error) throw error;
 
       const matchPlayers = [
@@ -112,18 +263,25 @@ export default function NewMatchPage() {
           match_id: match.id,
           player_id: p.id,
           team: "atlantis",
-          mmr_before: atlantis.find((x) => x.id === p.id)?.mmr,
+          mmr_before: atlPlayers.find((x) => x.id === p.id)?.mmr,
           mmr_after: p.newmmr,
+          hero_id: atlantis.find((e) => e.player.id === p.id)?.hero?.id ?? null,
         })),
         ...result.titans.map((p) => ({
           match_id: match.id,
           player_id: p.id,
           team: "titans",
-          mmr_before: titans.find((x) => x.id === p.id)?.mmr,
+          mmr_before: titPlayers.find((x) => x.id === p.id)?.mmr,
           mmr_after: p.newmmr,
+          hero_id: titans.find((e) => e.player.id === p.id)?.hero?.id ?? null,
         })),
       ];
-      await supabaseClient.from("match_players").insert(matchPlayers);
+
+      const { error: mpError } = await supabaseClient
+        .from("match_players")
+        .insert(matchPlayers);
+      if (mpError) throw mpError;
+
       await Promise.all(
         [...result.atlantis, ...result.titans].map((p) =>
           supabaseClient
@@ -137,7 +295,7 @@ export default function NewMatchPage() {
       setAtlantis([]);
       setTitans([]);
       setWinner("");
-    } catch (e) {
+    } catch {
       showToast("✦ An error darkened the records");
     } finally {
       setSaving(false);
@@ -222,26 +380,34 @@ export default function NewMatchPage() {
             <p className="empty-state">No Atlanteans assembled</p>
           )}
           {atlantis.map((p) => (
-            <div key={p.id} className="goa-player-row">
-              <span className="goa-player-name">
-                <span
-                  style={{
-                    color: "var(--atlantis-light)",
-                    fontSize: "0.75rem",
-                  }}
-                >
-                  ◆
+            <div key={p.player.id} className="goa-player-block">
+              <div key={p.player.id} className="goa-player-row">
+                <span className="goa-player-name">
+                  <span
+                    style={{
+                      color: "var(--atlantis-light)",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    ◆
+                  </span>
+                  {p.player.name}
+                  {p.player.mmr && (
+                    <span className="goa-player-mmr">{p.player.mmr}</span>
+                  )}
                 </span>
-                {p.name}
-                {p.mmr && <span className="goa-player-mmr">{p.mmr}</span>}
-              </span>
-              <button
-                className="goa-remove"
-                onClick={() => removePlayer(p.id, "atlantis")}
-                aria-label="Remove"
-              >
-                ✕
-              </button>
+                <button
+                  className="goa-remove"
+                  onClick={() => removePlayer(p.player.id, "atlantis")}
+                  aria-label="Remove"
+                >
+                  ✕
+                </button>
+              </div>
+              <HeroPicker
+                selected={p.hero}
+                onSelect={(h) => setHero(p.player.id, "atlantis", h)}
+              />
             </div>
           ))}
         </div>
@@ -286,23 +452,34 @@ export default function NewMatchPage() {
             <p className="empty-state">No Titans assembled</p>
           )}
           {titans.map((p) => (
-            <div key={p.id} className="goa-player-row">
-              <span className="goa-player-name">
-                <span
-                  style={{ color: "var(--titans-light)", fontSize: "0.75rem" }}
-                >
-                  ◆
+            <div key={p.player.id} className="goa-player-block">
+              <div className="goa-player-row">
+                <span className="goa-player-name">
+                  <span
+                    style={{
+                      color: "var(--titans-light)",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    ◆
+                  </span>
+                  {p.player.name}
+                  {p.player.mmr && (
+                    <span className="goa-player-mmr">{p.player.mmr}</span>
+                  )}
                 </span>
-                {p.name}
-                {p.mmr && <span className="goa-player-mmr">{p.mmr}</span>}
-              </span>
-              <button
-                className="goa-remove"
-                onClick={() => removePlayer(p.id, "titans")}
-                aria-label="Remove"
-              >
-                ✕
-              </button>
+                <button
+                  className="goa-remove"
+                  onClick={() => removePlayer(p.player.id, "titans")}
+                  aria-label="Remove"
+                >
+                  ✕
+                </button>
+              </div>
+              <HeroPicker
+                selected={p.hero}
+                onSelect={(h) => setHero(p.player.id, "titans", h)}
+              />
             </div>
           ))}
         </div>
