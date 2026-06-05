@@ -1378,12 +1378,28 @@
     letter-spacing: 0.05em;
   }
 
+  .goa-display-hero {
+    color: var(--text-muted);
+    font-style: italic;
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.05em;
+  }
+
   .goa-player-entry {
     display: flex;
     justify-content: space-between;
+    gap: 0;
+    flex-flow: column;
     align-items: baseline;
     padding: 0.25rem 0;
     border-bottom: 1px solid rgba(201, 151, 58, 0.07);
+  }
+  .goa-player-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
   }
   .goa-player-entry:last-child {
     border-bottom: none;

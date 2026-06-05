@@ -14,6 +14,8 @@ export function HeroPicker({
   const filtered =
     difficultyFilter === "All" ? HEROES : HEROES.filter((h) => h.difficulty === difficultyFilter);
 
+  const renderStars = (n: number) => "★".repeat(n);
+
   if (!open) {
     return (
       <div className="goa-hero-picker">
@@ -24,9 +26,8 @@ export function HeroPicker({
               {selected.name}
               <span
                 className="goa-hero-chip-role"
-                style={{ background: DIFFICULTY_COLORS[selected.difficulty], color: "#1C1A14" }}
               >
-                {selected.difficulty}
+                {renderStars(parseInt(selected.difficulty))}
               </span>
             </span>
             <button className="goa-change-hero" onClick={() => setOpen(true)}>
@@ -77,7 +78,7 @@ export function HeroPicker({
             className={`goa-role-chip ${difficultyFilter === r ? "active" : ""}`}
             onClick={() => setDifficultyFilter(r as HeroDifficulty | "All")}
           >
-            {r}
+            {renderStars(parseInt(r)) || "All"}
           </button>
         ))}
       </div>
@@ -95,7 +96,7 @@ export function HeroPicker({
               className="goa-hero-chip-role"
               style={{ background: DIFFICULTY_COLORS[h.difficulty] + "33", color: DIFFICULTY_COLORS[h.difficulty] }}
             >
-              {h.difficulty}
+              {renderStars(parseInt(h.difficulty))}
             </span>
           </button>
         ))}

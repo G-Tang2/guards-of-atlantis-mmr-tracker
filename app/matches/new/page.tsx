@@ -21,7 +21,6 @@ import { calculateMMR } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
 import { Hero } from "@/lib/heroes";
 
-
 export default function NewMatchPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -354,11 +353,11 @@ export default function NewMatchPage() {
                   ✕
                 </button>
               </div>
-                              <div className="goa-hero-wrap">
-              <HeroPicker
-                selected={p.hero}
-                onSelect={(h) => setHero(p.player.id, "titans", h)}
-              />
+              <div className="goa-hero-wrap">
+                <HeroPicker
+                  selected={p.hero}
+                  onSelect={(h) => setHero(p.player.id, "titans", h)}
+                />
               </div>
             </div>
           ))}

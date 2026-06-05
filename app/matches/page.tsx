@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
+import { HEROES } from "@/lib/heroes";
 
 type Player = {
   id: string;
@@ -17,6 +18,7 @@ type MatchPlayer = {
   players: Player;
   mmr_before: number;
   mmr_after: number;
+  hero_id?: string;
 };
 
 type Match = {
@@ -44,6 +46,8 @@ export default function MatchHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [filterPlayerId, setFilterPlayerId] = useState("");
 
+  const renderStars = (n: number) => "★".repeat(n);
+
   useEffect(() => {
     const loadData = async () => {
       const { data: matchesData, error: matchesError } = await supabaseClient
@@ -62,6 +66,7 @@ export default function MatchHistoryPage() {
             team,
             mmr_before,
             mmr_after,
+            hero_id,
             players (
               id,
               name,
@@ -71,6 +76,8 @@ export default function MatchHistoryPage() {
         `,
         )
         .order("created_at", { ascending: false });
+
+      console.log("Fetched matches:", matchesData);
 
       const { data: playersData, error: playersError } = await supabaseClient
         .from("players")
@@ -86,7 +93,7 @@ export default function MatchHistoryPage() {
         const normalizedMatchPlayers: MatchPlayer[] = (
           match.match_players ?? []
         )
-          .map((mp) => {
+          .map((mp): MatchPlayer | null => {
             const player = Array.isArray(mp.players)
               ? mp.players[0]
               : mp.players;
@@ -96,6 +103,7 @@ export default function MatchHistoryPage() {
               team: mp.team as Team,
               mmr_before: mp.mmr_before,
               mmr_after: mp.mmr_after,
+              hero_id: mp.hero_id,
               players: { id: player.id, name: player.name, mmr: player.mmr },
             };
           })
@@ -289,11 +297,22 @@ export default function MatchHistoryPage() {
                   {atlantis.map((p) => {
                     return (
                       <div key={p.player_id} className="goa-player-entry">
-                        <span className="goa-player-name">
-                          {p.players.name}
-                        </span>
-                        <span className="goa-mmr-change">
-                          {p.mmr_before} → {p.mmr_after}
+                        <div className="goa-player-info">
+                          <span className="goa-player-name">
+                            {p.players.name}
+                          </span>
+                          <span className="goa-mmr-change">
+                            {p.mmr_before} → {p.mmr_after}
+                          </span>
+                        </div>
+                        <span className="goa-display-hero">
+                          {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
+                          {renderStars(
+                            parseInt(
+                              HEROES.find((h) => h.id === p.hero_id)
+                                ?.difficulty || "",
+                            ),
+                          )}
                         </span>
                       </div>
                     );
@@ -317,11 +336,22 @@ export default function MatchHistoryPage() {
                   {titans.map((p) => {
                     return (
                       <div key={p.player_id} className="goa-player-entry">
-                        <span className="goa-player-name">
-                          {p.players.name}
-                        </span>
-                        <span className="goa-mmr-change">
-                          {p.mmr_before} → {p.mmr_after}
+                        <div className="goa-player-info">
+                          <span className="goa-player-name">
+                            {p.players.name}
+                          </span>
+                          <span className="goa-mmr-change">
+                            {p.mmr_before} → {p.mmr_after}
+                          </span>
+                        </div>
+                        <span className="goa-display-hero">
+                          {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
+                          {renderStars(
+                            parseInt(
+                              HEROES.find((h) => h.id === p.hero_id)
+                                ?.difficulty || "",
+                            ),
+                          )}
                         </span>
                       </div>
                     );
