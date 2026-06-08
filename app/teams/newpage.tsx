@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import router from "next/router";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 type Player = {
@@ -33,73 +33,26 @@ const randomSplit = (pool: Player[]): SplitResult => {
   return { atlantis, titans, atlantisAvg, titansAvg, diff: Math.abs(atlantisAvg - titansAvg) };
 };
 
+// Greedy balanced split: sort descending, snake-draft into two teams
 const balancedSplit = (pool: Player[]): SplitResult => {
-  const n = pool.length;
-  const totalMMR = pool.reduce((s, p) => s + p.mmr, 0);
-
-  let bestDiff = Infinity;
-  let bestMask = 0;
-
-  // iterate all subsets (0 to 2^n - 1)
-  for (let mask = 0; mask < (1 << n); mask++) {
-    const teamA: Player[] = [];
-    let teamASum = 0;
-
-    for (let i = 0; i < n; i++) {
-      if (mask & (1 << i)) {
-        teamA.push(pool[i]);
-        teamASum += pool[i].mmr;
-      }
-    }
-
-    const teamB: Player[] = [];
-    for (let i = 0; i < n; i++) {
-      if (!(mask & (1 << i))) {
-        teamB.push(pool[i]);
-      }
-    }
-
-    const teamBSum = totalMMR - teamASum;
-    const diff = Math.abs(teamASum - teamBSum);
-
-    // optional: enforce near-equal sizes if needed
-    if (Math.abs(teamA.length - teamB.length) > 1) continue;
-
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestMask = mask;
-    }
-  }
-
-  // build final teams
+  const sorted = [...pool].sort((a, b) => b.mmr - a.mmr);
   const atlantis: Player[] = [];
   const titans: Player[] = [];
-
-  let atlantisSum = 0;
-  let titansSum = 0;
-
-  for (let i = 0; i < n; i++) {
-    if (bestMask & (1 << i)) {
-      atlantis.push(pool[i]);
-      atlantisSum += pool[i].mmr;
+  sorted.forEach((p, i) => {
+    const aTotal = atlantis.reduce((s, x) => s + x.mmr, 0);
+    const tTotal = titans.reduce((s, x) => s + x.mmr, 0);
+    const aTarget = Math.ceil(sorted.length / 2);
+    const tTarget = Math.floor(sorted.length / 2);
+    if (atlantis.length < aTarget && (titans.length >= tTarget || aTotal <= tTotal)) {
+      atlantis.push(p);
     } else {
-      titans.push(pool[i]);
-      titansSum += pool[i].mmr;
+      titans.push(p);
     }
-  }
-
-  const atlantisAvg = Math.round(atlantisSum / atlantis.length);
-  const titansAvg = Math.round(titansSum / titans.length);
-
-  return {
-    atlantis,
-    titans,
-    atlantisAvg,
-    titansAvg,
-    diff: Math.round(Math.abs(atlantisAvg - titansAvg) ),
-  };
+  });
+  const atlantisAvg = avg(atlantis);
+  const titansAvg = avg(titans);
+  return { atlantis, titans, atlantisAvg, titansAvg, diff: Math.abs(atlantisAvg - titansAvg) };
 };
-
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
@@ -108,10 +61,10 @@ const styles = `
     --gold: #C9973A;
     --gold-light: #F0C96A;
     --gold-dark: #7A5A1A;
-    --atlantis-light: #2AABB8;
-    --atlantis-dark: #0D3D47;
-    --titans-light: #C42A3A;
-    --titans-dark: #3D0D14;
+    --atlantis-light: #E8364A;
+    --atlantis-dark: #5C0A12;
+    --titans-light: #3DCAD8;
+    --titans-dark: #0D3D47;
     --stone: #1C1A14;
     --stone-mid: #2A2720;
     --stone-lt: #3A3628;
@@ -121,8 +74,8 @@ const styles = `
     --muted: #A09070;
     font-family: 'Crimson Pro', Georgia, serif;
     background:
-      radial-gradient(ellipse 120% 50% at 50% 0%, rgba(26,107,122,0.18) 0%, transparent 55%),
-      radial-gradient(ellipse 80% 40% at 50% 100%, rgba(122,26,42,0.12) 0%, transparent 55%),
+      radial-gradient(ellipse 120% 50% at 50% 0%, rgba(196,42,58,0.18) 0%, transparent 55%),
+      radial-gradient(ellipse 80% 40% at 50% 100%, rgba(42,107,122,0.12) 0%, transparent 55%),
       repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(201,151,58,0.025) 40px),
       repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(201,151,58,0.025) 40px),
       #1C1A14;
@@ -267,7 +220,7 @@ const styles = `
   .goa-pool-mmr { font-family: 'Cinzel', serif; font-size: 0.65rem; color: var(--muted); }
   .goa-remove {
     background: none;
-    border: 1px solid rgba(196,42,58,0.35);
+    border: 1px solid rgba(42,171,184,0.35);
     border-radius: 2px;
     color: rgba(196,42,58,0.7);
     width: 22px; height: 22px;
@@ -277,7 +230,7 @@ const styles = `
     flex-shrink: 0;
     transition: all 0.15s;
   }
-  .goa-remove:hover { background: rgba(196,42,58,0.2); color: #ff6b7a; border-color: rgba(196,42,58,0.8); }
+  .goa-remove:hover { background: rgba(42,171,184,0.2); color: #ff6b7a; border-color: rgba(196,42,58,0.8); }
 
   .goa-pool-empty { color: var(--muted); font-style: italic; font-size: 0.82rem; text-align: center; padding: 0.4rem; }
 
@@ -318,13 +271,13 @@ const styles = `
   .goa-split-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
   .goa-split-btn.random {
-    border-color: rgba(42,171,184,0.4);
+    border-color: rgba(232,54,74,0.4);
     color: var(--atlantis-light);
   }
   .goa-split-btn.random:hover:not(:disabled) {
-    background: rgba(26,107,122,0.25);
+    background: rgba(196,42,58,0.25);
     border-color: var(--atlantis-light);
-    box-shadow: 0 0 12px rgba(42,171,184,0.2);
+    box-shadow: 0 0 12px rgba(232,54,74,0.2);
   }
 
   .goa-split-btn.balanced {
@@ -429,6 +382,38 @@ const styles = `
 
   .goa-divider { height: 1px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: 0.25rem 0.75rem; }
 
+  .goa-go-btn {
+    width: 100%;
+    background: linear-gradient(135deg, rgba(201,151,58,0.18), rgba(122,88,26,0.3));
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    color: var(--gold-light);
+    font-family: 'Cinzel', serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.9rem 1rem;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .goa-go-btn::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(201,151,58,0.15), transparent);
+    transition: left 0.4s;
+  }
+  .goa-go-btn:hover::before { left: 100%; }
+  .goa-go-btn:hover { box-shadow: 0 0 20px rgba(201,151,58,0.3); }
+
   .goa-footer {
     text-align: center;
     padding: 0 1rem 2rem;
@@ -441,6 +426,7 @@ const styles = `
 `;
 
 export default function TeamSplitterPage() {
+  const router = useRouter();
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -506,7 +492,6 @@ export default function TeamSplitterPage() {
     setLastMode("balanced");
   };
 
-  
   const handleGoToBattle = () => {
     if (!result) return;
     const params = new URLSearchParams();
@@ -514,7 +499,7 @@ export default function TeamSplitterPage() {
     result.titans.forEach((p) => params.append("tit", p.id));
     router.push(`/matches/new?${params.toString()}`);
   };
-  
+
   const canSplit = pool.length >= 2;
 
   if (loading) {
@@ -524,7 +509,7 @@ export default function TeamSplitterPage() {
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚔️</div>
           <p style={{ fontFamily: "'Cinzel', serif", fontSize: "0.75rem", letterSpacing: "0.2em", color: "var(--muted)", textTransform: "uppercase" }}>
-            Summoning players…
+            Summoning warriors…
           </p>
         </div>
       </div>
@@ -537,7 +522,7 @@ export default function TeamSplitterPage() {
 
       <header className="goa-header">
         <div className="goa-crown">⚔️</div>
-        <h1 className="goa-title">Divide the Players</h1>
+        <h1 className="goa-title">Divide the Host</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
 
@@ -554,7 +539,7 @@ export default function TeamSplitterPage() {
         <div className="goa-card-body">
           <input
             className="goa-search"
-            placeholder="Search or add a player..."
+            placeholder="Search or add a warrior…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setResult(null); }}
           />
@@ -569,7 +554,7 @@ export default function TeamSplitterPage() {
               ))}
               {available.length === 0 && (
                 <button className="goa-option goa-option-new" onClick={() => addToPool(search)}>
-                  ✦ Recruit &quot;{search}&quot;
+                  ✦ Recruit "{search}"
                 </button>
               )}
             </div>
@@ -577,7 +562,7 @@ export default function TeamSplitterPage() {
 
           <div className="goa-pool">
             {pool.length === 0 && (
-              <p className="goa-pool-empty">No players assembled yet</p>
+              <p className="goa-pool-empty">No warriors assembled yet</p>
             )}
             {pool.map((p) => (
               <div key={p.id} className="goa-pool-row">
@@ -612,13 +597,13 @@ export default function TeamSplitterPage() {
         >
           <span className="goa-split-icon">⚖️</span>
           Balanced Split
-          <span className="goa-split-desc">Similar average MMR across teams</span>
+          <span className="goa-split-desc">Equal MMR across teams</span>
         </button>
       </div>
 
       {!canSplit && (
         <p style={{ textAlign: "center", fontFamily: "'Cinzel', serif", fontSize: "0.62rem", letterSpacing: "0.12em", color: "var(--muted)", textTransform: "uppercase", margin: "0 0.75rem 0.75rem" }}>
-          Add at least 2 players to split
+          Add at least 2 warriors to split
         </p>
       )}
 
@@ -631,14 +616,14 @@ export default function TeamSplitterPage() {
                 {lastMode === "balanced" ? "⚖️ Balanced" : "🎲 Random"} Teams
               </span>
               <span className="goa-result-diff">
-                <span>{result.diff}</span> MMR difference
+                Δ <span>{result.diff}</span> MMR
               </span>
             </div>
 
             <div className="goa-result-teams">
               <div className="goa-result-team">
-                <div className="goa-result-team-head tit">
-                  <span>Atlantis</span>
+                <div className="goa-result-team-head atl">
+                  <span>🔴 Atlantis</span>
                 </div>
                 <div className="goa-result-avg">Avg {result.atlantisAvg} MMR</div>
                 {result.atlantis.map((p) => (
@@ -651,13 +636,13 @@ export default function TeamSplitterPage() {
               </div>
 
               <div className="goa-result-team">
-                <div className="goa-result-team-head atl">
-                  <span>Titans</span>
+                <div className="goa-result-team-head tit">
+                  <span>🔵 Titans</span>
                 </div>
                 <div className="goa-result-avg">Avg {result.titansAvg} MMR</div>
                 {result.titans.map((p) => (
                   <div key={p.id} className="goa-result-player">
-                    <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
+                    <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={20} borderColor="var(--tit)" />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
                     <span className="goa-result-player-mmr">{p.mmr}</span>
                   </div>
@@ -675,6 +660,9 @@ export default function TeamSplitterPage() {
           </div>
         </>
       )}
+
+      <div className="goa-divider" />
+      <div className="goa-footer">✦ &nbsp; Let the tides decide &nbsp; ✦</div>
     </main>
   );
 }

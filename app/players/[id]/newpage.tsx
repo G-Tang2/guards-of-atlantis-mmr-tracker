@@ -1,37 +1,33 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import { Hero, HEROES } from "@/lib/heroes";
+import { HEROES, ROLE_COLORS, ROLE_ICON, Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Player = {
-  id: string;
-  name: string;
-  mmr: number;
-  avatar_url?: string | null 
-};
+type Player = { id: string; name: string; mmr: number; avatar_url?: string | null };
 
 type MatchPlayer = {
   player_id: string;
   team: "atlantis" | "titans";
   mmr_before: number;
   mmr_after: number;
+  hero_id: string | null;
   players: Player;
 };
 
 type Match = {
   id: string;
   winner: "atlantis" | "titans";
-  created_at: string;
+  played_at: string;
   atlantis_avg_mmr: number;
   titans_avg_mmr: number;
   match_players: MatchPlayer[];
 };
+
 type HeroStat = {
   hero: Hero;
   played: number;
@@ -41,27 +37,20 @@ type HeroStat = {
 };
 
 type H2HEntry = {
-  opponent: Player;
-  withWins: number;
-  withLosses: number;
-  withMatches: number;
-  againstWins: number;
-  againstLosses: number;
-  againstMatches: number;
+  opponent: Player; // Player already has avatar_url
+  withWins: number; withLosses: number; withMatches: number;
+  againstWins: number; againstLosses: number; againstMatches: number;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const formatDate = (s: string) => {
+const fmt = (s: string) => {
   const d = new Date(s);
-  console.log(s)
-  // console.log(d)
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getFullYear()).slice(-2)}`;
 };
 
 const heroById = (id: string | null): Hero | null =>
   id ? (HEROES.find((h) => h.id === id) ?? null) : null;
-
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -276,30 +265,19 @@ const styles = `
   .goa-loading p { font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.2em; color:var(--muted); text-transform:uppercase; }
 `;
 
-// ─── MMR Sparkline chart ───────────────────────────────────────────────────────
+// ─── MMR Chart ────────────────────────────────────────────────────────────────
 
 function MmrChart({ points }: { points: { mmr: number; won: boolean; date: string }[] }) {
-  if (points.length < 2) {
-    return <p className="goa-chart-empty">Not enough battles to chart a trend</p>;
-  }
-
+  if (points.length < 2) return <p className="goa-chart-empty">Not enough battles to chart a trend</p>;
   const W = 320, H = 100, PAD = { t: 12, r: 8, b: 28, l: 36 };
-  const iW = W - PAD.l - PAD.r;
-  const iH = H - PAD.t - PAD.b;
-
+  const iW = W - PAD.l - PAD.r, iH = H - PAD.t - PAD.b;
   const mmrs = points.map((p) => p.mmr);
-  const minM = Math.min(...mmrs) - 20;
-  const maxM = Math.max(...mmrs) + 20;
-
+  const minM = Math.min(...mmrs) - 20, maxM = Math.max(...mmrs) + 20;
   const xOf = (i: number) => PAD.l + (i / (points.length - 1)) * iW;
   const yOf = (m: number) => PAD.t + iH - ((m - minM) / (maxM - minM)) * iH;
-
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)},${yOf(p.mmr).toFixed(1)}`).join(" ");
-  const areaPath = `${linePath} L${xOf(points.length - 1).toFixed(1)},${(PAD.t + iH).toFixed(1)} L${PAD.l},${(PAD.t + iH).toFixed(1)} Z`;
-
-  // Y axis ticks
+  const areaPath = `${linePath} L${xOf(points.length-1).toFixed(1)},${(PAD.t+iH).toFixed(1)} L${PAD.l},${(PAD.t+iH).toFixed(1)} Z`;
   const yTicks = [minM + 20, Math.round((minM + maxM) / 2), maxM - 20];
-
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="goa-chart-svg">
       <defs>
@@ -308,43 +286,21 @@ function MmrChart({ points }: { points: { mmr: number; won: boolean; date: strin
           <stop offset="100%" stopColor="#C9973A" stopOpacity="0" />
         </linearGradient>
       </defs>
-
-      {/* Grid lines */}
       {yTicks.map((t) => (
         <g key={t}>
-          <line x1={PAD.l} y1={yOf(t)} x2={W - PAD.r} y2={yOf(t)} className="goa-chart-axis" />
-          <text x={PAD.l - 4} y={yOf(t) + 3} textAnchor="end" className="goa-chart-label">{t}</text>
+          <line x1={PAD.l} y1={yOf(t)} x2={W-PAD.r} y2={yOf(t)} className="goa-chart-axis" />
+          <text x={PAD.l-4} y={yOf(t)+3} textAnchor="end" className="goa-chart-label">{t}</text>
         </g>
       ))}
-
-      {/* X axis */}
-      <line x1={PAD.l} y1={PAD.t + iH} x2={W - PAD.r} y2={PAD.t + iH} className="goa-chart-axis" />
-
-      {/* Area + line */}
+      <line x1={PAD.l} y1={PAD.t+iH} x2={W-PAD.r} y2={PAD.t+iH} className="goa-chart-axis" />
       <path d={areaPath} className="goa-chart-area" />
       <path d={linePath} className="goa-chart-line" />
-
-      {/* Dots */}
       {points.map((p, i) => (
-        <circle
-          key={i}
-          cx={xOf(i)}
-          cy={yOf(p.mmr)}
-          r={3}
-          className={`goa-chart-dot ${p.won ? "win" : "loss"}`}
-        />
+        <circle key={i} cx={xOf(i)} cy={yOf(p.mmr)} r={3} className={`goa-chart-dot ${p.won ? "win" : "loss"}`} />
       ))}
-
-      {/* First & last labels */}
-      {[0, points.length - 1].map((i) => (
-        <text
-          key={i}
-          x={xOf(i)}
-          y={H - 6}
-          textAnchor={i === 0 ? "start" : "end"}
-          className="goa-chart-label"
-        >
-          {formatDate(points[i].date)}
+      {[0, points.length-1].map((i) => (
+        <text key={i} x={xOf(i)} y={H-6} textAnchor={i === 0 ? "start" : "end"} className="goa-chart-label">
+          {fmt(points[i].date)}
         </text>
       ))}
     </svg>
@@ -353,21 +309,21 @@ function MmrChart({ points }: { points: { mmr: number; won: boolean; date: strin
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
+type Tab = "matches" | "heroes" | "h2h";
+
 export default function PlayerProfilePage() {
-  const params = useParams();
-  const router = useRouter();
+  const params  = useParams();
+  const router  = useRouter();
   const playerId = params?.id as string;
 
-  const [player, setPlayer] = useState<Player | null>(null);
-  // const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  const [player,  setPlayer]  = useState<Player | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"matches" | "h2h">("matches");
-    const [avatarUploading, setAvatarUploading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-  
+  const [activeTab, setActiveTab] = useState<Tab>("matches");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !player) return;
     // Resize + convert to base64 via canvas
@@ -407,24 +363,23 @@ export default function PlayerProfilePage() {
 
   useEffect(() => {
     if (!playerId) return;
-
     const load = async () => {
-      const [{ data: pData },{ data: mData }] = await Promise.all([
+      const [{ data: pData }, { data: mData }] = await Promise.all([
         supabaseClient.from("players").select("id, name, mmr, avatar_url").eq("id", playerId).single(),
         supabaseClient
           .from("matches")
           .select(`
-            id, winner, created_at, atlantis_avg_mmr, titans_avg_mmr,
+            id, winner, played_at, atlantis_avg_mmr, titans_avg_mmr,
             match_players (
-              player_id, team, mmr_before, mmr_after,
+              player_id, team, mmr_before, mmr_after, hero_id,
               players ( id, name, mmr, avatar_url )
             )
           `)
-          .order("created_at", { ascending: false }),
+          .order("played_at", { ascending: false }),
       ]);
 
       setPlayer(pData ?? null);
-      // Normalize match_players
+
       const normalized: Match[] = (mData ?? [])
         .filter((m: any) => m.match_players.some((mp: any) => mp.player_id === playerId))
         .map((m: any) => ({
@@ -441,11 +396,10 @@ export default function PlayerProfilePage() {
       setMatches(normalized);
       setLoading(false);
     };
-
     load();
   }, [playerId]);
 
-  // ── Derived stats ────────────────────────────────────────────────────────────
+  // ── Core stats ───────────────────────────────────────────────────────────────
 
   const myMatches = useMemo(
     () => matches.filter((m) => m.match_players.some((mp) => mp.player_id === playerId)),
@@ -455,77 +409,67 @@ export default function PlayerProfilePage() {
   const { wins, losses, totalMatches, winRate, mmrTrend, streak } = useMemo(() => {
     let w = 0, l = 0;
     const trend: { mmr: number; won: boolean; date: string }[] = [];
-
-    // Process oldest-first for trend
-    const chronological = [...myMatches].reverse();
-    chronological.forEach((m) => {
+    [...myMatches].reverse().forEach((m) => {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
       if (!me) return;
       const won = me.team === m.winner;
       if (won) w++; else l++;
-      trend.push({ mmr: me.mmr_after, won, date: m.created_at });
+      trend.push({ mmr: me.mmr_after, won, date: m.played_at });
     });
-
-    // Streak (from most recent)
     let streak = 0;
     for (const m of myMatches) {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
       if (!me) break;
       const won = me.team === m.winner;
-      if (streak === 0) { streak = won ? 1 : -1; }
+      if (streak === 0) streak = won ? 1 : -1;
       else if (streak > 0 && won) streak++;
       else if (streak < 0 && !won) streak--;
       else break;
     }
-
     const total = w + l;
-    return {
-      wins: w,
-      losses: l,
-      totalMatches: total,
-      winRate: total === 0 ? 0 : Math.round((w / total) * 100),
-      mmrTrend: trend,
-      streak,
-    };
+    return { wins: w, losses: l, totalMatches: total, winRate: total === 0 ? 0 : Math.round((w / total) * 100), mmrTrend: trend, streak };
+  }, [myMatches, playerId]);
+
+  // ── Hero stats ───────────────────────────────────────────────────────────────
+
+  const heroStats: HeroStat[] = useMemo(() => {
+    const map = new Map<string, { wins: number; losses: number }>();
+    myMatches.forEach((m) => {
+      const me = m.match_players.find((mp) => mp.player_id === playerId);
+      if (!me || !me.hero_id) return;
+      const won = me.team === m.winner;
+      const cur = map.get(me.hero_id) ?? { wins: 0, losses: 0 };
+      map.set(me.hero_id, { wins: cur.wins + (won ? 1 : 0), losses: cur.losses + (won ? 0 : 1) });
+    });
+    return Array.from(map.entries())
+      .map(([heroId, { wins, losses }]) => {
+        const hero = heroById(heroId);
+        if (!hero) return null;
+        const played = wins + losses;
+        return { hero, played, wins, losses, winRate: played === 0 ? 0 : Math.round((wins / played) * 100) };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b!.played - a!.played) as HeroStat[];
   }, [myMatches, playerId]);
 
   // ── H2H stats ────────────────────────────────────────────────────────────────
 
   const h2hStats: H2HEntry[] = useMemo(() => {
     const map = new Map<string, H2HEntry>();
-
     myMatches.forEach((m) => {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
       if (!me) return;
-      const myTeam = me.team;
-      const won = myTeam === m.winner;
-
+      const won = me.team === m.winner;
       m.match_players.forEach((mp) => {
         if (mp.player_id === playerId) return;
-        const opId = mp.player_id;
-
-        if (!map.has(opId)) {
-          map.set(opId, {
-            opponent: mp.players,
-            withWins: 0, withLosses: 0, withMatches: 0,
-            againstWins: 0, againstLosses: 0, againstMatches: 0,
-          });
+        if (!map.has(mp.player_id)) {
+          map.set(mp.player_id, { opponent: mp.players, withWins:0, withLosses:0, withMatches:0, againstWins:0, againstLosses:0, againstMatches:0 });
         }
-
-        const entry = map.get(opId)!;
-
-        if (mp.team === myTeam) {
-          // Teammate
-          entry.withMatches++;
-          if (won) entry.withWins++; else entry.withLosses++;
-        } else {
-          // Opponent
-          entry.againstMatches++;
-          if (won) entry.againstWins++; else entry.againstLosses++;
-        }
+        const e = map.get(mp.player_id)!;
+        if (mp.team === me.team) { e.withMatches++; if (won) e.withWins++; else e.withLosses++; }
+        else { e.againstMatches++; if (won) e.againstWins++; else e.againstLosses++; }
       });
     });
-
     return Array.from(map.values())
       .filter((e) => e.withMatches + e.againstMatches > 0)
       .sort((a, b) => (b.withMatches + b.againstMatches) - (a.withMatches + a.againstMatches));
@@ -537,28 +481,27 @@ export default function PlayerProfilePage() {
     return (
       <div className="goa-root">
         <style>{styles}</style>
-        <div className="goa-loading">
-          <div style={{ fontSize: "2rem" }}>⚔️</div>
-          <p>Consulting the archives…</p>
-        </div>
+        <div className="goa-loading"><div style={{fontSize:"2rem"}}>⚔️</div><p>Consulting the archives…</p></div>
       </div>
     );
   }
 
-  const initials = player.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const streakLabel = streak > 0 ? `${streak}W streak` : streak < 0 ? `${Math.abs(streak)}L streak` : "—";
   const streakColor = streak > 0 ? "var(--gain)" : streak < 0 ? "var(--loss)" : "var(--muted)";
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: "matches", label: "⚔ History" },
+    { key: "heroes",  label: "🦸 Heroes"  },
+    { key: "h2h",     label: "🛡 H2H"     },
+  ];
 
   return (
     <main className="goa-root">
       <style>{styles}</style>
 
-      {/* Back */}
-      <button className="goa-back" onClick={() => router.back()}>
-        <span className="goa-back-arrow">‹</span> Hall of Honour
-      </button>
+      <button className="goa-back" onClick={() => router.back()}>‹ Hall of Honour</button>
 
-      {/* Hero */}
+      {/* Hero banner */}
       <div className="goa-hero-banner">
         <div className="goa-avatar-wrap" onClick={() => fileInputRef.current?.click()}>
           <PlayerAvatar avatarUrl={player.avatar_url} name={player.name} size={80} borderColor="var(--gold)" />
@@ -588,49 +531,40 @@ export default function PlayerProfilePage() {
         <div className="goa-stat-tile">
           <div className="goa-stat-lbl">Win Rate</div>
           <div className="goa-stat-val">{winRate}%</div>
-          <div className="goa-win-bar-wrap">
-            <div className="goa-win-bar" style={{ width: `${winRate}%` }} />
-          </div>
+          <div className="goa-win-bar-wrap"><div className="goa-win-bar" style={{width:`${winRate}%`}} /></div>
         </div>
-
         <div className="goa-stat-tile">
           <div className="goa-stat-lbl">Battles</div>
           <div className="goa-stat-val">{totalMatches}</div>
           <div className="goa-stat-sub">matches played</div>
         </div>
-
         <div className="goa-stat-tile">
           <div className="goa-stat-lbl">Record</div>
           <div className="goa-wl-row">
             <span className="goa-wins">{wins}W</span>
-            <span className="goa-wl-sep">/</span>
+            <span style={{color:"var(--muted)",fontSize:"0.7rem"}}>/</span>
             <span className="goa-losses">{losses}L</span>
           </div>
           <div className="goa-stat-sub">victories / defeats</div>
         </div>
-
         <div className="goa-stat-tile">
           <div className="goa-stat-lbl">Streak</div>
-          <div className="goa-stat-val" style={{ color: streakColor, fontSize: "1rem" }}>
-            {streakLabel}
-          </div>
+          <div className="goa-stat-val" style={{color:streakColor,fontSize:"1rem"}}>{streakLabel}</div>
           <div className="goa-stat-sub">current run</div>
         </div>
       </div>
 
       {/* MMR Trend */}
       <div className="goa-section">
-        <div className="goa-sec-head">
-          <span>📈</span> MMR Trend
-        </div>
+        <div className="goa-sec-head"><span>📈</span> MMR Trend</div>
         <div className="goa-chart-wrap">
           <MmrChart points={mmrTrend} />
           {mmrTrend.length >= 2 && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.5rem" }}>
-              <span style={{ fontFamily: "'Cinzel', serif", fontSize: "0.58rem", color: "var(--muted)", letterSpacing: "0.06em" }}>
-                ● <span style={{ color: "var(--gain)" }}>Win</span> &nbsp; ● <span style={{ color: "var(--loss)" }}>Loss</span>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:"0.5rem"}}>
+              <span style={{fontFamily:"'Cinzel',serif",fontSize:"0.58rem",color:"var(--muted)",letterSpacing:"0.06em"}}>
+                ● <span style={{color:"var(--gain)"}}>Win</span> &nbsp; ● <span style={{color:"var(--loss)"}}>Loss</span>
               </span>
-              <span style={{ fontFamily: "'Cinzel', serif", fontSize: "0.58rem", color: "var(--muted)", letterSpacing: "0.06em" }}>
+              <span style={{fontFamily:"'Cinzel',serif",fontSize:"0.58rem",color:"var(--muted)",letterSpacing:"0.06em"}}>
                 {totalMatches} battles charted
               </span>
             </div>
@@ -638,80 +572,122 @@ export default function PlayerProfilePage() {
         </div>
       </div>
 
-      {/* Tab selector */}
-      <div style={{ display: "flex", margin: "0 0.75rem 0.6rem", gap: "0.5rem" }}>
-        {(["matches", "h2h"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              flex: 1,
-              background: activeTab === tab ? "rgba(201,151,58,0.15)" : "rgba(28,26,20,0.85)",
-              border: `1px solid ${activeTab === tab ? "var(--border-b)" : "var(--border)"}`,
-              borderRadius: "4px",
-              color: activeTab === tab ? "var(--gold-light)" : "var(--muted)",
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.65rem",
-              fontWeight: 600,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              padding: "0.55rem",
-              cursor: "pointer",
-              transition: "all 0.15s",
-            }}
-          >
-            {tab === "matches" ? "⚔ Match History" : "🛡 Head 2 Head"}
+      {/* Tabs */}
+      <div className="goa-tabs">
+        {TABS.map(({ key, label }) => (
+          <button key={key} className={`goa-tab ${activeTab === key ? "active" : ""}`} onClick={() => setActiveTab(key)}>
+            {label}
           </button>
         ))}
       </div>
 
-      {/* Match History */}
+      {/* ── Match History ── */}
       {activeTab === "matches" && (
         <div className="goa-section">
-          <div className="goa-sec-head">
-            <span>📜</span> Recent Battles
-          </div>
-
-          {myMatches.length === 0 && (
-            <p style={{ textAlign: "center", padding: "1.5rem", fontFamily: "'Cinzel', serif", fontSize: "0.65rem", color: "var(--muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              No battles on record
-            </p>
-          )}
-
+          <div className="goa-sec-head"><span>📜</span> Recent Battles</div>
+          {myMatches.length === 0 && <p className="goa-no-data">No battles on record</p>}
           {myMatches.map((m) => {
-            const me = m.match_players.find((mp) => mp.player_id === playerId)!;
+            const me = m.match_players.find((mp) => mp.player_id === playerId);
             if (!me) return null;
-            const won = me.team === m.winner;
+            const won   = me.team === m.winner;
             const delta = me.mmr_after - me.mmr_before;
-
-            const myTeammates = m.match_players
+            const hero  = heroById(me.hero_id);
+            const teammates = m.match_players
               .filter((mp) => mp.team === me.team && mp.player_id !== playerId)
-              .map((mp) => mp.players.name);
-            const enemies = m.match_players
-              .filter((mp) => mp.team !== me.team)
               .map((mp) => mp.players.name);
 
             return (
               <div key={m.id} className="goa-match-row">
-                <div className={`goa-match-badge ${won ? "win" : "loss"}`}>
-                  {won ? "Victory" : "Defeat"}
-                </div>
-
-                <div className="goa-match-info">
-                  <div className="goa-match-date">{formatDate(m.created_at)}</div>
-                  <div className="goa-match-teams">
-                    <span className={me.team === "atlantis" ? "goa-match-team-atl" : "goa-match-team-tit"}>
-                      {me.team === "atlantis" ? "🌊" : "🔥"}
-                    </span>
-                    {" "}
-                    <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-                      {myTeammates.length > 0 ? `w/ ${myTeammates.join(", ")}` : "Solo"}
-                    </span>
+                <div className="goa-match-top">
+                  <div className={`goa-match-badge ${won ? "win" : "loss"}`}>{won ? "Victory" : "Defeat"}</div>
+                  <div>
+                    <div className="goa-match-date">{fmt(m.played_at)}</div>
+                    <div className="goa-match-meta">
+                      <span className={me.team === "atlantis" ? "goa-atl" : "goa-tit"}>
+                        {me.team === "atlantis" ? "🔴" : "🔵"}
+                      </span>
+                      <span style={{fontSize:"0.75rem",color:"var(--muted)"}}>
+                        {teammates.length > 0 ? `w/ ${teammates.join(", ")}` : "Solo"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={`goa-match-delta ${delta >= 0 ? "pos" : "neg"}`}>
+                    {delta >= 0 ? "▲" : "▼"}{Math.abs(delta)}
                   </div>
                 </div>
 
-                <div className={`goa-match-delta ${delta >= 0 ? "pos" : "neg"}`}>
-                  {delta >= 0 ? "▲" : "▼"}{Math.abs(delta)}
+                {/* Hero pill */}
+                {hero && (
+                  <div style={{marginTop:"0.25rem"}}>
+                    <span className="goa-match-hero-pill">
+                      <span
+                        className="goa-match-hero-dot"
+                        style={{background: ROLE_COLORS[hero.role]}}
+                      />
+                      {ROLE_ICON[hero.role]} {hero.name}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Hero Stats ── */}
+      {activeTab === "heroes" && (
+        <div className="goa-section">
+          <div className="goa-sec-head"><span>🦸</span> Hero Performance</div>
+
+          {heroStats.length === 0 && (
+            <p className="goa-no-data">No hero data recorded yet</p>
+          )}
+
+          {heroStats.map((hs) => {
+            const roleColor = ROLE_COLORS[hs.hero.role];
+            const wrClass   = hs.winRate >= 60 ? "good" : hs.winRate >= 45 ? "avg" : "bad";
+            return (
+              <div key={hs.hero.id} className="goa-hero-row">
+                {/* Icon */}
+                <div className="goa-hero-icon-wrap" style={{borderColor:`${roleColor}33`, background:`${roleColor}11`}}>
+                  {ROLE_ICON[hs.hero.role]}
+                </div>
+
+                {/* Name + bar */}
+                <div className="goa-hero-info">
+                  <div className="goa-hero-name-row">
+                    <span className="goa-hero-name-text">{hs.hero.name}</span>
+                    <span
+                      className="goa-hero-role-badge"
+                      style={{background:`${roleColor}22`, color:roleColor, border:`1px solid ${roleColor}44`}}
+                    >
+                      {hs.hero.role[0]}
+                    </span>
+                  </div>
+                  <div className="goa-hero-bar-wrap">
+                    <div
+                      className="goa-hero-bar-fill"
+                      style={{
+                        width:`${hs.winRate}%`,
+                        background: hs.winRate >= 60
+                          ? `linear-gradient(90deg, var(--gain), rgba(93,187,138,0.6))`
+                          : hs.winRate >= 45
+                            ? `linear-gradient(90deg, var(--gold), rgba(201,151,58,0.6))`
+                            : `linear-gradient(90deg, var(--loss), rgba(196,74,74,0.6))`,
+                      }}
+                    />
+                  </div>
+                  <div className="goa-hero-played" style={{marginTop:"0.18rem"}}>{hs.played} game{hs.played !== 1 ? "s" : ""}</div>
+                </div>
+
+                {/* Win rate + W/L */}
+                <div className="goa-hero-stats-right">
+                  <div className={`goa-hero-wr ${wrClass}`}>{hs.winRate}%</div>
+                  <div className="goa-hero-wl">
+                    <span style={{color:"var(--gain)"}}>{hs.wins}W</span>
+                    <span style={{color:"var(--muted)"}}>/</span>
+                    <span style={{color:"var(--loss)"}}>{hs.losses}L</span>
+                  </div>
                 </div>
               </div>
             );
@@ -719,45 +695,35 @@ export default function PlayerProfilePage() {
         </div>
       )}
 
-      {/* Head to Head */}
+      {/* ── H2H ── */}
       {activeTab === "h2h" && (
         <div className="goa-section">
-          <div className="goa-sec-head">
-            <span>🛡</span> Head to Head
-          </div>
-
-          {h2hStats.length === 0 && (
-            <p className="goa-h2h-no-data">No head-to-head data yet</p>
-          )}
-
+          <div className="goa-sec-head"><span>🛡</span> Head to Head</div>
+          {h2hStats.length === 0 && <p className="goa-no-data">No head-to-head data yet</p>}
           {h2hStats.map((entry) => {
-            const withRate = entry.withMatches === 0 ? 0 : Math.round((entry.withWins / entry.withMatches) * 100);
+            const withRate    = entry.withMatches    === 0 ? 0 : Math.round((entry.withWins    / entry.withMatches)    * 100);
             const againstRate = entry.againstMatches === 0 ? 0 : Math.round((entry.againstWins / entry.againstMatches) * 100);
-
             return (
               <div key={entry.opponent.id} className="goa-h2h-row">
                 <div className="goa-h2h-name">
-                  <span style={{display:"flex",alignItems:"center",gap:"0.35rem"}}><PlayerAvatar avatarUrl={entry.opponent.avatar_url} name={entry.opponent.name} size={22} />{entry.opponent.name}</span>
+                  <span style={{display:"flex",alignItems:"center",gap:"0.35rem"}}>
+                    <PlayerAvatar avatarUrl={entry.opponent.avatar_url} name={entry.opponent.name} size={22} />
+                    {entry.opponent.name}
+                  </span>
                   <span className="goa-h2h-mmr">{entry.opponent.mmr} MMR</span>
                 </div>
-
                 <div className="goa-h2h-bars">
                   {entry.withMatches > 0 && (
                     <div className="goa-h2h-bar-row">
-                      <span className="goa-h2h-bar-lbl" style={{ color: "var(--atl)" }}>With</span>
-                      <div className="goa-h2h-bar-track">
-                        <div className="goa-h2h-bar-fill with" style={{ width: `${withRate}%` }} />
-                      </div>
+                      <span className="goa-h2h-bar-lbl" style={{color:"var(--atl)"}}>With</span>
+                      <div className="goa-h2h-bar-track"><div className="goa-h2h-bar-fill with" style={{width:`${withRate}%`}} /></div>
                       <span className="goa-h2h-bar-stat">{entry.withWins}W/{entry.withLosses}L</span>
                     </div>
                   )}
-
                   {entry.againstMatches > 0 && (
                     <div className="goa-h2h-bar-row">
-                      <span className="goa-h2h-bar-lbl" style={{ color: "var(--tit)" }}>Vs</span>
-                      <div className="goa-h2h-bar-track">
-                        <div className="goa-h2h-bar-fill against" style={{ width: `${againstRate}%` }} />
-                      </div>
+                      <span className="goa-h2h-bar-lbl" style={{color:"var(--tit)"}}>Vs</span>
+                      <div className="goa-h2h-bar-track"><div className="goa-h2h-bar-fill against" style={{width:`${againstRate}%`}} /></div>
                       <span className="goa-h2h-bar-stat">{entry.againstWins}W/{entry.againstLosses}L</span>
                     </div>
                   )}
@@ -768,8 +734,7 @@ export default function PlayerProfilePage() {
         </div>
       )}
 
-      <div style={{ height: "0.25rem" }} />
-      <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, var(--border), transparent)", margin: "0 0.75rem" }} />
+      <div style={{height:"1px",background:"linear-gradient(90deg,transparent,var(--border),transparent)",margin:"0.25rem 0.75rem"}} />
       <div className="goa-footer">✦ &nbsp; Your legend is still being written &nbsp; ✦</div>
     </main>
   );
