@@ -54,8 +54,6 @@ type H2HEntry = {
 
 const formatDate = (s: string) => {
   const d = new Date(s);
-  console.log(s)
-  // console.log(d)
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
 };
 
@@ -131,87 +129,32 @@ const styles = `
   .goa-tab { flex:1; background:rgba(28,26,20,0.85); border:1px solid var(--border); border-radius:4px; color:var(--muted); font-family:'Cinzel',serif; font-size:0.6rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:0.5rem 0.3rem; cursor:pointer; transition:all 0.15s; }
   .goa-tab.active { background:rgba(201,151,58,0.14); border-color:var(--border-b); color:var(--gold-light); }
 
-  /* Match rows */
-  .goa-match-row { padding:0.5rem 0.72rem; border-bottom:1px solid rgba(201,151,58,0.08); transition:background 0.12s; }
+  /* Match rows FIXED Grid Layout */
+  .goa-match-row { 
+    display: grid;
+    grid-template-columns: 65px 1fr auto;
+    align-items: center; 
+    gap: 0.75rem; 
+    padding: 0.65rem 0.72rem; 
+    border-bottom: 1px solid rgba(201,151,58,0.08); 
+    transition: background 0.12s; 
+  }
   .goa-match-row:last-child { border-bottom:none; }
   .goa-match-row:hover { background:rgba(42,39,32,0.5); }
-  .goa-match-top { display:grid; grid-template-columns:50px 1fr auto; align-items:center; gap:0.5rem; }
+  
   .goa-match-badge { font-family:'Cinzel',serif; font-size:0.58rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:0.2rem 0.35rem; border-radius:2px; text-align:center; }
   .goa-match-badge.win  { background:rgba(93,187,138,0.14); color:var(--gain); border:1px solid rgba(93,187,138,0.28); }
   .goa-match-badge.loss { background:rgba(196,42,58,0.1);   color:var(--loss); border:1px solid rgba(196,42,58,0.22); }
+  .goa-match-info { display: flex; flex-direction: column; gap: 0.1rem; }
   .goa-match-date { font-family:'Cinzel',serif; font-size:0.6rem; letter-spacing:0.06em; color:var(--muted); }
-  .goa-match-meta { font-size:0.78rem; color:var(--txt); margin-top:0.06rem; display:flex; align-items:center; gap:0.3rem; flex-wrap:wrap; }
+  .goa-match-teams { font-size: 0.75rem; display: flex; align-items: center; gap: 0.3rem; }
+  
   .goa-match-delta { font-family:'Cinzel',serif; font-size:0.7rem; font-weight:600; text-align:right; }
   .goa-match-delta.pos { color:var(--gain); }
   .goa-match-delta.neg { color:var(--loss); }
-  /* Hero pill shown in match row */
-  .goa-match-hero-pill {
-    display:inline-flex; align-items:center; gap:0.22rem;
-    font-size:0.72rem; color:var(--muted);
-    background:rgba(42,39,32,0.7);
-    border:1px solid rgba(201,151,58,0.15);
-    border-radius:2px;
-    padding:0.06rem 0.3rem;
-    margin-top:0.2rem;
-    font-family:'Crimson Pro',serif;
-  }
-  .goa-match-hero-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
-  .goa-atl { color:var(--atl-light); }
-  .goa-tit { color:var(--tit-light); }
 
-  /* ── Hero stats section ── */
-  .goa-hero-row {
-    display:grid;
-    grid-template-columns:auto 1fr auto;
-    align-items:center;
-    gap:0.55rem;
-    padding:0.55rem 0.72rem;
-    border-bottom:1px solid rgba(201,151,58,0.07);
-    transition:background 0.12s;
-  }
-  .goa-hero-row:last-child { border-bottom:none; }
-  .goa-hero-row:hover { background:rgba(42,39,32,0.5); }
-
-  .goa-hero-icon-wrap {
-    width:32px; height:32px;
-    border-radius:3px;
-    display:flex; align-items:center; justify-content:center;
-    font-size:1.15rem;
-    flex-shrink:0;
-    background:rgba(42,39,32,0.7);
-    border:1px solid rgba(201,151,58,0.15);
-  }
-
-  .goa-hero-info { min-width:0; }
-  .goa-hero-name-row { display:flex; align-items:center; gap:0.35rem; }
-  .goa-hero-name-text { font-size:0.88rem; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .goa-hero-role-badge {
-    font-family:'Cinzel',serif; font-size:0.46rem; letter-spacing:0.08em; text-transform:uppercase;
-    padding:0.06rem 0.28rem; border-radius:2px; flex-shrink:0; font-weight:600;
-  }
-  .goa-hero-bar-wrap {
-    margin-top:0.28rem;
-    height:4px;
-    background:rgba(196,74,74,0.2);
-    border-radius:2px;
-    overflow:hidden;
-  }
-  .goa-hero-bar-fill {
-    height:100%; border-radius:2px;
-    transition:width 0.6s ease;
-  }
-
-  .goa-hero-stats-right { text-align:right; flex-shrink:0; }
-  .goa-hero-wr {
-    font-family:'Cinzel',serif; font-size:0.82rem; font-weight:700;
-  }
-  .goa-hero-wr.good { color:var(--gain); }
-  .goa-hero-wr.bad  { color:var(--loss); }
-  .goa-hero-wr.avg  { color:var(--gold-light); }
-  .goa-hero-wl { font-family:'Cinzel',serif; font-size:0.56rem; color:var(--muted); margin-top:0.1rem; }
-  .goa-hero-played { font-family:'Cinzel',serif; font-size:0.52rem; color:var(--muted); letter-spacing:0.06em; }
-
-  .goa-no-data { text-align:center; font-style:italic; font-size:0.82rem; color:var(--muted); padding:1.5rem; }
+  .goa-match-team-atl { color: var(--atl-light); }
+  .goa-match-team-tit { color: var(--tit-light); }
 
   /* H2H */
   .goa-h2h-row { padding:0.55rem 0.72rem; border-bottom:1px solid rgba(201,151,58,0.08); transition:background 0.12s; }
@@ -229,7 +172,7 @@ const styles = `
   .goa-h2h-bar-stat { font-family:'Cinzel',serif; font-size:0.56rem; color:var(--muted); width:32px; text-align:right; flex-shrink:0; }
 
 
-  /* ── Avatar upload ── */
+  /* ── Avatar upload + edit banner ── */
   .goa-avatar-wrap {
     position: relative;
     width: 80px;
@@ -237,28 +180,43 @@ const styles = `
     margin: 0 auto 0.65rem;
     cursor: pointer;
   }
-  .goa-avatar-wrap:hover .goa-avatar-overlay { opacity: 1; }
-  .goa-avatar-overlay {
+  
+  /* Edit button at the bottom of avatar circle */
+  .goa-avatar-edit-btn {
     position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: rgba(0,0,0,0.55);
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2A2720;
+    border: 1px solid var(--gold);
+    border-radius: 10px;
+    padding: 0.15rem 0.45rem;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.2s;
-    gap: 0.1rem;
+    gap: 0.2rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    opacity: 0.8;
+    transition: all 0.2s ease;
+    pointer-events: none; /* Allows click events to pass straight through to wrapper */
+    z-index: 10;
   }
-  .goa-avatar-overlay-icon { font-size: 1.1rem; }
-  .goa-avatar-overlay-text {
+  .goa-avatar-edit-icon { font-size: 0.55rem; }
+  .goa-avatar-edit-text {
     font-family: 'Cinzel', serif;
-    font-size: 0.45rem;
-    letter-spacing: 0.12em;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #F0C96A;
+    color: var(--gold-light);
   }
+
+  /* Interaction states for the whole module */
+  .goa-avatar-wrap:hover .goa-avatar-edit-btn {
+    opacity: 1;
+    background: var(--gold-dark);
+    box-shadow: 0 0 12px rgba(201,151,58,0.4);
+  }
+  
   .goa-avatar-uploading {
     position: absolute;
     inset: 0;
@@ -269,6 +227,7 @@ const styles = `
     justify-content: center;
     font-size: 1.2rem;
     animation: spin 1s linear infinite;
+    z-index: 15;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .goa-footer { text-align:center; padding:0.5rem 1rem 2rem; font-family:'Cinzel',serif; font-size:0.52rem; letter-spacing:0.2em; text-transform:uppercase; color:rgba(160,144,112,0.32); }
@@ -297,7 +256,6 @@ function MmrChart({ points }: { points: { mmr: number; won: boolean; date: strin
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)},${yOf(p.mmr).toFixed(1)}`).join(" ");
   const areaPath = `${linePath} L${xOf(points.length - 1).toFixed(1)},${(PAD.t + iH).toFixed(1)} L${PAD.l},${(PAD.t + iH).toFixed(1)} Z`;
 
-  // Y axis ticks
   const yTicks = [minM + 20, Math.round((minM + maxM) / 2), maxM - 20];
 
   return (
@@ -309,7 +267,6 @@ function MmrChart({ points }: { points: { mmr: number; won: boolean; date: strin
         </linearGradient>
       </defs>
 
-      {/* Grid lines */}
       {yTicks.map((t) => (
         <g key={t}>
           <line x1={PAD.l} y1={yOf(t)} x2={W - PAD.r} y2={yOf(t)} className="goa-chart-axis" />
@@ -317,14 +274,11 @@ function MmrChart({ points }: { points: { mmr: number; won: boolean; date: strin
         </g>
       ))}
 
-      {/* X axis */}
       <line x1={PAD.l} y1={PAD.t + iH} x2={W - PAD.r} y2={PAD.t + iH} className="goa-chart-axis" />
 
-      {/* Area + line */}
       <path d={areaPath} className="goa-chart-area" />
       <path d={linePath} className="goa-chart-line" />
 
-      {/* Dots */}
       {points.map((p, i) => (
         <circle
           key={i}
@@ -335,7 +289,6 @@ function MmrChart({ points }: { points: { mmr: number; won: boolean; date: strin
         />
       ))}
 
-      {/* First & last labels */}
       {[0, points.length - 1].map((i) => (
         <text
           key={i}
@@ -359,18 +312,16 @@ export default function PlayerProfilePage() {
   const playerId = params?.id as string;
 
   const [player, setPlayer] = useState<Player | null>(null);
-  // const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"matches" | "h2h">("matches");
-    const [avatarUploading, setAvatarUploading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
 
-    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !player) return;
-    // Resize + convert to base64 via canvas
     setAvatarUploading(true);
     try {
       const url = await new Promise<string>((resolve, reject) => {
@@ -382,7 +333,6 @@ export default function PlayerProfilePage() {
             const canvas = document.createElement("canvas");
             canvas.width = SIZE; canvas.height = SIZE;
             const ctx = canvas.getContext("2d")!;
-            // Crop to square from centre
             const min = Math.min(img.width, img.height);
             const sx = (img.width - min) / 2;
             const sy = (img.height - min) / 2;
@@ -424,7 +374,7 @@ export default function PlayerProfilePage() {
       ]);
 
       setPlayer(pData ?? null);
-      // Normalize match_players
+      
       const normalized: Match[] = (mData ?? [])
         .filter((m: any) => m.match_players.some((mp: any) => mp.player_id === playerId))
         .map((m: any) => ({
@@ -456,7 +406,6 @@ export default function PlayerProfilePage() {
     let w = 0, l = 0;
     const trend: { mmr: number; won: boolean; date: string }[] = [];
 
-    // Process oldest-first for trend
     const chronological = [...myMatches].reverse();
     chronological.forEach((m) => {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
@@ -466,7 +415,6 @@ export default function PlayerProfilePage() {
       trend.push({ mmr: me.mmr_after, won, date: m.created_at });
     });
 
-    // Streak (from most recent)
     let streak = 0;
     for (const m of myMatches) {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
@@ -515,11 +463,9 @@ export default function PlayerProfilePage() {
         const entry = map.get(opId)!;
 
         if (mp.team === myTeam) {
-          // Teammate
           entry.withMatches++;
           if (won) entry.withWins++; else entry.withLosses++;
         } else {
-          // Opponent
           entry.againstMatches++;
           if (won) entry.againstWins++; else entry.againstLosses++;
         }
@@ -530,8 +476,6 @@ export default function PlayerProfilePage() {
       .filter((e) => e.withMatches + e.againstMatches > 0)
       .sort((a, b) => (b.withMatches + b.againstMatches) - (a.withMatches + a.againstMatches));
   }, [myMatches, playerId]);
-
-  // ─── Render ──────────────────────────────────────────────────────────────────
 
   if (loading || !player) {
     return (
@@ -545,7 +489,6 @@ export default function PlayerProfilePage() {
     );
   }
 
-  const initials = player.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const streakLabel = streak > 0 ? `${streak}W streak` : streak < 0 ? `${Math.abs(streak)}L streak` : "—";
   const streakColor = streak > 0 ? "var(--gain)" : streak < 0 ? "var(--loss)" : "var(--muted)";
 
@@ -562,14 +505,12 @@ export default function PlayerProfilePage() {
       <div className="goa-hero-banner">
         <div className="goa-avatar-wrap" onClick={() => fileInputRef.current?.click()}>
           <PlayerAvatar avatarUrl={player.avatar_url} name={player.name} size={80} borderColor="var(--gold)" />
-          <div className="goa-avatar-overlay">
-            {avatarUploading
-              ? <div className="goa-avatar-uploading">⟳</div>
-              : <>
-                  <span className="goa-avatar-overlay-icon">📷</span>
-                  <span className="goa-avatar-overlay-text">Change</span>
-                </>
-            }
+          {avatarUploading && <div className="goa-avatar-uploading">⏳</div>}
+          
+          {/* Always visible semi-opaque helper badge */}
+          <div className="goa-avatar-edit-btn">
+            <span className="goa-avatar-edit-icon"></span>
+            <span className="goa-avatar-edit-text">Edit</span>
           </div>
         </div>
         <input
@@ -687,9 +628,6 @@ export default function PlayerProfilePage() {
             const myTeammates = m.match_players
               .filter((mp) => mp.team === me.team && mp.player_id !== playerId)
               .map((mp) => mp.players.name);
-            const enemies = m.match_players
-              .filter((mp) => mp.team !== me.team)
-              .map((mp) => mp.players.name);
 
             return (
               <div key={m.id} className="goa-match-row">
@@ -704,7 +642,7 @@ export default function PlayerProfilePage() {
                       {me.team === "atlantis" ? "🌊" : "🔥"}
                     </span>
                     {" "}
-                    <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+                    <span style={{ color: "var(--muted)" }}>
                       {myTeammates.length > 0 ? `w/ ${myTeammates.join(", ")}` : "Solo"}
                     </span>
                   </div>

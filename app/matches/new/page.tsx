@@ -6,6 +6,7 @@ type Player = {
   id: string;
   name: string;
   mmr: number;
+  avatar_url?: string | null;
 };
 
 type PoolEntry = {
@@ -20,6 +21,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { calculateMMR } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
 import { Hero } from "@/lib/heroes";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 export default function NewMatchPage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -260,14 +262,7 @@ export default function NewMatchPage() {
             <div key={p.player.id} className="goa-player-block">
               <div key={p.player.id} className="goa-player-row">
                 <span className="goa-player-name">
-                  <span
-                    style={{
-                      color: "var(--atlantis-light)",
-                      fontSize: "0.75rem",
-                    }}
-                  >
-                    ◆
-                  </span>
+                  <PlayerAvatar avatarUrl={p.player.avatar_url} name={p.player.name} size={22} />
                   {p.player.name}
                   {p.player.mmr && (
                     <span className="goa-player-mmr">{p.player.mmr}</span>
@@ -332,14 +327,7 @@ export default function NewMatchPage() {
             <div key={p.player.id} className="goa-player-block">
               <div className="goa-player-row">
                 <span className="goa-player-name">
-                  <span
-                    style={{
-                      color: "var(--titans-light)",
-                      fontSize: "0.75rem",
-                    }}
-                  >
-                    ◆
-                  </span>
+                  <PlayerAvatar avatarUrl={p.player.avatar_url} name={p.player.name} size={22} />
                   {p.player.name}
                   {p.player.mmr && (
                     <span className="goa-player-mmr">{p.player.mmr}</span>

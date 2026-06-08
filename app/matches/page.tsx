@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES } from "@/lib/heroes";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
+import {useRouter} from "next/navigation";
 
 type Player = {
   id: string;
   name: string;
   mmr: number;
+  avatar_url?: string | null;
 };
 
 type Team = "atlantis" | "titans";
@@ -70,7 +73,8 @@ export default function MatchHistoryPage() {
             players (
               id,
               name,
-              mmr
+              mmr,
+              avatar_url
             )
           )
         `,
@@ -81,7 +85,7 @@ export default function MatchHistoryPage() {
 
       const { data: playersData, error: playersError } = await supabaseClient
         .from("players")
-        .select("id, name, mmr");
+        .select("id, name, mmr, avatar_url");
 
       if (matchesError || playersError) {
         console.error({ matchesError, playersError });
@@ -104,7 +108,7 @@ export default function MatchHistoryPage() {
               mmr_before: mp.mmr_before,
               mmr_after: mp.mmr_after,
               hero_id: mp.hero_id,
-              players: { id: player.id, name: player.name, mmr: player.mmr },
+              players: { id: player.id, name: player.name, mmr: player.mmr, avatar_url: player.avatar_url },
             };
           })
           .filter((mp): mp is MatchPlayer => mp !== null);
@@ -121,6 +125,7 @@ export default function MatchHistoryPage() {
         };
       });
 
+      console.log("playersData:", playersData);
       setMatches(normalizedMatches);
       setPlayers(playersData ?? []);
       setLoading(false);
@@ -128,6 +133,9 @@ export default function MatchHistoryPage() {
 
     loadData();
   }, []);
+
+  const router = useRouter();
+  const goToProfile = (id: string) => router.push(`/players/${id}`);
 
   const filteredMatches = useMemo(() => {
     if (!filterPlayerId) return matches;
@@ -217,8 +225,8 @@ export default function MatchHistoryPage() {
       {playerStats && (
         <div className="goa-stats-card">
           <div className="goa-stats-head">
-            <span>✦</span>
-            {playerStats.name} — Chronicle
+            <PlayerAvatar avatarUrl={players.find((p) => p.id === filterPlayerId)?.avatar_url} name={playerStats.name} size={32} />
+            {playerStats.name}
           </div>
           <div className="goa-stats-grid">
             <div className="goa-stat">
@@ -299,6 +307,7 @@ export default function MatchHistoryPage() {
                       <div key={p.player_id} className="goa-player-entry">
                         <div className="goa-player-info">
                           <span className="goa-player-name">
+                            <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={22} />
                             {p.players.name}
                           </span>
                           <span className="goa-mmr-change">
@@ -335,9 +344,10 @@ export default function MatchHistoryPage() {
                   </div>
                   {titans.map((p) => {
                     return (
-                      <div key={p.player_id} className="goa-player-entry">
+                      <div key={p.player_id} className="goa-player-entry" onClick={() => goToProfile(p.player_id)}>
                         <div className="goa-player-info">
-                          <span className="goa-player-name">
+                          <span className="goa-player-name" >
+                            <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={22} />
                             {p.players.name}
                           </span>
                           <span className="goa-mmr-change">
