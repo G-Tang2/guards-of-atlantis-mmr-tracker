@@ -304,7 +304,7 @@ export default function MatchHistoryPage() {
                   </div>
                   {atlantis.map((p) => {
                     return (
-                      <div key={p.player_id} className="goa-player-entry">
+                      <div key={p.player_id} className="goa-player-entry" onClick={() => goToProfile(p.player_id)}>
                         <div className="goa-player-info">
                           <span className="goa-player-name">
                             <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={22} />
