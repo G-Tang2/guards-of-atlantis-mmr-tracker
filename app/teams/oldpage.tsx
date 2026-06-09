@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import router from "next/router";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 type Player = {
@@ -383,12 +383,12 @@ const styles = `
   .goa-result-diff span { color: var(--gold-light); font-weight: 600; }
 
   .goa-result-teams {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .goa-result-team { padding: 0.65rem 0.7rem; }
-  .goa-result-team:first-child { border-bottom: 1px solid var(--border); }
+  .goa-result-team:first-child { border-right: 1px solid var(--border); }
 
   .goa-result-team-head {
     font-family: 'Cinzel', serif;
@@ -441,7 +441,6 @@ const styles = `
 `;
 
 export default function TeamSplitterPage() {
-  const router = useRouter();
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -536,9 +535,6 @@ export default function TeamSplitterPage() {
     <main className="goa-root">
       <style>{styles}</style>
 
-      <button className="goa-back" onClick={() => router.back()}>
-        <span className="goa-back-arrow">‹</span> Home
-      </button>
       <header className="goa-header">
         <div className="goa-crown">⚔️</div>
         <h1 className="goa-title">Divide the Players</h1>

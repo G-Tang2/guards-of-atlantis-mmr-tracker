@@ -199,9 +199,6 @@ export default function MatchHistoryPage() {
 
   return (
     <main className="goa-root">
-      <button className="goa-back" onClick={() => router.back()}>
-        <span className="goa-back-arrow">‹</span> Home
-      </button>
       <header className="goa-header">
         <div className="goa-crown">📜</div>
         <h1 className="goa-title">Battle Archives</h1>
@@ -276,17 +273,9 @@ export default function MatchHistoryPage() {
             (p) => p.team === "atlantis",
           );
           const titans = match.match_players.filter((p) => p.team === "titans");
-          
-          let matchBorderClass = "";
-          if (filterPlayerId) {
-            const playerEntry = match.match_players.find((mp) => mp.player_id === filterPlayerId);
-            if (playerEntry) {
-              matchBorderClass = playerEntry.team === match.winner ? "match-win" : "match-loss";
-            }
-          }
 
           return (
-            <div key={match.id} className={`goa-match-card ${matchBorderClass}`}>
+            <div key={match.id} className="goa-match-card">
               <div className="goa-match-header">
                 <span className="goa-match-date">
                   {formatDate(match.created_at)}

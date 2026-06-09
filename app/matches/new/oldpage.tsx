@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 type Player = {
   id: string;
@@ -25,7 +24,6 @@ import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 export default function NewMatchPage() {
-  const router = useRouter();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [atlantisSearch, setAtlantisSearch] = useState("");
@@ -216,9 +214,6 @@ export default function NewMatchPage() {
 
   return (
     <div className="goa-root goa-bg">
-      <button className="goa-back" onClick={() => router.back()}>
-        <span className="goa-back-arrow">‹</span> Home
-      </button>
       {/* Header */}
       <header className="goa-header">
         <h1 className="goa-title">Record of Battle</h1>

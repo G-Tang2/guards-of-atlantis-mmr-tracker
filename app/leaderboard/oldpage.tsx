@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 type Player = {
   id: string;
   name: string;
   mmr: number;
+  avatar_url?: string | null;
 };
 
 type Match = {
@@ -23,6 +25,7 @@ type PlayerStats = {
   id: string;
   name: string;
   mmr: number;
+  avatar_url?: string | null;
   wins: number;
   losses: number;
   matches: number;
@@ -49,8 +52,8 @@ const styles = `
     --loss: #C44A4A;
     font-family: 'Crimson Pro', Georgia, serif;
     background:
-      radial-gradient(ellipse 120% 50% at 50% 0%, rgba(26,107,122,0.15) 0%, transparent 55%),
-      radial-gradient(ellipse 80% 40% at 50% 100%, rgba(122,26,42,0.1) 0%, transparent 55%),
+      radial-gradient(ellipse 120% 50% at 50% 0%, rgba(196,42,58,0.15) 0%, transparent 55%),
+      radial-gradient(ellipse 80% 40% at 50% 100%, rgba(42,107,122,0.1) 0%, transparent 55%),
       repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(201,151,58,0.025) 40px),
       repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(201,151,58,0.025) 40px),
       #1C1A14;
@@ -327,7 +330,7 @@ export default function LeaderboardPage() {
     const load = async () => {
       const { data: playersData } = await supabaseClient
         .from("players")
-        .select("id, name, mmr");
+        .select("id, name, mmr, avatar_url");
       const { data: matchesData } = await supabaseClient.from("matches").select(`
         id,
         winner,
@@ -356,6 +359,7 @@ export default function LeaderboardPage() {
         id: player.id,
         name: player.name,
         mmr: player.mmr,
+        avatar_url: player.avatar_url ?? null,
         wins,
         losses,
         matches: matchesPlayed,
@@ -441,6 +445,7 @@ export default function LeaderboardPage() {
             const cls = plinthClass[idx];
             return (
               <div key={p.id} className={`goa-podium-slot ${cls}`} onClick={() => goToProfile(p.id)}>
+                <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={36} borderColor={idx === 0 ? "rgba(201,151,58,0.8)" : idx === 1 ? "rgba(192,192,192,0.7)" : "rgba(180,100,40,0.7)"} />
                 <span className="goa-podium-name">{p.name}</span>
                 <span className="goa-podium-mmr">{p.mmr} MMR</span>
                 <div className={`goa-podium-plinth ${cls}`}>
@@ -491,6 +496,7 @@ export default function LeaderboardPage() {
                 {rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`}
               </span>
               <span className="goa-cell-name">
+                <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
                 {p.name}
                 <span className="goa-name-arrow">›</span>
               </span>

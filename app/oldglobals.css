@@ -250,13 +250,14 @@
 
   /* Sections & Containers */
   .goa-section {
-    margin: 0 0.75rem 0.75rem;
+    margin: 1rem;
     border: 1px solid var(--border);
     border-radius: 4px;
     overflow: hidden;
-    background: rgba(28, 26, 20, 0.85);
+    background: rgba(28, 26, 20, 0.8);
     position: relative;
   }
+
   .goa-section::before {
     content: "";
     position: absolute;
@@ -267,27 +268,17 @@
     background: linear-gradient(
       90deg,
       transparent,
-      var(--border-b),
+      var(--border-bright),
       transparent
     );
   }
-  .goa-sec-head {
-    padding: 0.55rem 0.85rem;
+
+  .goa-section-header {
+    padding: 0.6rem 1rem;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(
-      135deg,
-      rgba(42, 39, 32, 0.55),
-      rgba(28, 26, 20, 0.8)
-    );
-    font-family: "Cinzel", serif;
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--gold);
   }
 
   .goa-section-title {
@@ -461,7 +452,7 @@
   }
 
   .goa-player-name {
-    font-size: 1.2rem; /* Increased from 0.88rem */
+    font-size: 0.93rem; /* Increased from 0.88rem */
     color: var(--text-primary);
     display: flex;
     align-items: center;
@@ -470,7 +461,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 60%;
-    justify-self: center;
   }
 
   .goa-player-mmr {
@@ -693,7 +683,7 @@
 
   .goa-podium-mmr {
     font-family: "Cinzel", serif;
-    font-size: 0.78rem; /* Increased from 0.68rem */
+    font-size: 0.72rem; /* Increased from 0.68rem */
     color: var(--text-muted);
     letter-spacing: 0.05em;
   }
@@ -776,7 +766,7 @@
 
   /* Leaderboard Interactive Sort Controls */
   .goa-sort-bar {
-    margin: 0.85rem 0.75rem;
+    margin: 0.85rem 0.75rem 0;
     display: flex;
     gap: 0.4rem;
     flex-wrap: wrap;
@@ -834,15 +824,6 @@
     );
   }
 
-  .goa-tap-hint {
-    text-align: center;
-    font-family: "Cinzel", serif;
-    font-size: 0.55rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: rgba(235, 201, 49, 0.671);
-  }
-
   .goa-header-row,
   .goa-row {
     display: grid;
@@ -878,9 +859,6 @@
   }
   .goa-col-head.right {
     justify-content: flex-end;
-  }
-  .goa-col-head.center {
-    justify-content: center;
   }
 
   .goa-row {
@@ -924,15 +902,11 @@
   }
 
   .goa-cell-name {
-    font-size: 1rem;
-    color: var(--txt);
+    font-size: 0.95rem; /* Increased from 0.9rem */
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    transition: color 0.15s;
   }
 
   .goa-cell-mmr {
@@ -1030,9 +1004,7 @@
     margin-bottom: 0;
   }
 
-  .goa-hero-wrap {
-    padding: 0.3rem 0.55rem 0.45rem;
-  }
+  .goa-hero-wrap { padding: 0.3rem 0.55rem 0.45rem; }
 
   /* Faction Strip UI */
   .goa-factions {
@@ -1151,7 +1123,11 @@
   }
 
   .goa-nav-btn.tm .goa-nav-accent {
-    background: linear-gradient(180deg, #8b5cf6, rgba(139, 92, 246, 0.25));
+    background: linear-gradient(
+      180deg,
+      #8b5cf6,
+      rgba(139, 92, 246, 0.25)
+    );
   }
 
   .goa-nav-inner {
@@ -1207,20 +1183,6 @@
   }
 
   /* Player Profile Statistics Cards */
-  .goa-hero-banner {
-    padding: 1rem 1rem 0;
-    text-align: center;
-    position: relative;
-  }
-  .goa-hero-banner::after {
-    content: "";
-    display: block;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--gold), transparent);
-    margin: 1.1rem auto 0;
-    width: 75%;
-  }
-
   .goa-stats-card {
     margin: 0.75rem;
     border: 1px solid var(--border);
@@ -1265,82 +1227,38 @@
   .goa-stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-    margin: 0.75rem;
+    gap: 0;
   }
-  .goa-stat-tile {
-    background: rgba(28, 26, 20, 0.85);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.7rem 0.85rem;
-    position: relative;
-    overflow: hidden;
+  .goa-stat {
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
   }
-  .goa-stat-tile::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      var(--border-b),
-      transparent
-    );
+  .goa-stat:nth-child(even) {
+    border-right: none;
   }
-  .goa-stat-lbl {
+  .goa-stat:nth-last-child(-n + 2) {
+    border-bottom: none;
+  }
+  .goa-stat-label {
     font-family: "Cinzel", serif;
-    font-size: 0.58rem;
+    font-size: 0.65rem; /* Increased from 0.6rem */
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 0.25rem;
+    color: var(--text-muted);
+    margin-bottom: 0.2rem;
   }
-  .goa-stat-val {
+  .goa-stat-value {
     font-family: "Cinzel", serif;
-    font-size: 1.35rem;
-    font-weight: 700;
+    font-size: 1.25rem; /* Increased from 1.15rem */
+    font-weight: 600;
     color: var(--gold-light);
-    line-height: 1;
   }
   .goa-stat-sub {
-    font-size: 0.72rem;
-    color: var(--muted);
+    font-size: 0.8rem; /* Increased from 0.75rem */
+    color: var(--text-muted);
     font-style: italic;
-    margin-top: 0.15rem;
-  }
-  .goa-win-bar-wrap {
-    margin-top: 0.5rem;
-    height: 6px;
-    background: rgba(196, 74, 74, 0.2);
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  .goa-win-bar {
-    height: 100%;
-    background: linear-gradient(90deg, var(--gain), rgba(93, 187, 138, 0.7));
-    border-radius: 3px;
-    transition: width 0.6s ease;
-  }
-  .goa-wl-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.35rem;
-  }
-  .goa-wins {
-    color: var(--gain);
-    font-family: "Cinzel", serif;
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-  .goa-losses {
-    color: var(--loss);
-    font-family: "Cinzel", serif;
-    font-size: 0.85rem;
-    font-weight: 600;
+    margin-top: 0.1rem;
   }
 
   /* Match Management Elements */
@@ -1349,27 +1267,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-  }
-
-  .goa-match-badge {
-    font-family: "Cinzel", serif;
-    font-size: 0.58rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 0.2rem 0.35rem;
-    border-radius: 2px;
-    text-align: center;
-  }
-  .goa-match-badge.win {
-    background: rgba(93, 187, 138, 0.14);
-    color: var(--gain);
-    border: 1px solid rgba(93, 187, 138, 0.28);
-  }
-  .goa-match-badge.loss {
-    background: rgba(196, 42, 58, 0.1);
-    color: var(--loss);
-    border: 1px solid rgba(196, 42, 58, 0.22);
   }
 
   .goa-match-card {
@@ -1414,21 +1311,7 @@
     font-family: "Cinzel", serif;
     font-size: 0.7rem; /* Increased from 0.65rem */
     letter-spacing: 0.1em;
-    color: var(--text-primary);
-    font-weight: 700;
-  }
-
-  .goa-match-delta {
-    font-family: "Cinzel", serif;
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-align: right;
-  }
-  .goa-match-delta.pos {
-    color: var(--gain);
-  }
-  .goa-match-delta.neg {
-    color: var(--loss);
+    color: var(--text-muted);
   }
 
   .goa-match-winner {
@@ -1462,15 +1345,15 @@
   }
 
   .goa-teams {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .goa-team {
     padding: 0.65rem 0.75rem;
   }
   .goa-team:first-child {
-    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
   }
 
   .goa-team-head {
@@ -1523,7 +1406,7 @@
   .goa-player-entry:last-child {
     border-bottom: none;
   }
-
+  
   .goa-player-info {
     display: flex;
     justify-content: space-between;
@@ -1539,18 +1422,6 @@
     display: flex;
     align-items: center;
     gap: 0.2rem;
-  }
-
-  .goa-mmr-display {
-    font-family: "Cinzel", serif;
-    font-size: 0.72rem;
-    letter-spacing: 0.15em;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-  .goa-mmr-display b {
-    color: var(--gold);
-    font-size: 1rem;
   }
 
   .goa-delta {
@@ -1776,460 +1647,5 @@
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
-  }
-
-  /* ── Back button (all pages) ── */
-  .goa-back {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.9rem 0.9rem 0;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-family: "Cinzel", serif;
-    font-size: 0.78rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: color 0.15s;
-  }
-  .goa-back:hover {
-    color: var(--gold-light);
-  }
-  .goa-back-arrow {
-    font-size: 0.9rem;
-  }
-
-  /* ── Match card win/loss border (battle archive) ── */
-  .goa-match-card.match-win {
-    border-color: rgba(93, 187, 138, 0.55);
-    box-shadow: 0 0 0 1px rgba(93, 187, 138, 0.2);
-  }
-  .goa-match-card.match-win::before {
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(93, 187, 138, 0.5),
-      transparent
-    );
-  }
-  .goa-match-card.match-loss {
-    border-color: rgba(196, 74, 74, 0.55);
-    box-shadow: 0 0 0 1px rgba(196, 74, 74, 0.2);
-  }
-  .goa-match-card.match-loss::before {
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(196, 74, 74, 0.5),
-      transparent
-    );
-  }
-
-  /* ── Player block (new match page) ── */
-  .goa-player-block {
-    background: rgba(42, 39, 32, 0.45);
-    border: 1px solid rgba(201, 151, 58, 0.15);
-    border-radius: 3px;
-    overflow: visible;
-    animation: fadeSlide 0.2s ease;
-  }
-  .goa-hero-wrap {
-    padding: 0.3rem 0.55rem 0.45rem;
-  }
-
-  /* ── Hero stats section (profile page) ── */
-  .goa-hero-stat-row {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.6rem 0.85rem;
-    border-bottom: 1px solid rgba(201, 151, 58, 0.07);
-    transition: background 0.12s;
-  }
-  .goa-hero-stat-row:last-child {
-    border-bottom: none;
-  }
-  .goa-hero-stat-row:hover {
-    background: rgba(42, 39, 32, 0.5);
-  }
-
-  .goa-hero-stat-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 3px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    flex-shrink: 0;
-    background: rgba(42, 39, 32, 0.7);
-    border: 1px solid rgba(201, 151, 58, 0.15);
-  }
-  .goa-hero-stat-info {
-    min-width: 0;
-  }
-  .goa-hero-stat-name {
-    font-family: "Cinzel", serif;
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 0.15rem;
-  }
-  .goa-hero-stat-bar-wrap {
-    height: 5px;
-    background: rgba(42, 39, 32, 0.8);
-    border-radius: 3px;
-    overflow: hidden;
-    margin-bottom: 0.15rem;
-  }
-  .goa-hero-stat-bar-fill {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.6s ease;
-  }
-  .goa-hero-stat-games {
-    font-family: "Cinzel", serif;
-    font-size: 0.6rem;
-    color: var(--text-muted);
-    letter-spacing: 0.05em;
-  }
-  .goa-hero-stat-right {
-    text-align: right;
-    flex-shrink: 0;
-  }
-  .goa-hero-stat-wr {
-    font-family: "Cinzel", serif;
-    font-size: 1rem;
-    font-weight: 700;
-  }
-  .goa-hero-stat-wr.good {
-    color: var(--gain);
-  }
-  .goa-hero-stat-wr.mid {
-    color: var(--gold-light);
-  }
-  .goa-hero-stat-wr.bad {
-    color: var(--loss);
-  }
-  .goa-hero-stat-wl {
-    font-family: "Cinzel", serif;
-    font-size: 0.65rem;
-    color: var(--text-muted);
-  }
-
-  /* ── Profile match history: vs team ── */
-  .goa-match-vs {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-top: 0.1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    flex-wrap: wrap;
-  }
-  .goa-vs-label {
-    font-family: "Cinzel", serif;
-    font-size: 0.75rem;
-    letter-spacing: 0.08em;
-    color: var(--text-muted);
-  }
-  .goa-vs-player {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  /* ── Profile page tabs ── */
-  .goa-profile-tabs {
-    display: flex;
-    margin: 0 0.75rem 0.65rem;
-    gap: 0.4rem;
-  }
-  .goa-profile-tab {
-    flex: 1;
-    background: rgba(28, 26, 20, 0.85);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text-muted);
-    font-family: "Cinzel", serif;
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 0.55rem 0.25rem;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .goa-profile-tab.active {
-    background: rgba(201, 151, 58, 0.14);
-    border-color: rgba(201, 151, 58, 0.65);
-    color: var(--gold-light);
-  }
-
-  /* ── Profile match row win/loss border ── */
-  .goa-profile-match-row {
-    display: grid;
-    grid-template-columns: 65px 1fr auto;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.65rem 0.85rem;
-    border-bottom: 1px solid rgba(201, 151, 58, 0.08);
-    transition: background 0.12s;
-  }
-  .goa-profile-match-row:last-child {
-    border-bottom: none;
-  }
-  .goa-profile-match-row:hover {
-    background: rgba(42, 39, 32, 0.5);
-  }
-
-  /* ── Avatar upload wrap ── */
-  .goa-avatar-wrap {
-    position: relative;
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 0.65rem;
-    cursor: pointer;
-  }
-  .goa-avatar-edit-btn {
-    position: absolute;
-    bottom: -2px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #2a2720;
-    border: 1px solid var(--gold);
-    border-radius: 10px;
-    padding: 0.15rem 0.45rem;
-    display: flex;
-    align-items: center;
-    gap: 0.2rem;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-    opacity: 0.8;
-    transition: all 0.2s ease;
-    pointer-events: none;
-  }
-  .goa-avatar-wrap:hover .goa-avatar-edit-btn {
-    opacity: 1;
-  }
-  .goa-avatar-edit-icon {
-    font-size: 0.7rem;
-  }
-  .goa-avatar-edit-text {
-    font-family: "Cinzel", serif;
-    font-size: 0.5rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--gold-light);
-  }
-  .goa-avatar-uploading {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.4rem;
-  }
-
-  /* ── Profile section card ── */
-  .goa-profile-section {
-    margin: 0 0.75rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-    background: rgba(28, 26, 20, 0.85);
-    position: relative;
-  }
-  .goa-profile-section::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(201, 151, 58, 0.65),
-      transparent
-    );
-  }
-  .goa-profile-sec-head {
-    padding: 0.6rem 0.85rem;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    border-bottom: 1px solid var(--border);
-    background: linear-gradient(
-      135deg,
-      rgba(42, 39, 32, 0.55),
-      rgba(28, 26, 20, 0.8)
-    );
-    font-family: "Cinzel", serif;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--gold);
-  }
-
-  /* ── Profile stat tiles ── */
-  .goa-profile-stat-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-    margin: 0.75rem;
-  }
-  .goa-profile-stat-tile {
-    background: rgba(28, 26, 20, 0.85);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.75rem 0.9rem;
-    position: relative;
-    overflow: hidden;
-  }
-  .goa-profile-stat-tile::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(201, 151, 58, 0.65),
-      transparent
-    );
-  }
-  .goa-profile-stat-lbl {
-    font-family: "Cinzel", serif;
-    font-size: 0.62rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 0.25rem;
-  }
-  .goa-profile-stat-val {
-    font-family: "Cinzel", serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--gold-light);
-    line-height: 1;
-  }
-  .goa-profile-stat-sub {
-    font-size: 0.76rem;
-    color: var(--text-muted);
-    font-style: italic;
-    margin-top: 0.15rem;
-  }
-  .goa-profile-win-bar-wrap {
-    margin-top: 0.5rem;
-    height: 6px;
-    background: rgba(196, 74, 74, 0.2);
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  .goa-profile-win-bar {
-    height: 100%;
-    background: linear-gradient(90deg, var(--gain), rgba(93, 187, 138, 0.7));
-    border-radius: 3px;
-    transition: width 0.6s ease;
-  }
-
-  /* ── MMR chart ── */
-  .goa-chart-wrap {
-    padding: 0.75rem;
-    overflow: hidden;
-  }
-  .goa-chart-svg {
-    width: 100%;
-    overflow: visible;
-  }
-  .goa-chart-line {
-    fill: none;
-    stroke: var(--gold);
-    stroke-width: 1.5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .goa-chart-area {
-    fill: url(#goldGrad);
-    opacity: 0.25;
-  }
-  .goa-chart-dot {
-    fill: var(--stone);
-    stroke: var(--gold-light);
-    stroke-width: 1.5;
-  }
-  .goa-chart-dot.win {
-    stroke: var(--gain);
-  }
-  .goa-chart-dot.loss {
-    stroke: var(--loss);
-  }
-  .goa-chart-label {
-    font-family: "Cinzel", serif;
-    font-size: 9px;
-    fill: var(--text-muted);
-  }
-  .goa-chart-axis {
-    stroke: var(--border);
-    stroke-width: 0.5;
-  }
-  .goa-chart-empty {
-    text-align: center;
-    font-family: "Cinzel", serif;
-    font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    padding: 1.5rem;
-  }
-
-  /* ── Team splitter result ── */
-  .goa-result-teams {
-    display: flex;
-    flex-direction: column;
-  }
-  .goa-result-team {
-    padding: 0.65rem 0.75rem;
-  }
-  .goa-result-team:first-child {
-    border-bottom: 1px solid var(--border);
-  }
-
-  /* ── H2H no data ── */
-  .goa-h2h-no-data {
-    text-align: center;
-    font-style: italic;
-    font-size: 0.88rem;
-    color: var(--text-muted);
-    padding: 1.5rem;
-  }
-  .goa-loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .goa-loading p {
-    font-family: "Cinzel", serif;
-    font-size: 0.78rem;
-    letter-spacing: 0.2em;
-    color: var(--text-muted);
-    text-transform: uppercase;
   }
 }
