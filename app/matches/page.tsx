@@ -330,7 +330,7 @@ export default function MatchHistoryPage() {
                           {renderStars(
                             parseInt(
                               HEROES.find((h) => h.id === p.hero_id)
-                                ?.difficulty || "",
+                                ?.complexity || "",
                             ),
                           )}
                         </span>
@@ -370,7 +370,7 @@ export default function MatchHistoryPage() {
                           {renderStars(
                             parseInt(
                               HEROES.find((h) => h.id === p.hero_id)
-                                ?.difficulty || "",
+                                ?.complexity || "",
                             ),
                           )}
                         </span>

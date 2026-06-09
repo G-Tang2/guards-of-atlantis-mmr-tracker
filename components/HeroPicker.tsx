@@ -1,4 +1,4 @@
-import { HEROES, DIFFICULTY_COLORS, Hero, HeroDifficulty } from "@/lib/heroes";
+import { HEROES, DIFFICULTY_COLORS, Hero, HeroComplexity } from "@/lib/heroes";
 import { useState } from "react";
 
 export function HeroPicker({
@@ -9,10 +9,10 @@ export function HeroPicker({
   onSelect: (h: Hero | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [difficultyFilter, setDifficultyFilter] = useState<HeroDifficulty | "All">("All");
+  const [complexityFilter, setComplexityFilter] = useState<HeroComplexity | "All">("All");
 
   const filtered =
-    difficultyFilter === "All" ? HEROES : HEROES.filter((h) => h.difficulty === difficultyFilter);
+    complexityFilter === "All" ? HEROES : HEROES.filter((h) => h.complexity === complexityFilter);
 
   const renderStars = (n: number) => "★".repeat(n);
 
@@ -27,7 +27,7 @@ export function HeroPicker({
               <span
                 className="goa-hero-chip-role"
               >
-                {renderStars(parseInt(selected.difficulty))}
+                {renderStars(parseInt(selected.complexity))}
               </span>
             </span>
             <button className="goa-change-hero" onClick={() => setOpen(true)}>
@@ -75,8 +75,8 @@ export function HeroPicker({
         {["All", ...Object.keys(DIFFICULTY_COLORS)].map((r) => (
           <button
             key={r}
-            className={`goa-role-chip ${difficultyFilter === r ? "active" : ""}`}
-            onClick={() => setDifficultyFilter(r as HeroDifficulty | "All")}
+            className={`goa-role-chip ${complexityFilter === r ? "active" : ""}`}
+            onClick={() => setComplexityFilter(r as HeroComplexity | "All")}
           >
             {renderStars(parseInt(r)) || "All"}
           </button>
@@ -94,9 +94,9 @@ export function HeroPicker({
             <span>{h.name}</span>
             <span
               className="goa-hero-chip-role"
-              style={{ background: DIFFICULTY_COLORS[h.difficulty] + "33", color: DIFFICULTY_COLORS[h.difficulty] }}
+              style={{ background: DIFFICULTY_COLORS[h.complexity] + "33", color: DIFFICULTY_COLORS[h.complexity] }}
             >
-              {renderStars(parseInt(h.difficulty))}
+              {renderStars(parseInt(h.complexity))}
             </span>
           </button>
         ))}

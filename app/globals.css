@@ -1839,10 +1839,16 @@
     padding: 0.3rem 0.55rem 0.45rem;
   }
 
+  .goa-hero-stat-hero-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
   /* ── Hero stats section (profile page) ── */
   .goa-hero-stat-row {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: 1fr auto;
     align-items: center;
     gap: 0.6rem;
     padding: 0.6rem 0.85rem;
@@ -1881,6 +1887,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     margin-bottom: 0.15rem;
+  }
+  .goa-hero-stat-complexity {
+    color: var(--text-muted);
+    font-size: 0.85rem;
   }
   .goa-hero-stat-bar-wrap {
     height: 5px;
@@ -2232,4 +2242,20 @@
     color: var(--text-muted);
     text-transform: uppercase;
   }
+
+   /* H2H */
+  .goa-h2h-row { padding:0.55rem 0.72rem; border-bottom:1px solid rgba(201,151,58,0.08); transition:background 0.12s; }
+  .goa-h2h-row:last-child { border-bottom:none; }
+  .goa-h2h-row:hover { background:rgba(42,39,32,0.5); }
+  .goa-h2h-name { font-family:'Cinzel',serif; font-size:0.7rem; font-weight:600; letter-spacing:0.06em; color:var(--txt); margin-bottom:0.3rem; display:flex; justify-content:space-between; align-items:center; }
+  .goa-h2h-mmr { font-size:0.56rem; color:var(--muted); font-weight:400; }
+  .goa-h2h-bars { display:flex; flex-direction:column; gap:0.25rem; }
+  .goa-h2h-bar-row { display:flex; align-items:center; gap:0.38rem; }
+  .goa-h2h-bar-lbl { font-family:'Cinzel',serif; font-size:0.5rem; letter-spacing:0.1em; text-transform:uppercase; width:32px; flex-shrink:0; }
+  .goa-h2h-bar-track { flex:1; height:5px; background:rgba(42,39,32,0.8); border-radius:3px; overflow:hidden; }
+  .goa-h2h-bar-fill { height:100%; border-radius:3px; transition:width 0.5s ease; }
+  .goa-h2h-bar-fill.with    { background:linear-gradient(90deg,var(--gain), rgba(93,187,138,0.6)) }
+  .goa-h2h-bar-fill.against { background:linear-gradient(90deg,var(--gain), rgba(93,187,138,0.6)) }
+  .goa-h2h-bar-stat { font-family:'Cinzel',serif; font-size:0.56rem; color:var(--muted); width:32px; text-align:right; flex-shrink:0; }
+
 }
