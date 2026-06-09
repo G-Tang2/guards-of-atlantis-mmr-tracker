@@ -318,7 +318,7 @@ export default function MatchHistoryPage() {
                       <div key={p.player_id} className="goa-player-entry" onClick={() => goToProfile(p.player_id)}>
                         <div className="goa-player-info">
                           <span className="goa-player-name">
-                            <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={22} />
+                            <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={32} />
                             {p.players.name}
                           </span>
                           <span className="goa-mmr-change">
@@ -358,7 +358,7 @@ export default function MatchHistoryPage() {
                       <div key={p.player_id} className="goa-player-entry" onClick={() => goToProfile(p.player_id)}>
                         <div className="goa-player-info">
                           <span className="goa-player-name" >
-                            <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={22} />
+                            <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={32} />
                             {p.players.name}
                           </span>
                           <span className="goa-mmr-change">

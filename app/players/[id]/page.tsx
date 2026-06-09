@@ -420,7 +420,7 @@ export default function PlayerProfilePage() {
     <main className="goa-root">
       {/* Back */}
       <button className="goa-back" onClick={() => router.back()}>
-        <span className="goa-back-arrow">‹</span> Hall of Honour
+        <span className="goa-back-arrow">‹</span> Back
       </button>
 
       {/* Hero */}
