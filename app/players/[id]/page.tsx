@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { Hero, HEROES, HeroComplexity } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import React from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -638,22 +639,22 @@ export default function PlayerProfilePage() {
                       >
                         {" "}
                         with{" "}
-                        {myTeammates
-                          .map((p) => (
-                            <span key={p.id} className="goa-vs-player">
-                              {p.name}
-                            </span>
-                          ))
-                          .reduce(
-                            (acc, el, i) =>
-                              i === 0 ? [el] : ([...acc, ", ", el] as any[]),
-                            [],
-                          )}
+                        <>
+                          {myTeammates.map((p, i) => (
+                            <React.Fragment key={p.id}>
+                              {i > 0 && ", "}
+                              <span className="goa-vs-player">{p.name}</span>
+                            </React.Fragment>
+                          ))}
+                        </>
                       </span>
                     )}
                   </div>
                   {/* Enemy team */}
-                  <div className="goa-match-teams">
+                  <div
+                    className="goa-match-teams"
+                    style={{ marginTop: "0.15rem" }}
+                  >
                     {enemies.length > 0 && (
                       <span
                         style={{
@@ -663,17 +664,14 @@ export default function PlayerProfilePage() {
                       >
                         {" "}
                         vs{" "}
-                        {enemies
-                          .map((p) => (
-                            <span key={p.id} className="goa-vs-player">
-                              {p.name}
-                            </span>
-                          ))
-                          .reduce(
-                            (acc, el, i) =>
-                              i === 0 ? [el] : ([...acc, ", ", el] as any[]),
-                            [],
-                          )}
+                        <>
+                          {enemies.map((p, i) => (
+                            <React.Fragment key={p.id}>
+                              {i > 0 && ", "}
+                              <span className="goa-vs-player">{p.name}</span>
+                            </React.Fragment>
+                          ))}
+                        </>
                       </span>
                     )}
                   </div>
