@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
-import {useRouter} from "next/navigation";
+import { useRouter } from "next/navigation";
 
 type Player = {
   id: string;
@@ -108,7 +108,12 @@ export default function MatchHistoryPage() {
               mmr_before: mp.mmr_before,
               mmr_after: mp.mmr_after,
               hero_id: mp.hero_id,
-              players: { id: player.id, name: player.name, mmr: player.mmr, avatar_url: player.avatar_url },
+              players: {
+                id: player.id,
+                name: player.name,
+                mmr: player.mmr,
+                avatar_url: player.avatar_url,
+              },
             };
           })
           .filter((mp): mp is MatchPlayer => mp !== null);
@@ -228,7 +233,13 @@ export default function MatchHistoryPage() {
       {playerStats && (
         <div className="goa-stats-card">
           <div className="goa-stats-head">
-            <PlayerAvatar avatarUrl={players.find((p) => p.id === filterPlayerId)?.avatar_url} name={playerStats.name} size={32} />
+            <PlayerAvatar
+              avatarUrl={
+                players.find((p) => p.id === filterPlayerId)?.avatar_url
+              }
+              name={playerStats.name}
+              size={32}
+            />
             {playerStats.name}
           </div>
           <div className="goa-stats-grid">
@@ -276,17 +287,23 @@ export default function MatchHistoryPage() {
             (p) => p.team === "atlantis",
           );
           const titans = match.match_players.filter((p) => p.team === "titans");
-          
+
           let matchBorderClass = "";
           if (filterPlayerId) {
-            const playerEntry = match.match_players.find((mp) => mp.player_id === filterPlayerId);
+            const playerEntry = match.match_players.find(
+              (mp) => mp.player_id === filterPlayerId,
+            );
             if (playerEntry) {
-              matchBorderClass = playerEntry.team === match.winner ? "match-win" : "match-loss";
+              matchBorderClass =
+                playerEntry.team === match.winner ? "match-win" : "match-loss";
             }
           }
 
           return (
-            <div key={match.id} className={`goa-match-card ${matchBorderClass}`}>
+            <div
+              key={match.id}
+              className={`goa-match-card ${matchBorderClass}`}
+            >
               <div className="goa-match-header">
                 <span className="goa-match-date">
                   {formatDate(match.created_at)}
@@ -315,10 +332,18 @@ export default function MatchHistoryPage() {
                   </div>
                   {atlantis.map((p) => {
                     return (
-                      <div key={p.player_id} className="goa-player-entry" onClick={() => goToProfile(p.player_id)}>
+                      <div
+                        key={p.player_id}
+                        className="goa-player-entry"
+                        onClick={() => goToProfile(p.player_id)}
+                      >
                         <div className="goa-player-info">
                           <span className="goa-player-name">
-                            <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={32} />
+                            <PlayerAvatar
+                              avatarUrl={p.players.avatar_url}
+                              name={p.players.name}
+                              size={32}
+                            />
                             {p.players.name}
                           </span>
                           <span className="goa-mmr-change">
@@ -355,10 +380,18 @@ export default function MatchHistoryPage() {
                   </div>
                   {titans.map((p) => {
                     return (
-                      <div key={p.player_id} className="goa-player-entry" onClick={() => goToProfile(p.player_id)}>
+                      <div
+                        key={p.player_id}
+                        className="goa-player-entry"
+                        onClick={() => goToProfile(p.player_id)}
+                      >
                         <div className="goa-player-info">
-                          <span className="goa-player-name" >
-                            <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={32} />
+                          <span className="goa-player-name">
+                            <PlayerAvatar
+                              avatarUrl={p.players.avatar_url}
+                              name={p.players.name}
+                              size={32}
+                            />
                             {p.players.name}
                           </span>
                           <span className="goa-mmr-change">

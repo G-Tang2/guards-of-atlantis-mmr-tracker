@@ -497,9 +497,7 @@ export default function PlayerProfilePage() {
 
       {/* MMR Trend */}
       <div className="goa-section">
-        <div className="goa-sec-head">
-          MMR Trend
-        </div>
+        <div className="goa-sec-head">MMR Trend</div>
         <div className="goa-chart-wrap">
           <MmrChart points={mmrTrend} />
           {mmrTrend.length >= 2 && (
@@ -558,9 +556,7 @@ export default function PlayerProfilePage() {
       {/* Match History */}
       {activeTab === "matches" && (
         <div className="goa-profile-section">
-          <div className="goa-profile-sec-head">
-            Recent Battles
-          </div>
+          <div className="goa-profile-sec-head">Recent Battles</div>
 
           {myMatches.length === 0 && (
             <p
@@ -692,9 +688,7 @@ export default function PlayerProfilePage() {
       {/* Heroes */}
       {activeTab === "heroes" && (
         <div className="goa-profile-section">
-          <div className="goa-profile-sec-head">
-             Hero Performance
-          </div>
+          <div className="goa-profile-sec-head">Hero Performance</div>
 
           {heroStats.length === 0 && (
             <p
@@ -759,9 +753,7 @@ export default function PlayerProfilePage() {
       {/* Head to Head */}
       {activeTab === "h2h" && (
         <div className="goa-profile-section">
-          <div className="goa-profile-sec-head">
-            Head to Head
-          </div>
+          <div className="goa-profile-sec-head">Head to Head</div>
 
           {h2hStats.length === 0 && (
             <p className="goa-h2h-no-data">No head-to-head data yet</p>

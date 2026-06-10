@@ -44,9 +44,9 @@ function NewMatchPageInner() {
         .select("*")
         .order("name");
       const { data, error } = await result;
-      if (!error && data) 
-        {setPlayers(data);
-      
+      if (!error && data) {
+        setPlayers(data);
+
         // Pre-populate teams from URL params (?atlantis=id1,id2&titans=id3,id4)
         const atlantisParam = searchParams.get("atlantis");
         const titansParam = searchParams.get("titans");
@@ -291,7 +291,11 @@ function NewMatchPageInner() {
             <div key={p.player.id} className="goa-player-block">
               <div key={p.player.id} className="goa-player-row">
                 <span className="goa-player-name">
-                  <PlayerAvatar avatarUrl={p.player.avatar_url} name={p.player.name} size={22} />
+                  <PlayerAvatar
+                    avatarUrl={p.player.avatar_url}
+                    name={p.player.name}
+                    size={22}
+                  />
                   {p.player.name}
                   {p.player.mmr && (
                     <span className="goa-player-mmr">{p.player.mmr}</span>
@@ -356,7 +360,11 @@ function NewMatchPageInner() {
             <div key={p.player.id} className="goa-player-block">
               <div className="goa-player-row">
                 <span className="goa-player-name">
-                  <PlayerAvatar avatarUrl={p.player.avatar_url} name={p.player.name} size={22} />
+                  <PlayerAvatar
+                    avatarUrl={p.player.avatar_url}
+                    name={p.player.name}
+                    size={22}
+                  />
                   {p.player.name}
                   {p.player.mmr && (
                     <span className="goa-player-mmr">{p.player.mmr}</span>

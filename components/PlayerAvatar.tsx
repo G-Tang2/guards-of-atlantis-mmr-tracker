@@ -1,12 +1,5 @@
 "use client";
 
-// Shared avatar component used across all pages.
-// Props:
-//   avatarUrl  - url/base64 from players.avatar_url (nullable)
-//   name       - player name (used for initials fallback)
-//   size       - pixel size (default 28)
-//   borderColor - optional CSS colour for the ring (default gold)
-
 type Props = {
   avatarUrl?: string | null;
   name: string;
@@ -14,7 +7,12 @@ type Props = {
   borderColor?: string;
 };
 
-export function PlayerAvatar({ avatarUrl, name, size = 28, borderColor }: Props) {
+export function PlayerAvatar({
+  avatarUrl,
+  name,
+  size = 28,
+  borderColor,
+}: Props) {
   const initials = name
     .split(" ")
     .map((w) => w[0] ?? "")

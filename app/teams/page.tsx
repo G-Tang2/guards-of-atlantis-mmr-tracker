@@ -21,7 +21,9 @@ type SplitResult = {
 } | null;
 
 const avg = (players: Player[]) =>
-  players.length === 0 ? 0 : Math.round(players.reduce((s, p) => s + p.mmr, 0) / players.length);
+  players.length === 0
+    ? 0
+    : Math.round(players.reduce((s, p) => s + p.mmr, 0) / players.length);
 
 const randomSplit = (pool: Player[]): SplitResult => {
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
@@ -30,7 +32,13 @@ const randomSplit = (pool: Player[]): SplitResult => {
   const titans = shuffled.slice(mid);
   const atlantisAvg = avg(atlantis);
   const titansAvg = avg(titans);
-  return { atlantis, titans, atlantisAvg, titansAvg, diff: Math.abs(atlantisAvg - titansAvg) };
+  return {
+    atlantis,
+    titans,
+    atlantisAvg,
+    titansAvg,
+    diff: Math.abs(atlantisAvg - titansAvg),
+  };
 };
 
 const balancedSplit = (pool: Player[]): SplitResult => {
@@ -41,7 +49,7 @@ const balancedSplit = (pool: Player[]): SplitResult => {
   let bestMask = 0;
 
   // iterate all subsets (0 to 2^n - 1)
-  for (let mask = 0; mask < (1 << n); mask++) {
+  for (let mask = 0; mask < 1 << n; mask++) {
     const teamA: Player[] = [];
     let teamASum = 0;
 
@@ -96,7 +104,7 @@ const balancedSplit = (pool: Player[]): SplitResult => {
     titans,
     atlantisAvg,
     titansAvg,
-    diff: Math.round(Math.abs(atlantisAvg - titansAvg) ),
+    diff: Math.round(Math.abs(atlantisAvg - titansAvg)),
   };
 };
 
@@ -122,8 +130,9 @@ export default function TeamSplitterPage() {
   }, []);
 
   const available = allPlayers.filter(
-    (p) => !pool.some((x) => x.id === p.id) &&
-      p.name.toLowerCase().includes(search.toLowerCase())
+    (p) =>
+      !pool.some((x) => x.id === p.id) &&
+      p.name.toLowerCase().includes(search.toLowerCase()),
   );
 
   const upsertPlayer = async (name: string): Promise<Player> => {
@@ -139,9 +148,9 @@ export default function TeamSplitterPage() {
   const addToPool = async (name: string) => {
     if (!name.trim()) return;
     const existing = allPlayers.find(
-      (p) => p.name.toLowerCase() === name.trim().toLowerCase()
+      (p) => p.name.toLowerCase() === name.trim().toLowerCase(),
     );
-    const player = existing ?? await upsertPlayer(name.trim());
+    const player = existing ?? (await upsertPlayer(name.trim()));
     if (!pool.some((p) => p.id === player.id)) {
       setPool((prev) => [...prev, player]);
       if (!allPlayers.some((p) => p.id === player.id)) {
@@ -167,21 +176,37 @@ export default function TeamSplitterPage() {
     setLastMode("balanced");
   };
 
-const handleGoToBattle = () => {
-  if (!result) return;
-  const atlantisIds = result.atlantis.map((p) => p.id).join(",");
-  const titansIds   = result.titans.map((p) => p.id).join(",");
-  router.push(`/matches/new?atlantis=${atlantisIds}&titans=${titansIds}`);
-};
-  
+  const handleGoToBattle = () => {
+    if (!result) return;
+    const atlantisIds = result.atlantis.map((p) => p.id).join(",");
+    const titansIds = result.titans.map((p) => p.id).join(",");
+    router.push(`/matches/new?atlantis=${atlantisIds}&titans=${titansIds}`);
+  };
+
   const canSplit = pool.length >= 2;
 
   if (loading) {
     return (
-      <div className="goa-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+      <div
+        className="goa-root"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+        }}
+      >
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚔️</div>
-          <p style={{ fontFamily: "'Cinzel', serif", fontSize: "0.75rem", letterSpacing: "0.2em", color: "var(--muted)", textTransform: "uppercase" }}>
+          <p
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontSize: "0.75rem",
+              letterSpacing: "0.2em",
+              color: "var(--muted)",
+              textTransform: "uppercase",
+            }}
+          >
             Summoning players…
           </p>
         </div>
@@ -205,7 +230,15 @@ const handleGoToBattle = () => {
         <div className="goa-card-head">
           Player Pool
           {pool.length > 0 && (
-            <span style={{ marginLeft: "auto", fontFamily: "'Cinzel', serif", fontSize: "0.6rem", color: "var(--muted)", letterSpacing: "0.05em" }}>
+            <span
+              style={{
+                marginLeft: "auto",
+                fontFamily: "'Cinzel', serif",
+                fontSize: "0.6rem",
+                color: "var(--muted)",
+                letterSpacing: "0.05em",
+              }}
+            >
               {pool.length} summoned
             </span>
           )}
@@ -215,19 +248,29 @@ const handleGoToBattle = () => {
             className="goa-search"
             placeholder="Search or add a player..."
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setResult(null); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setResult(null);
+            }}
           />
 
           {search && (
             <div className="goa-dropdown">
               {available.map((p) => (
-                <button key={p.id} className="goa-splitter-option" onClick={() => addToPool(p.name)}>
+                <button
+                  key={p.id}
+                  className="goa-splitter-option"
+                  onClick={() => addToPool(p.name)}
+                >
                   <span>{p.name}</span>
                   <span className="goa-splitter-option-mmr">{p.mmr} MMR</span>
                 </button>
               ))}
               {available.length === 0 && (
-                <button className="goa-splitter-option goa-splitter-option-new" onClick={() => addToPool(search)}>
+                <button
+                  className="goa-splitter-option goa-splitter-option-new"
+                  onClick={() => addToPool(search)}
+                >
                   ✦ Recruit &quot;{search}&quot;
                 </button>
               )}
@@ -241,11 +284,20 @@ const handleGoToBattle = () => {
             {pool.map((p) => (
               <div key={p.id} className="goa-pool-row">
                 <span className="goa-pool-name">
-                  <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
+                  <PlayerAvatar
+                    avatarUrl={p.avatar_url}
+                    name={p.name}
+                    size={22}
+                  />
                   {p.name}
                   <span className="goa-pool-mmr">{p.mmr}</span>
                 </span>
-                <button className="goa-remove" onClick={() => removeFromPool(p.id)}>✕</button>
+                <button
+                  className="goa-remove"
+                  onClick={() => removeFromPool(p.id)}
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
@@ -271,12 +323,24 @@ const handleGoToBattle = () => {
         >
           <span className="goa-split-icon">⚖️</span>
           Balanced Split
-          <span className="goa-split-desc">Similar average MMR across teams</span>
+          <span className="goa-split-desc">
+            Similar average MMR across teams
+          </span>
         </button>
       </div>
 
       {!canSplit && (
-        <p style={{ textAlign: "center", fontFamily: "'Cinzel', serif", fontSize: "0.62rem", letterSpacing: "0.12em", color: "var(--muted)", textTransform: "uppercase", margin: "0 0.75rem 0.75rem" }}>
+        <p
+          style={{
+            textAlign: "center",
+            fontFamily: "'Cinzel', serif",
+            fontSize: "0.62rem",
+            letterSpacing: "0.12em",
+            color: "var(--muted)",
+            textTransform: "uppercase",
+            margin: "0 0.75rem 0.75rem",
+          }}
+        >
           Add at least 2 players to split
         </p>
       )}
@@ -299,11 +363,26 @@ const handleGoToBattle = () => {
                 <div className="goa-result-team-head tit">
                   <span>Atlantis</span>
                 </div>
-                <div className="goa-result-avg">Avg {result.atlantisAvg} MMR</div>
+                <div className="goa-result-avg">
+                  Avg {result.atlantisAvg} MMR
+                </div>
                 {result.atlantis.map((p) => (
                   <div key={p.id} className="goa-result-player">
-                    <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={20} borderColor="var(--atl)" />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                    <PlayerAvatar
+                      avatarUrl={p.avatar_url}
+                      name={p.name}
+                      size={20}
+                      borderColor="var(--atl)"
+                    />
+                    <span
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {p.name}
+                    </span>
                     <span className="goa-result-player-mmr">{p.mmr}</span>
                   </div>
                 ))}
@@ -316,8 +395,20 @@ const handleGoToBattle = () => {
                 <div className="goa-result-avg">Avg {result.titansAvg} MMR</div>
                 {result.titans.map((p) => (
                   <div key={p.id} className="goa-result-player">
-                    <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                    <PlayerAvatar
+                      avatarUrl={p.avatar_url}
+                      name={p.name}
+                      size={22}
+                    />
+                    <span
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {p.name}
+                    </span>
                     <span className="goa-result-player-mmr">{p.mmr}</span>
                   </div>
                 ))}
