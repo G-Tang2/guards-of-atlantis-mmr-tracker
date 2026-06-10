@@ -1,7 +1,6 @@
 "use client";
-export const dynamic = "force-dynamic";
 
-import React, { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Player = {
@@ -25,7 +24,7 @@ import { HeroPicker } from "@/components/HeroPicker";
 import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 
-export default function NewMatchPage() {
+function NewMatchPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -414,5 +413,13 @@ export default function NewMatchPage() {
 
       {toast && <div className="goa-toast">{toast}</div>}
     </div>
+  );
+}
+
+export default function NewMatchPage() {
+  return (
+    <Suspense>
+      <NewMatchPageInner />
+    </Suspense>
   );
 }
