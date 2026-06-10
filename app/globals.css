@@ -598,12 +598,12 @@
     z-index: 1;
   }
 
-  .goa-save-wrap {
+  .goa-btn-wrap {
     padding: 1rem;
     padding-bottom: 2rem;
   }
 
-  .goa-save-btn {
+  .goa-btn {
     width: 100%;
     background: linear-gradient(
       135deg,
@@ -625,7 +625,7 @@
     overflow: hidden;
   }
 
-  .goa-save-btn::before {
+  .goa-btn::before {
     content: "";
     position: absolute;
     top: 0;
@@ -641,10 +641,10 @@
     transition: left 0.4s;
   }
 
-  .goa-save-btn:hover:not(:disabled)::before {
+  .goa-btn:hover:not(:disabled)::before {
     left: 100%;
   }
-  .goa-save-btn:hover:not(:disabled) {
+  .goa-btn:hover:not(:disabled) {
     background: linear-gradient(
       135deg,
       rgba(201, 151, 58, 0.3),
@@ -652,7 +652,7 @@
     );
     box-shadow: 0 0 20px rgba(201, 151, 58, 0.3);
   }
-  .goa-save-btn:disabled {
+  .goa-btn:disabled {
     opacity: 0.35;
     cursor: not-allowed;
     border-color: var(--border);

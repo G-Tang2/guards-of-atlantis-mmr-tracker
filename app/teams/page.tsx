@@ -507,14 +507,12 @@ export default function TeamSplitterPage() {
     setLastMode("balanced");
   };
 
-  
-  const handleGoToBattle = () => {
-    if (!result) return;
-    const params = new URLSearchParams();
-    result.atlantis.forEach((p) => params.append("atl", p.id));
-    result.titans.forEach((p) => params.append("tit", p.id));
-    router.push(`/matches/new?${params.toString()}`);
-  };
+const handleGoToBattle = () => {
+  if (!result) return;
+  const atlantisIds = result.atlantis.map((p) => p.id).join(",");
+  const titansIds   = result.titans.map((p) => p.id).join(",");
+  router.push(`/matches/new?atlantis=${atlantisIds}&titans=${titansIds}`);
+};
   
   const canSplit = pool.length >= 2;
 
@@ -671,8 +669,8 @@ export default function TeamSplitterPage() {
           </div>
 
           {/* Go to battle */}
-          <div style={{ margin: "0 0.75rem 0.75rem" }}>
-            <button className="goa-go-btn" onClick={handleGoToBattle}>
+          <div className="goa-btn-wrap">
+            <button className="goa-btn" onClick={handleGoToBattle}>
               ⚔ Begin the Battle
               <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>→</span>
             </button>

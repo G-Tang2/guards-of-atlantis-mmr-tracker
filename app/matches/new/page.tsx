@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Player = {
   id: string;
@@ -26,6 +26,7 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 export default function NewMatchPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [atlantisSearch, setAtlantisSearch] = useState("");
@@ -43,7 +44,30 @@ export default function NewMatchPage() {
         .select("*")
         .order("name");
       const { data, error } = await result;
-      if (!error) setPlayers(data ?? []);
+      if (!error && data) 
+        {setPlayers(data);
+      
+        // Pre-populate teams from URL params (?atlantis=id1,id2&titans=id3,id4)
+        const atlantisParam = searchParams.get("atlantis");
+        const titansParam = searchParams.get("titans");
+
+        if (atlantisParam) {
+          const ids = new Set(atlantisParam.split(",").filter(Boolean));
+          const entries: PoolEntry[] = data
+            .filter((p) => ids.has(p.id))
+            .map((player) => ({ player, hero: null }));
+          if (entries.length > 0) setAtlantis(entries);
+        }
+
+        if (titansParam) {
+          const ids = new Set(titansParam.split(",").filter(Boolean));
+          const entries: PoolEntry[] = data
+            .filter((p) => ids.has(p.id))
+            .map((player) => ({ player, hero: null }));
+          if (entries.length > 0) setTitans(entries);
+        }
+      }
+
       setLoading(false);
     };
     loadPlayers();
@@ -377,9 +401,9 @@ export default function NewMatchPage() {
       <div className="goa-divider" />
 
       {/* Save */}
-      <div className="goa-save-wrap">
+      <div className="goa-btn-wrap">
         <button
-          className="goa-save-btn"
+          className="goa-btn"
           onClick={handleSave}
           disabled={!canSave || saving}
         >
