@@ -117,9 +117,21 @@
   }
   body {
     @apply bg-background text-foreground;
+    padding-top: env(safe-area-inset-top);
   }
   html {
     @apply font-sans;
+  }
+
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    background: #000; /* or your app background */
+  }
+
+  body {
+    padding-top: env(safe-area-inset-top);
   }
 
   /* Master Core Root Settings */
@@ -211,6 +223,7 @@
     text-align: center;
     padding: 1.75rem 1rem 1rem;
     position: relative;
+    padding-top: env(safe-area-inset-top);
   }
 
   .goa-header::after {
