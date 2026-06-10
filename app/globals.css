@@ -271,6 +271,15 @@
       transparent
     );
   }
+
+  .goa-section-header {
+    padding: 0.6rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
   .goa-sec-head {
     padding: 0.55rem 0.85rem;
     display: flex;
