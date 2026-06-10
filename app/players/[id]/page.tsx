@@ -498,7 +498,7 @@ export default function PlayerProfilePage() {
       {/* MMR Trend */}
       <div className="goa-section">
         <div className="goa-sec-head">
-          <span>📈</span> MMR Trend
+          MMR Trend
         </div>
         <div className="goa-chart-wrap">
           <MmrChart points={mmrTrend} />
@@ -540,9 +540,9 @@ export default function PlayerProfilePage() {
       <div className="goa-profile-tabs">
         {(
           [
-            ["matches", "⚔ History"],
-            ["heroes", "🦸 Heroes"],
-            ["h2h", "🛡 H2H"],
+            ["matches", "History"],
+            ["heroes", "Heroes"],
+            ["h2h", "H2H"],
           ] as const
         ).map(([tab, label]) => (
           <button
@@ -559,7 +559,7 @@ export default function PlayerProfilePage() {
       {activeTab === "matches" && (
         <div className="goa-profile-section">
           <div className="goa-profile-sec-head">
-            <span>📜</span> Recent Battles
+            Recent Battles
           </div>
 
           {myMatches.length === 0 && (
@@ -693,7 +693,7 @@ export default function PlayerProfilePage() {
       {activeTab === "heroes" && (
         <div className="goa-profile-section">
           <div className="goa-profile-sec-head">
-            <span>🦸</span> Hero Performance
+             Hero Performance
           </div>
 
           {heroStats.length === 0 && (
@@ -760,7 +760,7 @@ export default function PlayerProfilePage() {
       {activeTab === "h2h" && (
         <div className="goa-profile-section">
           <div className="goa-profile-sec-head">
-            <span>🛡</span> Head to Head
+            Head to Head
           </div>
 
           {h2hStats.length === 0 && (
