@@ -481,6 +481,19 @@
     justify-self: center;
   }
 
+    .goa-profile-player-name {
+    font-family: "Cinzel", serif;
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--gold-light);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px rgba(201, 151, 58, 0.4);
+    margin: 0 0 0.2rem;
+    text-align: center;
+    width: 100%;
+  }
+
   .goa-player-mmr {
     font-size: 0.8rem; /* Increased from 0.75rem */
     color: var(--text-muted);

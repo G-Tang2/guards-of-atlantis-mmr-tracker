@@ -451,7 +451,7 @@ export default function PlayerProfilePage() {
           style={{ display: "none" }}
           onChange={handleAvatarChange}
         />
-        <h1 className="goa-player-name">{player.name}</h1>
+        <h1 className="goa-profile-player-name">{player.name}</h1>
         <p className="goa-mmr-display">
           <b>{player.mmr}</b> MMR
         </p>
