@@ -59,8 +59,7 @@
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted: oklch(65.916% 0.04876 84.435);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -395,7 +394,7 @@
     border-radius: 2px;
   }
 
-  .goa-option {
+  .goa-battle-option {
     width: 100%;
     background: var(--stone-mid);
     border: none;
@@ -412,13 +411,13 @@
     gap: 0.4rem;
   }
 
-  .goa-option:hover {
+  .goa-battle-option:hover {
     background: rgba(42, 39, 32, 0.9);
   }
-  .goa-option:last-child {
+  .goa-battle-option:last-child {
     border-bottom: none;
   }
-  .goa-option-new {
+  .goa-battle-option-new {
     color: var(--gold);
     font-style: italic;
   }
@@ -2217,17 +2216,252 @@
   }
 
   /* ── Team splitter result ── */
+  .goa-card {
+    margin: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(28,26,20,0.85);
+    position: relative;
+  }
+  .goa-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-bright), transparent);
+  }
+  .goa-card-head {
+    padding: 0.55rem 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(42,39,32,0.5), rgba(28,26,20,0.8));
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .goa-card-body { padding: 0.75rem; }
+
+  .goa-splitter-dropdown {
+    margin-top: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .goa-splitter-dropdown::-webkit-scrollbar { width: 4px; }
+  .goa-splitter-dropdown::-webkit-scrollbar-track { background: var(--stone-mid); }
+  .goa-splitter-dropdown::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 2px; }
+
+  .goa-splitter-option {
+    width: 100%;
+    background: var(--stone-mid);
+    border: none;
+    border-bottom: 1px solid rgba(201,151,58,0.1);
+    padding: 0.55rem 0.75rem;
+    color: var(--txt);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.95rem;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.15s;
+  }
+  .goa-splitter-option:hover { background: rgba(58,54,40,0.9); }
+  .goa-splitter-option:last-child { border-bottom: none; }
+  .goa-splitter-option-mmr { font-family: 'Cinzel', serif; font-size: 0.65rem; color: var(--muted); }
+  .goa-splitter-option-new { color: var(--gold); font-style: italic; }
+
+  .goa-pool {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.65rem;
+  }
+
+  .goa-pool-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(42,39,32,0.5);
+    border: 1px solid rgba(201,151,58,0.15);
+    border-radius: 3px;
+    padding: 0.42rem 0.6rem;
+    animation: fadeSlide 0.2s ease;
+  }
+  @keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .goa-pool-name { font-size: 0.9rem; color: var(--txt); display: flex; align-items: center; gap: 0.35rem; }
+  .goa-pool-mmr { font-family: 'Cinzel', serif; font-size: 0.65rem; color: var(--muted); }
+  .goa-remove {
+    background: none;
+    border: 1px solid rgba(196,42,58,0.35);
+    border-radius: 2px;
+    color: rgba(196,42,58,0.7);
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .goa-remove:hover { background: rgba(196,42,58,0.2); color: #ff6b7a; border-color: rgba(196,42,58,0.8); }
+
+  .goa-pool-empty { color: var(--muted); font-style: italic; font-size: 0.82rem; text-align: center; padding: 0.4rem; }
+
+  .goa-split-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+    margin: 0 0.75rem 0.75rem;
+  }
+
+  .goa-split-btn {
+    border-radius: 4px;
+    padding: 0.85rem 0.5rem;
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+    border: 1px solid var(--border);
+    background: rgba(28,26,20,0.85);
+    color: var(--txt);
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .goa-split-btn::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-bright), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .goa-split-btn:hover:not(:disabled)::before { opacity: 1; }
+  .goa-split-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .goa-split-btn.random {
+    border-color: rgb(229, 72, 77);
+    color: rgb(255, 138, 145);
+  }
+  .goa-split-btn.random:hover:not(:disabled) {
+    background: rgba(255, 107, 112, 0.12);
+    border-color: rgb(255, 107, 112);
+    box-shadow: 0 0 12px rgba(42,171,184,0.2);
+  }
+
+  .goa-split-btn.balanced {
+    border-color: rgba(201,151,58,0.5);
+    color: var(--gold-light);
+  }
+  .goa-split-btn.balanced:hover:not(:disabled) {
+    background: rgba(201,151,58,0.15);
+    border-color: var(--gold);
+    box-shadow: 0 0 12px rgba(201,151,58,0.2);
+  }
+
+  .goa-split-icon { font-size: 1.5rem; display: block; margin-bottom: 0.3rem; }
+  .goa-split-desc { font-size: 0.6rem; font-weight: 400; color: var(--muted); display: block; margin-top: 0.15rem; font-family: 'Crimson Pro', serif; font-style: italic; text-transform: none; letter-spacing: 0; }
+
+  /* Result */
+  .goa-result {
+    margin: 0 0.75rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(28,26,20,0.85);
+    position: relative;
+    animation: fadeSlide 0.25s ease;
+  }
+  .goa-result::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-bright), transparent);
+  }
+
+  .goa-result-head {
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(42,39,32,0.5), rgba(28,26,20,0.8));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .goa-result-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .goa-result-diff {
+    font-family: 'Cinzel', serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  .goa-result-diff span { color: var(--gold-light); font-weight: 600; }
+
   .goa-result-teams {
     display: flex;
     flex-direction: column;
   }
-  .goa-result-team {
-    padding: 0.65rem 0.75rem;
+
+  .goa-result-team { padding: 0.65rem 0.7rem; }
+  .goa-result-team:first-child { border-bottom: 1px solid var(--border); }
+
+  .goa-result-team-head {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.15rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
-  .goa-result-team:first-child {
-    border-bottom: 1px solid var(--border);
+  .goa-result-team-head.atl { color: var(--atlantis-light); }
+  .goa-result-team-head.tit { color: var(--titans-light); }
+
+  .goa-result-avg {
+    font-family: 'Cinzel', serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 0.45rem;
   }
 
+  .goa-result-player {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.22rem 0;
+    border-bottom: 1px solid rgba(201,151,58,0.06);
+    font-size: 0.85rem;
+    color: var(--txt);
+  }
+  .goa-result-player:last-child { border-bottom: none; }
+  .goa-result-player-mmr { font-family: 'Cinzel', serif; font-size: 0.6rem; color: var(--muted); margin-left: auto; }
+  
   /* ── H2H no data ── */
   .goa-h2h-no-data {
     text-align: center;

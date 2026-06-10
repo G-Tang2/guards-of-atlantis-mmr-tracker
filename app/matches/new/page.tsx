@@ -263,11 +263,11 @@ export default function NewMatchPage() {
           />
         </div>
         {atlantisSearch && (
-          <div className="goa-dropdown">
+          <div className="goa-splitter-dropdown">
             {filterPlayers(availablePlayers, atlantisSearch).map((p) => (
               <button
                 key={p.id}
-                className="goa-option"
+                className="goa-battle-option"
                 onClick={() => addPlayer(p.name, "atlantis")}
               >
                 ⚔ {p.name}
@@ -275,7 +275,7 @@ export default function NewMatchPage() {
             ))}
             {filterPlayers(availablePlayers, atlantisSearch).length === 0 && (
               <button
-                className="goa-option goa-option-new"
+                className="goa-battle-option goa-battle-option-new"
                 onClick={() => addPlayer(atlantisSearch, "atlantis")}
               >
                 ✦ Recruit &quot;{atlantisSearch}&quot;
@@ -328,11 +328,11 @@ export default function NewMatchPage() {
           />
         </div>
         {titansSearch && (
-          <div className="goa-dropdown">
+          <div className="goa-splitter-dropdown">
             {filterPlayers(availablePlayers, titansSearch).map((p) => (
               <button
                 key={p.id}
-                className="goa-option"
+                className="goa-battle-option"
                 onClick={() => addPlayer(p.name, "titans")}
               >
                 ⚔ {p.name}
@@ -340,7 +340,7 @@ export default function NewMatchPage() {
             ))}
             {filterPlayers(availablePlayers, titansSearch).length === 0 && (
               <button
-                className="goa-option goa-option-new"
+                className="goa-battle-option goa-battle-option-new"
                 onClick={() => addPlayer(titansSearch, "titans")}
               >
                 ✦ Recruit &quot;{titansSearch}&quot;
