@@ -78,6 +78,21 @@ export default function Home() {
             </div>
           </div>
         </Link>
+        <Link href="/heroes" className="goa-nav-link">
+          <div className="goa-nav-btn" style={{ borderColor: "rgba(201,151,58,0.3)" }}>
+            <div className="goa-nav-accent" style={{ background: "linear-gradient(180deg, #C9973A, #7A5A1A)" }} />
+            <div className="goa-nav-inner">
+              <div className="goa-nav-left">
+                <span className="goa-nav-icon">🦸</span>
+                <div className="goa-nav-text">
+                  <span className="goa-nav-label">Hero Compendium</span>
+                  <span className="goa-nav-desc">Win rates & hero stats</span>
+                </div>
+              </div>
+              <span className="goa-nav-arrow">›</span>
+            </div>
+          </div>
+        </Link>
       </nav>
     </main>
   );

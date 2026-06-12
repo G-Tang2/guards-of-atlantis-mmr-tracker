@@ -245,7 +245,7 @@
 
   .goa-subtitle {
     font-family: "Cinzel", serif;
-    font-size: 0.7rem; /* Increased from 0.65rem */
+    font-size: 1rem; /* Increased from 0.65rem */
     color: var(--text-muted);
     letter-spacing: 0.2em;
     text-transform: uppercase;
