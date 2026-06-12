@@ -89,10 +89,10 @@ export default function HeroDetailPage() {
         return;
       }
 
-      const normalized: Match[] = mData.map((m) => ({
+      const normalized: Match[] = mData.map((m: any) => ({
         ...m,
         match_players: (m.match_players ?? [])
-          .map((mp) => {
+          .map((mp: any) => {
             const p = Array.isArray(mp.players) ? mp.players[0] : mp.players;
             if (!p) return null;
             return { ...mp, players: { ...p } };
