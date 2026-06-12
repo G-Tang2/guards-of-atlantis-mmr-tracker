@@ -66,7 +66,7 @@ export default function HeroDetailPage() {
         return;
       }
 
-      const matchIds = [...new Set(mpData.map((r: any) => r.match_id))];
+      const matchIds = [...new Set(mpData.map((r) => r.match_id))];
 
       // Fetch those matches with full details
       const { data: mData, error: mError } = await supabaseClient
@@ -89,10 +89,10 @@ export default function HeroDetailPage() {
         return;
       }
 
-      const normalized: Match[] = mData.map((m: any) => ({
+      const normalized: Match[] = mData.map((m) => ({
         ...m,
         match_players: (m.match_players ?? [])
-          .map((mp: any) => {
+          .map((mp) => {
             const p = Array.isArray(mp.players) ? mp.players[0] : mp.players;
             if (!p) return null;
             return { ...mp, players: { ...p } };
