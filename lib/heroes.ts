@@ -53,8 +53,8 @@ export const HEROES: Hero[] = [
 ];
 
 export const DIFFICULTY_COLORS: Record<HeroComplexity, string> = {
-  "1": "rgba(93,187,138,0.8)",   // green
-  "2": "rgba(201,151,58,0.8)",   // gold
-  "3": "rgba(160,100,200,0.8)",  // purple
-  "4": "rgba(196,42,58,0.8)",    // red
+  "1": "rgba(156, 223, 118, 0.8)",   // green
+  "2": "rgba(197, 126, 218, 0.85)",   // purple
+  "3": "rgba(91, 223, 223, 0.88)",  // teal
+  "4": "rgba(223, 136, 136, 0.93)",  // red
 };

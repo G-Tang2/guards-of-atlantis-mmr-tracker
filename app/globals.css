@@ -2279,7 +2279,7 @@
   }
 
   .goa-splitter-dropdown {
-    margin-top: 0.5rem;
+    margin: 0 0.75rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: 3px;
     overflow: hidden;

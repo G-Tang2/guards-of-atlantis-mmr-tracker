@@ -96,7 +96,7 @@ export function HeroPicker({
               className="goa-hero-chip-role"
               style={{ background: DIFFICULTY_COLORS[h.complexity] + "33", color: DIFFICULTY_COLORS[h.complexity] }}
             >
-              {renderStars(parseInt(h.complexity))}
+              {h.complexity+" ★"}
             </span>
           </button>
         ))}
