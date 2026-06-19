@@ -2,7 +2,7 @@
 
 **Live app:** [https://guards-of-atlantis-mmr-tracker.vercel.app](https://guards-of-atlantis-mmr-tracker.vercel.app)
 
-A mobile-first web app for tracking MMR (matchmaking rating), match history, hero performance, and player stats for [Guards of Atlantis II](https://www.boardgamegeek.com/boardgame/339906/guards-of-atlantis-ii) — a 2-team MOBA-style board game for 2–10 players.
+A mobile-first web app for tracking MMR (matchmaking rating), match history, hero performance, and player stats for [Guards of Atlantis II](https://boardgamegeek.com/boardgame/267609/guards-of-atlantis-ii) — a 2-team MOBA-style board game for 2–10 players.
 
 ---
 
