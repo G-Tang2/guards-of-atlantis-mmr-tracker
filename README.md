@@ -48,6 +48,7 @@ Three tables in Supabase:
 |--------|------|-------|
 | `id` | `uuid` | Primary key |
 | `winner` | `text` | `"atlantis"` or `"titans"` |
+| `win_condition` | `win_condition` | How the game was won |
 | `created_at` | `timestamptz` | Auto-set |
 | `atlantis_avg_mmr` | `float` | Average MMR of Atlantis team at time of match |
 | `titans_avg_mmr` | `float` | Average MMR of Titans team at time of match |
@@ -154,6 +155,13 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 Run the following SQL in your Supabase SQL editor:
 
 ```sql
+-- Types
+create type win_condition as enum (
+  'CORE_DESTROYED',
+  'SURRENDER',
+  'TIMEOUT'
+);
+
 -- Players
 create table players (
   id uuid primary key default gen_random_uuid(),
@@ -166,6 +174,7 @@ create table players (
 create table matches (
   id uuid primary key default gen_random_uuid(),
   winner text not null check (winner in ('atlantis', 'titans')),
+  win_condition win_condition not null,
   created_at timestamptz not null default now(),
   atlantis_avg_mmr float,
   titans_avg_mmr float,
