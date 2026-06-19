@@ -13,6 +13,18 @@ type Player = {
   avatar_url?: string | null;
 };
 
+enum WinCondition {
+  LAST_PUSH = "LAST_PUSH",
+  THRONE = "THRONE",
+  LIFE_COUNTER = "LIFE_COUNTER",
+}
+
+const winConditionLabel: Record<string, string> = {
+  LAST_PUSH: "LAST PUSH",
+  THRONE: "THRONE",
+  LIFE_COUNTER: "LIFE COUNTER",
+};
+
 type Team = "atlantis" | "titans";
 
 type MatchPlayer = {
@@ -27,6 +39,7 @@ type MatchPlayer = {
 type Match = {
   id: string;
   winner: Team;
+  win_condition: WinCondition | null;
   created_at: string;
   atlantis_avg_mmr: number;
   titans_avg_mmr: number;
@@ -51,6 +64,11 @@ export default function MatchHistoryPage() {
 
   const renderStars = (n: number) => "★".repeat(n);
 
+  const formatWinCondition = (wc?: WinCondition | null) => {
+    if (!wc) return "";
+    return `BY ${winConditionLabel[wc]}`;
+  };
+
   useEffect(() => {
     const loadData = async () => {
       const { data: matchesData, error: matchesError } = await supabaseClient
@@ -59,6 +77,7 @@ export default function MatchHistoryPage() {
           `
           id,
           winner,
+          win_condition,
           created_at,
           atlantis_avg_mmr,
           titans_avg_mmr,
@@ -121,6 +140,7 @@ export default function MatchHistoryPage() {
         return {
           id: match.id,
           winner: match.winner as Team,
+          win_condition: match.win_condition as WinCondition,
           created_at: match.created_at,
           atlantis_avg_mmr: match.atlantis_avg_mmr,
           titans_avg_mmr: match.titans_avg_mmr,
@@ -310,7 +330,8 @@ export default function MatchHistoryPage() {
                 </span>
                 <span className="goa-match-winner">
                   <span className={`goa-winner-badge ${match.winner}`}>
-                    {match.winner} VICTORY
+                    {match.winner} VICTORY{" "}
+                    {formatWinCondition(match.win_condition)}
                   </span>
                 </span>
               </div>
