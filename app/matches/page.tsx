@@ -56,6 +56,9 @@ const formatDate = (dateString: string) => {
   return `${day}/${month}/${year}`;
 };
 
+const sortByName = (a: Player, b: Player) =>
+  a.name.localeCompare(b.name);
+
 export default function MatchHistoryPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -99,8 +102,6 @@ export default function MatchHistoryPage() {
         `,
         )
         .order("created_at", { ascending: false });
-
-      console.log("Fetched matches:", matchesData);
 
       const { data: playersData, error: playersError } = await supabaseClient
         .from("players")
@@ -149,8 +150,6 @@ export default function MatchHistoryPage() {
           match_players: normalizedMatchPlayers,
         };
       });
-
-      console.log("playersData:", playersData);
       setMatches(normalizedMatches);
       setPlayers(playersData ?? []);
       setLoading(false);
@@ -240,8 +239,8 @@ export default function MatchHistoryPage() {
           value={filterPlayerId}
           onChange={(e) => setFilterPlayerId(e.target.value)}
         >
-          <option value="">⚔ All combatants</option>
-          {players.map((p) => (
+          <option value="">⚔ All Players</option>
+          {[...players].sort(sortByName).map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>

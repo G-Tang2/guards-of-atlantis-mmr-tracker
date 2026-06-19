@@ -299,7 +299,7 @@ export default function HeroesPage() {
                     <span
                       style={{
                         fontFamily: "'Cinzel', serif",
-                        fontSize: "1rem",
+                        fontSize: "1.1rem",
                         letterSpacing: "0.08em",
                         textTransform: "uppercase",
                         color: "var(--text-muted)",

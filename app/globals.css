@@ -536,6 +536,53 @@
     gap: 0.75rem;
   }
 
+  .goa-win-condition-section {
+    margin: 1rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .goa-win-condition-btn {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem 0.5rem;
+    cursor: pointer;
+    font-family: "Cinzel", serif;
+    font-size: 0.85rem; /* Increased from 0.8rem */
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    transition: all 0.2s;
+    background: rgba(28, 26, 20, 0.8);
+    position: relative;
+    overflow: hidden;
+    color: var(--gold-light);
+    border-color: rgba(201, 159, 41, 0.22);
+  }
+
+  .goa-win-condition-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: linear-gradient(
+      135deg,
+      rgba(201, 159, 41, 0.22),
+      rgba(131, 103, 27, 0.445)
+    );
+  }
+
+  .goa-win-condition-btn.selected {
+    border-color: var(--gold-light);
+    box-shadow: 0 0 16px rgb(90, 73, 39);
+  }
+  .goa-win-condition-btn.selected::before {
+    opacity: 1;
+  }
+
   .goa-filter-wrap {
     margin: 0.75rem;
   }

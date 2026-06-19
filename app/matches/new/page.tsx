@@ -15,6 +15,12 @@ type PoolEntry = {
   hero: Hero | null;
 };
 
+enum WinCondition {
+  LAST_PUSH = "LAST_PUSH",
+  THRONE = "THRONE",
+  LIFE_COUNTER = "LIFE_COUNTER",
+}
+
 type Team = "atlantis" | "titans";
 
 type Winner = "" | "atlantis" | "titans";
@@ -34,6 +40,7 @@ function NewMatchPageInner() {
   const [atlantis, setAtlantis] = useState<PoolEntry[]>([]);
   const [titans, setTitans] = useState<PoolEntry[]>([]);
   const [winner, setWinner] = useState<Winner>("");
+  const [winCondition, setWinCondition] = useState<WinCondition | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -152,6 +159,7 @@ function NewMatchPageInner() {
         .from("matches")
         .insert({
           winner,
+          win_condition: winCondition,
           atlantis_avg_mmr: result.meta.atlantisAvg,
           titans_avg_mmr: result.meta.titansAvg,
           atlantis_mmr_change: result.meta.atlantisDelta,
@@ -200,8 +208,12 @@ function NewMatchPageInner() {
       setAtlantis([]);
       setTitans([]);
       setWinner("");
+
+      setTimeout(() => {
+        router.push("/matches");
+      }, 1000);
     } catch {
-      showToast("✦ An error darkened the records");
+      showToast("✦ Record cannot be saved. Try again.");
     } finally {
       setSaving(false);
     }
@@ -387,6 +399,45 @@ function NewMatchPageInner() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Win condition */}
+      <p className="winner-label">Victory Condition</p>
+      <div className="goa-win-condition-section">
+        <button
+          className={`goa-win-condition-btn ${winCondition === WinCondition.THRONE ? "selected" : ""}`}
+          onClick={() =>
+            setWinCondition(
+              winCondition === WinCondition.THRONE ? null : WinCondition.THRONE,
+            )
+          }
+        >
+          <span className="goa-faction-label">Throne</span>
+        </button>
+        <button
+          className={`goa-win-condition-btn ${winCondition === WinCondition.LAST_PUSH ? "selected" : ""}`}
+          onClick={() =>
+            setWinCondition(
+              winCondition === WinCondition.LAST_PUSH
+                ? null
+                : WinCondition.LAST_PUSH,
+            )
+          }
+        >
+          <span className="goa-faction-label">Last Push</span>
+        </button>
+        <button
+          className={`goa-win-condition-btn ${winCondition === WinCondition.LIFE_COUNTER ? "selected" : ""}`}
+          onClick={() =>
+            setWinCondition(
+              winCondition === WinCondition.LIFE_COUNTER
+                ? null
+                : WinCondition.LIFE_COUNTER,
+            )
+          }
+        >
+          <span className="goa-faction-label">Life Counter</span>
+        </button>
       </div>
 
       {/* Winner */}
