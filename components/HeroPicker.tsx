@@ -1,5 +1,6 @@
 import { HEROES, DIFFICULTY_COLORS, Hero, HeroComplexity } from "@/lib/heroes";
 import { useState } from "react";
+import Image from "next/image";
 
 export function HeroPicker({
   selected,
@@ -9,10 +10,16 @@ export function HeroPicker({
   onSelect: (h: Hero | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [complexityFilter, setComplexityFilter] = useState<HeroComplexity | "All">("All");
+  const [complexityFilter, setComplexityFilter] = useState<
+    HeroComplexity | "All"
+  >("All");
+
+  const sortedHeroes = [...HEROES].sort((a, b) => a.name.localeCompare(b.name));
 
   const filtered =
-    complexityFilter === "All" ? HEROES : HEROES.filter((h) => h.complexity === complexityFilter);
+    complexityFilter === "All"
+      ? sortedHeroes
+      : sortedHeroes.filter((h) => h.complexity === complexityFilter);
 
   const renderStars = (n: number) => "★".repeat(n);
 
@@ -24,9 +31,7 @@ export function HeroPicker({
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
             <span className="goa-selected-hero">
               {selected.name}
-              <span
-                className="goa-hero-chip-role"
-              >
+              <span className="goa-hero-chip-role">
                 {renderStars(parseInt(selected.complexity))}
               </span>
             </span>
@@ -89,15 +94,24 @@ export function HeroPicker({
           <button
             key={h.id}
             className={`goa-hero-chip ${selected?.id === h.id ? "selected" : ""}`}
-            onClick={() => { onSelect(h); setOpen(false); }}
+            onClick={() => {
+              onSelect(h);
+              setOpen(false);
+            }}
           >
+            <Image
+              src={`/heroes/${h.id}_icon.png`}
+              alt={h.name}
+              width={18}
+              height={18}
+              style={{
+                objectFit: "contain",
+                flexShrink: 0,
+                display: "flex",
+                justifySelf: "center",
+              }}
+            />
             <span>{h.name}</span>
-            <span
-              className="goa-hero-chip-role"
-              style={{ background: DIFFICULTY_COLORS[h.complexity] + "33", color: DIFFICULTY_COLORS[h.complexity] }}
-            >
-              {h.complexity+" ★"}
-            </span>
           </button>
         ))}
       </div>
