@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
@@ -59,11 +59,83 @@ const formatDate = (dateString: string) => {
 
 const sortByName = (a: Player, b: Player) => a.name.localeCompare(b.name);
 
+const MATCHES_PER_PAGE = 5;
+
+const MATCH_SELECT = `
+  id,
+  winner,
+  win_condition,
+  created_at,
+  atlantis_avg_mmr,
+  titans_avg_mmr,
+  atlantis_mmr_change,
+  titans_mmr_change,
+  match_players (
+    player_id,
+    team,
+    mmr_before,
+    mmr_after,
+    hero_id,
+    players (
+      id,
+      name,
+      mmr,
+      avatar_url
+    )
+  )
+`;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const normalizeMatch = (match: any): Match => {
+  const normalizedMatchPlayers: MatchPlayer[] = (match.match_players ?? [])
+    .map((mp: any): MatchPlayer | null => {
+      const player = Array.isArray(mp.players) ? mp.players[0] : mp.players;
+      if (!player) return null;
+      return {
+        player_id: mp.player_id,
+        team: mp.team as Team,
+        mmr_before: mp.mmr_before,
+        mmr_after: mp.mmr_after,
+        hero_id: mp.hero_id,
+        players: {
+          id: player.id,
+          name: player.name,
+          mmr: player.mmr,
+          avatar_url: player.avatar_url,
+        },
+      };
+    })
+    .filter((mp: MatchPlayer | null): mp is MatchPlayer => mp !== null);
+
+  return {
+    id: match.id,
+    winner: match.winner as Team,
+    win_condition: match.win_condition as WinCondition,
+    created_at: match.created_at,
+    atlantis_avg_mmr: match.atlantis_avg_mmr,
+    titans_avg_mmr: match.titans_avg_mmr,
+    atlantis_mmr_change: match.atlantis_mmr_change,
+    titans_mmr_change: match.titans_mmr_change,
+    match_players: normalizedMatchPlayers,
+  };
+};
+
+type PlayerStats = {
+  wins: number;
+  losses: number;
+  winRate: number;
+  mmr: number;
+  name: string;
+};
+
 export default function MatchHistoryPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filterPlayerId, setFilterPlayerId] = useState("");
+  const [totalCount, setTotalCount] = useState(0);
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
 
   const renderStars = (n: number) => "★".repeat(n);
 
@@ -72,125 +144,152 @@ export default function MatchHistoryPage() {
     return `BY ${winConditionLabel[wc]}`;
   };
 
+  // Load the player list once (small table, needed for the filter dropdown).
   useEffect(() => {
-    const loadData = async () => {
-      const { data: matchesData, error: matchesError } = await supabaseClient
-        .from("matches")
-        .select(
-          `
-          id,
-          winner,
-          win_condition,
-          created_at,
-          atlantis_avg_mmr,
-          titans_avg_mmr,
-          atlantis_mmr_change,
-          titans_mmr_change,
-          match_players (
-            player_id,
-            team,
-            mmr_before,
-            mmr_after,
-            hero_id,
-            players (
-              id,
-              name,
-              mmr,
-              avatar_url
-            )
-          )
-        `,
-        )
-        .order("created_at", { ascending: false });
-
-      const { data: playersData, error: playersError } = await supabaseClient
+    const loadPlayers = async () => {
+      const { data, error } = await supabaseClient
         .from("players")
         .select("id, name, mmr, avatar_url");
+      if (error) {
+        console.error(error);
+        return;
+      }
+      setPlayers(data ?? []);
+    };
+    loadPlayers();
+  }, []);
 
-      if (matchesError || playersError) {
-        console.error({ matchesError, playersError });
-        setLoading(false);
+  // Fetches one page of matches, either for "all players" or for a specific
+  // player (via match_players), and either replaces or appends to the list.
+  const fetchMatches = async (
+    playerId: string,
+    offset: number,
+    append: boolean,
+  ) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
+
+    if (!playerId) {
+      const { data, error, count } = await supabaseClient
+        .from("matches")
+        .select(MATCH_SELECT, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(offset, offset + MATCHES_PER_PAGE - 1);
+
+      if (error) {
+        console.error(error);
+      } else {
+        const normalized = (data ?? []).map(normalizeMatch);
+        setMatches((prev) => (append ? [...prev, ...normalized] : normalized));
+        setTotalCount(count ?? 0);
+      }
+    } else {
+      // Find which matches this player was in first (paginated + ordered by
+      // match date), then fetch the full match data for just those matches.
+      const { data: mpData, error: mpError, count } = await supabaseClient
+        .from("match_players")
+        .select("match_id, matches!inner(created_at)", { count: "exact" })
+        .eq("player_id", playerId)
+        .order("created_at", { foreignTable: "matches", ascending: false })
+        .range(offset, offset + MATCHES_PER_PAGE - 1);
+
+      if (mpError) {
+        console.error(mpError);
+      } else {
+        const matchIds = (mpData ?? []).map((row) => row.match_id);
+        if (matchIds.length === 0) {
+          if (!append) setMatches([]);
+        } else {
+          const { data, error } = await supabaseClient
+            .from("matches")
+            .select(MATCH_SELECT)
+            .in("id", matchIds)
+            .order("created_at", { ascending: false });
+
+          if (error) {
+            console.error(error);
+          } else {
+            const normalized = (data ?? []).map(normalizeMatch);
+            setMatches((prev) =>
+              append ? [...prev, ...normalized] : normalized,
+            );
+          }
+        }
+        setTotalCount(count ?? 0);
+      }
+    }
+
+    if (append) setLoadingMore(false);
+    else setLoading(false);
+  };
+
+  // Refetch the first page whenever the filter changes (this also covers
+  // the very first load, since filterPlayerId starts as "").
+  // This is the standard "fetch data in response to a changed dependency"
+  // effect (see https://react.dev/learn/synchronizing-with-effects#fetching-data) —
+  // fetchMatches synchronously flips the loading flag before its own await,
+  // which the set-state-in-effect lint can't distinguish from unwanted
+  // derived-state updates, so it's suppressed here intentionally.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchMatches(filterPlayerId, 0, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterPlayerId]);
+
+  const handleLoadMore = () => {
+    fetchMatches(filterPlayerId, matches.length, true);
+  };
+
+  // Win/loss stats need to cover ALL of a player's matches, not just the
+  // page that's currently loaded, so this is fetched independently.
+  useEffect(() => {
+    if (!filterPlayerId) return;
+
+    const loadStats = async () => {
+      const { data, error } = await supabaseClient
+        .from("match_players")
+        .select("team, matches!inner(winner)")
+        .eq("player_id", filterPlayerId);
+
+      if (error) {
+        console.error(error);
         return;
       }
 
-      const normalizedMatches: Match[] = (matchesData ?? []).map((match) => {
-        const normalizedMatchPlayers: MatchPlayer[] = (
-          match.match_players ?? []
-        )
-          .map((mp): MatchPlayer | null => {
-            const player = Array.isArray(mp.players)
-              ? mp.players[0]
-              : mp.players;
-            if (!player) return null;
-            return {
-              player_id: mp.player_id,
-              team: mp.team as Team,
-              mmr_before: mp.mmr_before,
-              mmr_after: mp.mmr_after,
-              hero_id: mp.hero_id,
-              players: {
-                id: player.id,
-                name: player.name,
-                mmr: player.mmr,
-                avatar_url: player.avatar_url,
-              },
-            };
-          })
-          .filter((mp): mp is MatchPlayer => mp !== null);
-
-        return {
-          id: match.id,
-          winner: match.winner as Team,
-          win_condition: match.win_condition as WinCondition,
-          created_at: match.created_at,
-          atlantis_avg_mmr: match.atlantis_avg_mmr,
-          titans_avg_mmr: match.titans_avg_mmr,
-          atlantis_mmr_change: match.atlantis_mmr_change,
-          titans_mmr_change: match.titans_mmr_change,
-          match_players: normalizedMatchPlayers,
-        };
+      let wins = 0;
+      let losses = 0;
+      (data ?? []).forEach((row) => {
+        const matchInfo = Array.isArray(row.matches)
+          ? row.matches[0]
+          : row.matches;
+        if (!matchInfo) return;
+        if (row.team === matchInfo.winner) wins++;
+        else losses++;
       });
-      setMatches(normalizedMatches);
-      setPlayers(playersData ?? []);
-      setLoading(false);
+
+      const total = wins + losses;
+      const winRate = total === 0 ? 0 : (wins / total) * 100;
+      const player = players.find((p) => p.id === filterPlayerId);
+      setPlayerStats({
+        wins,
+        losses,
+        winRate,
+        mmr: player?.mmr ?? 1000,
+        name: player?.name ?? "Unknown",
+      });
     };
 
-    loadData();
-  }, []);
+    loadStats();
+  }, [filterPlayerId, players]);
 
   const router = useRouter();
   const goToProfile = (id: string) => router.push(`/players/${id}`);
 
-  const filteredMatches = useMemo(() => {
-    if (!filterPlayerId) return matches;
-    return matches.filter((match) =>
-      match.match_players.some((mp) => mp.player_id === filterPlayerId),
-    );
-  }, [matches, filterPlayerId]);
+  const hasMore = matches.length < totalCount;
 
-  const playerStats = useMemo(() => {
-    if (!filterPlayerId) return null;
-    let wins = 0;
-    let losses = 0;
-    filteredMatches.forEach((match) => {
-      const playerTeam = match.match_players.find(
-        (mp) => mp.player_id === filterPlayerId,
-      )?.team;
-      if (!playerTeam) return;
-      if (playerTeam === match.winner) wins++;
-      else losses++;
-    });
-    const total = wins + losses;
-    const winRate = total === 0 ? 0 : (wins / total) * 100;
-    const player = players.find((p) => p.id === filterPlayerId);
-    return {
-      wins,
-      losses,
-      winRate,
-      mmr: player?.mmr ?? 1000,
-      name: player?.name ?? "Unknown",
-    };
-  }, [filteredMatches, filterPlayerId, players]);
+  // Don't show stale stats from a previously selected player once the
+  // filter is cleared (avoids needing an extra effect just to null it out).
+  const displayedStats = filterPlayerId ? playerStats : null;
 
   if (loading) {
     return (
@@ -249,43 +348,43 @@ export default function MatchHistoryPage() {
       </div>
 
       {/* Player stats */}
-      {playerStats && (
+      {displayedStats && (
         <div className="goa-stats-card">
           <div className="goa-stats-head">
             <PlayerAvatar
               avatarUrl={
                 players.find((p) => p.id === filterPlayerId)?.avatar_url
               }
-              name={playerStats.name}
+              name={displayedStats.name}
               size={32}
             />
-            {playerStats.name}
+            {displayedStats.name}
           </div>
           <div className="goa-stats-grid">
             <div className="goa-stat">
               <div className="goa-stat-label">Rating</div>
-              <div className="goa-stat-value">{playerStats.mmr}</div>
+              <div className="goa-stat-value">{displayedStats.mmr}</div>
               <div className="goa-stat-sub">current MMR</div>
             </div>
             <div className="goa-stat">
               <div className="goa-stat-label">Win Rate</div>
               <div className="goa-stat-value">
-                {playerStats.winRate.toFixed(1)}%
+                {displayedStats.winRate.toFixed(1)}%
               </div>
               <div className="goa-stat-sub">
-                {playerStats.wins + playerStats.losses} battles
+                {displayedStats.wins + displayedStats.losses} battles
               </div>
             </div>
             <div className="goa-stat">
               <div className="goa-stat-label">Victories</div>
               <div className="goa-stat-value" style={{ color: "var(--gain)" }}>
-                {playerStats.wins}
+                {displayedStats.wins}
               </div>
             </div>
             <div className="goa-stat">
               <div className="goa-stat-label">Defeats</div>
               <div className="goa-stat-value" style={{ color: "var(--loss)" }}>
-                {playerStats.losses}
+                {displayedStats.losses}
               </div>
             </div>
           </div>
@@ -294,14 +393,14 @@ export default function MatchHistoryPage() {
 
       {/* Match list */}
       <div className="goa-matches">
-        {filteredMatches.length === 0 && (
+        {matches.length === 0 && (
           <div className="goa-empty">
             <div className="goa-empty-icon">⚔</div>
             <p>No battles recorded</p>
           </div>
         )}
 
-        {filteredMatches.map((match) => {
+        {matches.map((match) => {
           const atlantis = match.match_players.filter(
             (p) => p.team === "atlantis",
           );
@@ -450,6 +549,51 @@ export default function MatchHistoryPage() {
           );
         })}
       </div>
+
+      {matches.length > 0 && (
+        <div
+          className="goa-pagination"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "0.75rem",
+            marginBottom: "2rem",
+          }}
+        >
+          <p
+            className="goa-pagination-count"
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontSize: "0.7rem",
+              letterSpacing: "0.15em",
+              color: "var(--muted)",
+              textTransform: "uppercase",
+              margin: 0,
+            }}
+          >
+            Showing {matches.length} of {totalCount} battles
+          </p>
+          {hasMore && (
+            <button
+              className="goa-load-more"
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              style={{
+                fontFamily: "'Cinzel', serif",
+                fontSize: "0.75rem",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                padding: "0.6rem 1.5rem",
+                cursor: loadingMore ? "default" : "pointer",
+                opacity: loadingMore ? 0.6 : 1,
+              }}
+            >
+              {loadingMore ? "Loading…" : "Load More Battles"}
+            </button>
+          )}
+        </div>
+      )}
     </main>
   );
 }
