@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES, Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import Image from "next/image";
 
 type Player = {
   id: string;
@@ -219,6 +220,18 @@ export default function HeroDetailPage() {
 
       {/* Hero header */}
       <header className="goa-header">
+        <Image
+          src={`/heroes/${hero.id}_icon.png`}
+          alt={hero.name}
+          width={100}
+          height={100}
+          style={{
+            objectFit: "contain",
+            flexShrink: 0,
+            display: "flex",
+            justifySelf: "center",
+          }}
+        />
         <h1 className="goa-title">{hero.name}</h1>
         <p className="goa-subtitle">{renderStars(hero.complexity ?? 1)}</p>
       </header>
@@ -530,8 +543,25 @@ export default function HeroDetailPage() {
                             fontWeight: p.hero_id === heroId ? 700 : 400,
                           }}
                         >
+                          <Image
+                            src={`/heroes/${p.hero_id}_icon.png`}
+                            alt={hero.name}
+                            width={24}
+                            height={24}
+                            style={{
+                              objectFit: "contain",
+                              flexShrink: 0,
+                              display: "flex",
+                              justifySelf: "center",
+                            }}
+                          />
                           {HEROES.find((h) => h.id === p.hero_id)?.name}
-                          {p.hero_id === heroId && " ✦"}
+                          {renderStars(
+                            parseInt(
+                              HEROES.find((h) => h.id === p.hero_id)
+                                ?.complexity || "",
+                            ),
+                          )}
                         </span>
                       )}
                     </div>
@@ -585,8 +615,25 @@ export default function HeroDetailPage() {
                             fontWeight: p.hero_id === heroId ? 700 : 400,
                           }}
                         >
-                          {HEROES.find((h) => h.id === p.hero_id)?.name}
-                          {p.hero_id === heroId && " ✦"}
+                          <Image
+                            src={`/heroes/${p.hero_id}_icon.png`}
+                            alt={hero.name}
+                            width={24}
+                            height={24}
+                            style={{
+                              objectFit: "contain",
+                              flexShrink: 0,
+                              display: "flex",
+                              justifySelf: "center",
+                            }}
+                          />
+                          {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
+                          {renderStars(
+                            parseInt(
+                              HEROES.find((h) => h.id === p.hero_id)
+                                ?.complexity || "",
+                            ),
+                          )}
                         </span>
                       )}
                     </div>
