@@ -296,7 +296,13 @@ export default function HeroesPage() {
                           : "var(--text-muted)",
                     }}
                   >
-                  <Image src={s.hero.icon} alt={s.hero.name} width={24} height={24} style={{ objectFit: "contain", flexShrink: 0 }}/>
+                    <Image
+                      src={s.hero.icon}
+                      alt={s.hero.name}
+                      width={24}
+                      height={24}
+                      style={{ objectFit: "contain", flexShrink: 0 }}
+                    />
                     {s.hero.name}
                   </span>
                   {s.played > 0 && (

@@ -5,6 +5,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 type Player = {
   id: string;
@@ -56,8 +57,7 @@ const formatDate = (dateString: string) => {
   return `${day}/${month}/${year}`;
 };
 
-const sortByName = (a: Player, b: Player) =>
-  a.name.localeCompare(b.name);
+const sortByName = (a: Player, b: Player) => a.name.localeCompare(b.name);
 
 export default function MatchHistoryPage() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -371,6 +371,13 @@ export default function MatchHistoryPage() {
                           </span>
                         </div>
                         <span className="goa-display-hero">
+                          <Image
+                            src={"/heroes/" + p.hero_id + "_icon.png"}
+                            alt={p.hero_id || "unknown hero"}
+                            width={30}
+                            height={30}
+                            style={{ objectFit: "contain", flexShrink: 0 }}
+                          />
                           {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
                           {renderStars(
                             parseInt(
@@ -419,6 +426,13 @@ export default function MatchHistoryPage() {
                           </span>
                         </div>
                         <span className="goa-display-hero">
+                          <Image
+                            src={"/heroes/" + p.hero_id + "_icon.png"}
+                            alt={p.hero_id || "unknown hero"}
+                            width={30}
+                            height={30}
+                            style={{ objectFit: "contain", flexShrink: 0 }}
+                          />
                           {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
                           {renderStars(
                             parseInt(
