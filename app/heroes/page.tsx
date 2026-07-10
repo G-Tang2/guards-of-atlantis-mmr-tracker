@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES, Hero } from "@/lib/heroes";
+import Image from "next/image";
 
 type HeroStat = {
   hero: Hero;
@@ -117,11 +118,11 @@ export default function HeroesPage() {
   }, [sorted]);
 
   const sortCols: { key: SortKey; label: string }[] = [
+    { key: "name", label: "hero" },
     { key: "played", label: "GP" },
     { key: "winRate", label: "Win %" },
     { key: "wins", label: "Wins" },
     { key: "losses", label: "Losses" },
-    { key: "name", label: "hero" },
     { key: "complexity", label: "★" },
   ];
 
@@ -187,7 +188,7 @@ export default function HeroesPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 40px 60px 40px 40px",
+            gridTemplateColumns: "1fr 30px 50px 30px 30px",
             padding: "0.45rem 0.75rem",
             borderBottom: "1px solid var(--border)",
             background: "rgba(42,39,32,0.6)",
@@ -209,14 +210,13 @@ export default function HeroesPage() {
                 fontSize: "0.75rem",
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
-                color: sortKey === key ? "var(--gold)" : "var(--text-muted)",
+                color: "var(--text-muted)",
                 cursor: "pointer",
                 userSelect: "none",
                 textAlign: key === "name" ? "left" : "center",
               }}
             >
               {label}
-              {sortKey === key ? (sortAsc ? " ▲" : " ▼") : ""}
             </span>
           ))}
         </div>
@@ -255,7 +255,7 @@ export default function HeroesPage() {
               }
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 40px 60px 40px 40px",
+                gridTemplateColumns: "1fr 30px 50px 30px 30px",
                 alignItems: "center",
                 padding: "0.55rem 0.75rem",
                 borderBottom: "1px solid rgba(201,151,58,0.08)",
@@ -287,12 +287,16 @@ export default function HeroesPage() {
                     style={{
                       fontFamily: "'Crimson Pro', serif",
                       fontSize: "1rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
                       color:
                         s.played > 0
                           ? "var(--text-primary)"
                           : "var(--text-muted)",
                     }}
                   >
+                  <Image src={s.hero.icon} alt={s.hero.name} width={24} height={24} style={{ objectFit: "contain", flexShrink: 0 }}/>
                     {s.hero.name}
                   </span>
                   {s.played > 0 && (
