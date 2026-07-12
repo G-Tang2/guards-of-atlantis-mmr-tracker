@@ -50,7 +50,7 @@ export default function HeroDetailPage() {
   const hero: Hero | undefined = HEROES.find((h) => h.id === heroId);
 
   const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!heroId) return;
@@ -548,12 +548,6 @@ export default function HeroDetailPage() {
                             alt={hero.name}
                             width={24}
                             height={24}
-                            style={{
-                              objectFit: "contain",
-                              flexShrink: 0,
-                              display: "flex",
-                              justifySelf: "center",
-                            }}
                           />
                           {HEROES.find((h) => h.id === p.hero_id)?.name}
                           {renderStars(
