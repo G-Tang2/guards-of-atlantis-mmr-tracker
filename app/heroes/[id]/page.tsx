@@ -50,7 +50,7 @@ export default function HeroDetailPage() {
   const hero: Hero | undefined = HEROES.find((h) => h.id === heroId);
 
   const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!heroId) return;
