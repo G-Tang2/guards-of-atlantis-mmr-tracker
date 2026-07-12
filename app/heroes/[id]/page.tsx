@@ -620,12 +620,6 @@ export default function HeroDetailPage() {
                             alt={hero.name}
                             width={24}
                             height={24}
-                            style={{
-                              objectFit: "contain",
-                              flexShrink: 0,
-                              display: "flex",
-                              justifySelf: "center",
-                            }}
                           />
                           {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
                           {renderStars(

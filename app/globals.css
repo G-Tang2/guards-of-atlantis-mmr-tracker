@@ -214,6 +214,7 @@
   /* Header Utilities */
   .goa-header {
     text-align: center;
+    justify-items: center;
     padding: 1.75rem 1rem 1rem;
     position: relative;
   }

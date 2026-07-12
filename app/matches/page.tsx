@@ -473,9 +473,9 @@ export default function MatchHistoryPage() {
                           <Image
                             src={"/heroes/" + p.hero_id + "_icon.png"}
                             alt={p.hero_id || "unknown hero"}
-                            width={30}
-                            height={30}
-                            style={{ objectFit: "contain", flexShrink: 0 }}
+                            width={24}
+                            height={24}
+                            style={{ objectFit: "contain", flexShrink: 0, marginLeft: "0.2rem" }}
                           />
                           {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
                           {renderStars(
@@ -528,9 +528,9 @@ export default function MatchHistoryPage() {
                           <Image
                             src={"/heroes/" + p.hero_id + "_icon.png"}
                             alt={p.hero_id || "unknown hero"}
-                            width={30}
-                            height={30}
-                            style={{ objectFit: "contain", flexShrink: 0 }}
+                            width={24}
+                            height={24}
+                            style={{ objectFit: "contain", flexShrink: 0 , marginLeft: "0.2rem"}}
                           />
                           {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
                           {renderStars(
