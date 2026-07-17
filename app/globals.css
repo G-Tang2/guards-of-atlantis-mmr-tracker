@@ -234,9 +234,10 @@
 
   .goa-checkbox-container {
     display: flex;
+    width: stretch;
+    margin-left: 1.3rem;
     align-items: end;
     gap: 0.5rem;
-    align-self: center;
   }
 
   .goa-header::after {

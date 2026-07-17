@@ -258,19 +258,16 @@ export default function LeaderboardPage() {
         ))}
       </div>
 
-      <div className="goa-leaderboard-information-container">
-        <div className="goa-checkbox-container">
-          <Checkbox
-            id="show-all-players"
-            checked={showAllPlayers}
-            onCheckedChange={(checked) => setShowAllPlayers(checked == true)}
-            className="border-[#ebc931ab] data-[state=checked]:border-[#ebc931ab] data-[state=checked]:bg-[#b7a14238] display: inline-block"
-          />
-          <label htmlFor="show-all-players" className="goa-tap-hint">
-            Show all players
-          </label>
-        </div>
-        <p className="goa-tap-hint">Tap a player to view their profile</p>
+      <div className="goa-checkbox-container">
+        <Checkbox
+          id="show-all-players"
+          checked={showAllPlayers}
+          onCheckedChange={(checked) => setShowAllPlayers(checked == true)}
+          className="border-[#ebc931ab] data-[state=checked]:border-[#ebc931ab] data-[state=checked]:bg-[#b7a14238] display: inline-block"
+        />
+        <label htmlFor="show-all-players" className="goa-tap-hint">
+          Show all players
+        </label>
       </div>
 
       {/* Table */}
