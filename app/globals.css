@@ -222,6 +222,23 @@
     align-items: center;
   }
 
+  .goa-leaderboard-information-container {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: stretch;
+    margin-left: 1.3rem;
+    align-items: end;
+    gap: 0.5rem;
+    align-self: center;
+  }
+
+  .goa-checkbox-container {
+    display: flex;
+    align-items: end;
+    gap: 0.5rem;
+    align-self: center;
+  }
+
   .goa-header::after {
     content: "";
     display: block;

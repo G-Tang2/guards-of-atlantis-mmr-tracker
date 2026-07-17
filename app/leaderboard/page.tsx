@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Player = {
   id: string;
@@ -41,6 +42,7 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("mmr");
   const [sortAsc, setSortAsc] = useState(false);
+  const [showAllPlayers, setShowAllPlayers] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -90,9 +92,14 @@ export default function LeaderboardPage() {
     });
   }, [players, matches]);
 
+  const playersToDisplay = useMemo(() => {
+    if (showAllPlayers) return leaderboard;
+    return leaderboard.filter((p) => p.matches >= 5);
+  }, [leaderboard, showAllPlayers]);
+
   const rankedByMmr = useMemo(
-    () => [...leaderboard].sort((a, b) => b.mmr - a.mmr),
-    [leaderboard],
+    () => [...playersToDisplay].sort((a, b) => b.mmr - a.mmr),
+    [playersToDisplay],
   );
 
   const rankMap = useMemo(() => {
@@ -110,7 +117,7 @@ export default function LeaderboardPage() {
   };
 
   const sorted = useMemo(() => {
-    const list = [...leaderboard];
+    const list = [...playersToDisplay];
     list.sort((a, b) => {
       if (sortKey === "name")
         return sortAsc
@@ -143,9 +150,9 @@ export default function LeaderboardPage() {
       return sortAsc ? valA - valB : valB - valA;
     });
     return list;
-  }, [leaderboard, sortKey, sortAsc, rankMap]);
+  }, [playersToDisplay, sortKey, sortAsc, rankMap]);
 
-  const top3 = rankedByMmr.slice(0, 3);
+  const top3 = sorted.slice(0, 3);
   const plinthClass = ["first", "second", "third"];
   const medalEmoji = ["🥇", "🥈", "🥉"];
   const sortCols: { key: SortKey; label: string }[] = [
@@ -251,7 +258,20 @@ export default function LeaderboardPage() {
         ))}
       </div>
 
-      <p className="goa-tap-hint">Tap a player to view their profile</p>
+      <div className="goa-leaderboard-information-container">
+        <div className="goa-checkbox-container">
+          <Checkbox
+            id="show-all-players"
+            checked={showAllPlayers}
+            onCheckedChange={(checked) => setShowAllPlayers(checked == true)}
+            className="border-[#ebc931ab] data-[state=checked]:border-[#ebc931ab] data-[state=checked]:bg-[#b7a14238] display: inline-block"
+          />
+          <label htmlFor="show-all-players" className="goa-tap-hint">
+            Show all players
+          </label>
+        </div>
+        <p className="goa-tap-hint">Tap a player to view their profile</p>
+      </div>
 
       {/* Table */}
       <div className="goa-table-wrap">
