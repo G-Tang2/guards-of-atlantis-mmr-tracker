@@ -4,8 +4,6 @@ export type Player = {
   mmr: number;
 };
 
-const K = 40;
-
 // Expected probability (mmr formula)
 const expectedWin = (a: number, b: number) => {
   return 1 / (1 + Math.pow(10, (b - a) / 400));
@@ -14,6 +12,20 @@ const expectedWin = (a: number, b: number) => {
 // Team average mmr
 const teamAvg = (team: Player[]) =>
   team.reduce((sum, p) => sum + p.mmr, 0) / team.length;
+
+const calculateDelta = (
+  hasWon: boolean,
+  expectedScore: number,
+  baseK: number = 40,
+  winBonus: number = 10
+): number => {
+  const actualScore = hasWon ? 1 : 0;
+  
+  // Fixes the precedence bug: (K + bonus) is grouped together before multiplying
+  const effectiveK = hasWon ? baseK + winBonus : baseK; 
+  
+  return effectiveK * (actualScore - expectedScore);
+};
 
 export const calculateMMR = (
   atlantis: Player[],
@@ -26,12 +38,10 @@ export const calculateMMR = (
   const expectedA = expectedWin(atlantisAvg, titansAvg);
   const expectedB = 1 - expectedA;
 
-  const scoreA = winner === "atlantis" ? 1 : 0;
-  const scoreB = 1 - scoreA;
+  const isAtlantisWinner = winner === "atlantis";
 
-  // Team-level mmr change (same for everyone)
-  const atlantisDelta = K * (scoreA - expectedA);
-  const titansDelta = K * (scoreB - expectedB);
+  const atlantisDelta = calculateDelta(isAtlantisWinner, expectedA);
+  const titansDelta = calculateDelta(!isAtlantisWinner, expectedB);
 
   const apply = (team: Player[], delta: number) => {
     const roundedDelta = Math.round(delta);
