@@ -419,13 +419,15 @@ export default function TeamSplitterPage() {
             {pool.map((p) => (
               <div key={p.id} className="goa-pool-row">
                 <span className="goa-pool-name">
-                  <PlayerAvatar
-                    avatarUrl={p.avatar_url}
-                    name={p.name}
-                    size={22}
-                  />
-                  {p.name}
-                  <span className="goa-pool-mmr">{p.mmr}</span>
+                  <span className="flex gap-2">
+                    <PlayerAvatar
+                      avatarUrl={p.avatar_url}
+                      name={p.name}
+                      size={22}
+                    />
+                    {p.name}
+                  </span>
+                  <span className="goa-pool-mmr">{p.mmr} MMR</span>
                 </span>
                 <button
                   className="goa-remove"
@@ -612,6 +614,9 @@ export default function TeamSplitterPage() {
                             <span className="draft-captain-name">
                               {chosen.name}
                             </span>
+                            <span className="draft-captain-mmr">
+                              {chosen.mmr} MMR
+                            </span>
                             <button
                               className="goa-remove"
                               onClick={() => setCaptain(faction, null)}
@@ -629,12 +634,18 @@ export default function TeamSplitterPage() {
                                   className="draft-player-option"
                                   onClick={() => setCaptain(faction, p)}
                                 >
-                                  <PlayerAvatar
-                                    avatarUrl={p.avatar_url}
-                                    name={p.name}
-                                    size={20}
-                                  />
-                                  <span>{p.name}</span>
+                                  <div className="flex align-center gap-1">
+                                    <PlayerAvatar
+                                      avatarUrl={p.avatar_url}
+                                      name={p.name}
+                                      size={20}
+                                    />
+                                    <span>{p.name}</span>
+                                  </div>
+                                  <span className="draft-player-mmr">
+                                    {" "}
+                                    {p.mmr} MMR
+                                  </span>
                                 </button>
                               ))}
                           </div>
@@ -695,6 +706,9 @@ export default function TeamSplitterPage() {
 
                 {/* Players to pick from */}
                 <div className="draft-available">
+                  <span className="draft-available-label">
+                    Available Players
+                  </span>
                   {draft.remaining.map((p) => (
                     <button
                       key={p.id}
