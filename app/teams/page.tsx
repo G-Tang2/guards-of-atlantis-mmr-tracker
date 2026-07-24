@@ -112,104 +112,6 @@ const snakeFaction = (
   return Math.floor(pickNumber / 2) % 2 === 0 ? firstPick : second;
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const styles = `
- 
-  /* ── Draft modal ── */
-  .draft-overlay {
-    position: fixed; inset: 0;
-    background: rgba(10,9,6,0.85);
-    z-index: 200;
-    display: flex; align-items: flex-end; justify-content: center;
-    animation: overlayIn 0.2s ease;
-  }
-  @keyframes overlayIn { from{opacity:0} to{opacity:1} }
-
-  .draft-sheet {
-    width: 100%; max-width: 480px;
-    background: #1E1C16;
-    border: 1px solid rgba(201,151,58,0.5);
-    border-bottom: none;
-    border-radius: 14px 14px 0 0;
-    max-height: 90vh;
-    display: flex; flex-direction: column;
-    overflow: hidden;
-    animation: sheetUp 0.28s cubic-bezier(0.32,0.72,0,1);
-    position: relative;
-  }
-  .draft-sheet::before { content:''; position:absolute; top:0;left:0;right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(201,151,58,0.7),transparent); }
-  @keyframes sheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-
-  .draft-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.9rem 1rem 0.75rem;
-    border-bottom: 1px solid rgba(201,151,58,0.2);
-    background: linear-gradient(135deg,rgba(42,39,32,0.6),rgba(28,26,20,0.9));
-    flex-shrink: 0;
-  }
-  .draft-head-title { font-family:'Cinzel',serif; font-size:0.88rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--gold-light); }
-  .draft-close { background:none; border:1px solid rgba(201,151,58,0.3); border-radius:3px; color:var(--muted); width:28px; height:28px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.75rem; transition:all 0.15s; }
-  .draft-close:hover { border-color:var(--gold); color:var(--gold-light); }
-
-  .draft-body { flex:1; overflow-y:auto; padding:0.85rem 0.9rem 1.5rem; display:flex; flex-direction:column; gap:0.7rem; }
-  .draft-body::-webkit-scrollbar { width:3px; }
-  .draft-body::-webkit-scrollbar-thumb { background:rgba(201,151,58,0.3); border-radius:2px; }
-
-  .draft-note { font-family:'Cinzel',serif; font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); text-align:center; }
-  .draft-note.highlight { color:var(--gold-light); }
-
-  .draft-random-btn { width:100%; background:rgba(42,39,32,0.7); border:1px solid rgba(201,151,58,0.3); border-radius:4px; color:var(--gold-light); font-family:'Cinzel',serif; font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:0.6rem; cursor:pointer; transition:all 0.15s; }
-  .draft-random-btn:hover { background:rgba(201,151,58,0.15); border-color:var(--gold); }
-
-  .draft-captain-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; }
-  .draft-captain-col { display:flex; flex-direction:column; gap:0.35rem; }
-
-  .draft-faction-label { font-family:'Cinzel',serif; font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; }
-  .draft-faction-label.atl { color:var(--atl-light); }
-  .draft-faction-label.tit { color:var(--tit-light); }
-
-  .draft-col-label { font-family:'Cinzel',serif; font-size:0.55rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); }
-
-  .draft-captain-chosen { display:flex; align-items:center; gap:0.4rem; background:rgba(42,39,32,0.6); border:1px solid rgba(201,151,58,0.25); border-radius:3px; padding:0.4rem 0.5rem; }
-  .draft-captain-name { font-family:'Crimson Pro',serif; font-size:0.88rem; color:var(--txt); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
-  .draft-player-scroll { display:flex; flex-direction:column; gap:0.25rem; max-height:150px; overflow-y:auto; }
-  .draft-player-scroll::-webkit-scrollbar { width:3px; }
-  .draft-player-scroll::-webkit-scrollbar-thumb { background:rgba(201,151,58,0.3); border-radius:2px; }
-  .draft-player-option { display:flex; align-items:center; gap:0.4rem; background:rgba(28,26,20,0.85); border:1px solid rgba(201,151,58,0.15); border-radius:3px; padding:0.38rem 0.5rem; cursor:pointer; font-family:'Crimson Pro',serif; font-size:0.88rem; color:var(--txt); transition:all 0.12s; width:100%; text-align:left; }
-  .draft-player-option:hover { background:rgba(42,39,32,0.9); border-color:rgba(201,151,58,0.4); }
-  .draft-player-option:disabled { opacity:0.3; cursor:not-allowed; }
-
-  .draft-start-btn { width:100%; background:linear-gradient(135deg,rgba(201,151,58,0.18),rgba(122,88,26,0.3)); border:1px solid var(--gold); border-radius:4px; color:var(--gold-light); font-family:'Cinzel',serif; font-size:0.82rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; padding:0.8rem; cursor:pointer; transition:all 0.2s; }
-  .draft-start-btn:disabled { opacity:0.3; cursor:not-allowed; }
-  .draft-start-btn:not(:disabled):hover { box-shadow:0 0 16px rgba(201,151,58,0.3); }
-
-  /* Drafting phase */
-  .draft-pick-banner { display:flex; align-items:center; gap:0.55rem; padding:0.65rem 0.75rem; border-radius:4px; border:1px solid; animation:pulse 1.8s ease-in-out infinite; }
-  .draft-pick-banner.atl { background:rgba(196,42,58,0.1); border-color:rgba(196,42,58,0.45); }
-  .draft-pick-banner.tit { background:rgba(42,171,184,0.1); border-color:rgba(42,171,184,0.45); }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.72} }
-  .draft-pick-info { flex:1; display:flex; flex-direction:column; gap:0.08rem; }
-  .draft-pick-sub { font-family:'Cinzel',serif; font-size:0.55rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); }
-  .draft-pick-num { font-family:'Cinzel',serif; font-size:0.6rem; color:var(--muted); }
-
-  .draft-available { display:flex; flex-direction:column; gap:0.32rem; }
-  .draft-pick-btn { display:flex; align-items:center; gap:0.5rem; background:rgba(28,26,20,0.85); border:1px solid rgba(201,151,58,0.2); border-radius:4px; padding:0.55rem 0.75rem; cursor:pointer; transition:all 0.15s; width:100%; }
-  .draft-pick-btn:hover { background:rgba(201,151,58,0.1); border-color:rgba(201,151,58,0.5); transform:translateX(3px); }
-  .draft-pick-btn-name { flex:1; font-family:'Crimson Pro',serif; font-size:0.95rem; color:var(--txt); text-align:left; }
-  .draft-pick-btn-mmr { font-family:'Cinzel',serif; font-size:0.62rem; color:var(--muted); }
-
-  .draft-live-teams { display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; }
-  .draft-live-team { background:rgba(28,26,20,0.7); border:1px solid rgba(201,151,58,0.15); border-radius:4px; padding:0.5rem 0.6rem; display:flex; flex-direction:column; gap:0.28rem; }
-  .draft-live-row { display:flex; align-items:center; gap:0.3rem; padding:0.15rem 0; border-bottom:1px solid rgba(201,151,58,0.06); animation:fadeSlide 0.2s ease; }
-  .draft-live-row:last-child { border-bottom:none; }
-  .draft-live-num { font-family:'Cinzel',serif; font-size:0.55rem; color:var(--muted); width:14px; text-align:center; flex-shrink:0; }
-  .draft-live-name { font-family:'Crimson Pro',serif; font-size:0.82rem; color:var(--txt); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-`;
-
-// ── Page ──────────────────────────────────────────────────────────────────────
-
 export default function TeamSplitterPage() {
   const router = useRouter();
 
@@ -280,10 +182,9 @@ export default function TeamSplitterPage() {
 
   const handleGoToBattle = () => {
     if (!result) return;
-    const params = new URLSearchParams();
-    result.atlantis.forEach((p) => params.append("atl", p.id));
-    result.titans.forEach((p) => params.append("tit", p.id));
-    router.push(`/matches/new?${params.toString()}`);
+    const atlantisIds = result.atlantis.map((p) => p.id).join(",");
+    const titansIds = result.titans.map((p) => p.id).join(",");
+    router.push(`/matches/new?atlantis=${atlantisIds}&titans=${titansIds}`);
   };
 
   // ── Draft handlers ──────────────────────────────────────────────────────────
@@ -423,7 +324,6 @@ export default function TeamSplitterPage() {
           minHeight: "100vh",
         }}
       >
-        <style>{styles}</style>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚔️</div>
           <p
@@ -444,8 +344,6 @@ export default function TeamSplitterPage() {
 
   return (
     <main className="goa-root">
-      <style>{styles}</style>
-
       <button className="goa-back" onClick={() => router.back()}>
         ‹ Home
       </button>
@@ -634,7 +532,9 @@ export default function TeamSplitterPage() {
                         >
                           {p.name}
                         </span>
-                        <span className="goa-result-player-mmr">{p.mmr}</span>
+                        <span className="goa-result-player-mmr">
+                          {p.mmr} MMR
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -821,8 +721,7 @@ export default function TeamSplitterPage() {
                         <span
                           className={`draft-faction-label ${faction === "atlantis" ? "atl" : "tit"}`}
                         >
-                          {faction === "atlantis" ? "Atlantis" : "Titans"} (
-                          {members.length})
+                          {faction === "atlantis" ? "Atlantis" : "Titans"}
                         </span>
                         {members.map((p, i) => (
                           <div key={p.id} className="draft-live-row">
@@ -835,6 +734,7 @@ export default function TeamSplitterPage() {
                               size={18}
                             />
                             <span className="draft-live-name">{p.name}</span>
+                            <span className="draft-live-mmr">{p.mmr} MMR</span>
                           </div>
                         ))}
                       </div>
@@ -857,7 +757,7 @@ export default function TeamSplitterPage() {
                     const memberAvg = avg(members);
                     return (
                       <div key={faction} className="draft-live-team">
-                        <div>
+                        <div className="flex justify-between align-center">
                           <span
                             className={`draft-faction-label ${faction === "atlantis" ? "atl" : "tit"}`}
                           >
@@ -869,9 +769,10 @@ export default function TeamSplitterPage() {
                               fontSize: "0.55rem",
                               color: "var(--muted)",
                               marginLeft: "0.35rem",
+                              alignContent: "center",
                             }}
                           >
-                            avg {memberAvg}
+                            AVG MMR: {memberAvg}
                           </span>
                         </div>
                         {members.map((p) => (
@@ -889,7 +790,7 @@ export default function TeamSplitterPage() {
                                 color: "var(--muted)",
                               }}
                             >
-                              {p.mmr}
+                              {p.mmr} MMR
                             </span>
                           </div>
                         ))}
