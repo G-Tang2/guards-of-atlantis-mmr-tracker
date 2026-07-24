@@ -147,6 +147,8 @@
     --text-muted: #a09070;
     --gain: #5dbb8a;
     --loss: #c44a4a;
+    --balanced-text: rgb(68 195 108);
+    --balanced-border: rgb(25 169 70);
 
     font-family: "Crimson Pro", Georgia, serif;
     font-size: 1.05rem; /* Increased slightly from base */
@@ -402,7 +404,6 @@
   }
 
   .goa-dropdown {
-    margin: 0 0.75rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: 3px;
     overflow: hidden;
@@ -2472,9 +2473,9 @@
 
   .goa-split-btns {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 0.65rem;
-    margin: 0 0.75rem 0.75rem;
+    margin: 0 0.75rem 0.75rem 0.75rem;
   }
 
   .goa-split-btn {
@@ -2517,25 +2518,36 @@
     opacity: 0.3;
     cursor: not-allowed;
   }
+  .goa-split-btn.draft {
+    border-color: rgb(237, 217, 113, 0.478);
+    color: rgb(231, 200, 37);
+  }
+
+  .goa-split-btn.draft.active,
+  .goa-split-btn.draft:hover:not(:disabled) {
+    background: rgb(251, 227, 102, 0.12);
+    border-color: rgb(237, 217, 113);
+    box-shadow: 0 0 12px rgba(68, 195, 108, 0.2);
+  }
 
   .goa-split-btn.random {
-    border-color: rgb(229, 72, 77);
+    border-color: rgb(229, 72, 77, 0.478);
     color: rgb(255, 138, 145);
   }
   .goa-split-btn.random:hover:not(:disabled) {
     background: rgba(255, 107, 112, 0.12);
-    border-color: rgb(255, 107, 112);
+    border-color: rgb(229, 72, 77);
     box-shadow: 0 0 12px rgba(42, 171, 184, 0.2);
   }
 
   .goa-split-btn.balanced {
-    border-color: rgba(201, 151, 58, 0.5);
-    color: var(--gold-light);
+    border-color: rgba(25, 169, 70, 0.478);
+    color: var(--balanced-text);
   }
   .goa-split-btn.balanced:hover:not(:disabled) {
-    background: rgba(201, 151, 58, 0.15);
-    border-color: var(--gold);
-    box-shadow: 0 0 12px rgba(201, 151, 58, 0.2);
+    background: rgba(68, 195, 108, 0.15);
+    border-color: rgba(25, 169, 70);
+    box-shadow: 0 0 12px rgba(68, 195, 108, 0.2);
   }
 
   .goa-split-icon {
