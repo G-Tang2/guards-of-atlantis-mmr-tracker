@@ -2988,7 +2988,7 @@
   }
   .draft-captain-mmr {
     font-family: "Cinzel", serif;
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     color: var(--muted);
   }
 
@@ -3194,5 +3194,166 @@
     font-family: "Cinzel", serif;
     font-size: 0.62rem;
     color: var(--muted);
+  }
+
+  .draft-coin-scene {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    gap: 1.5rem;
+  }
+
+  .draft-coin-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    animation: fadeInUp 0.4s ease;
+  }
+
+  .draft-coin-captains {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    position: relative;
+  }
+
+  .draft-coin-captain {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Avatar wrapper — classes applied via JS */
+  .draft-coin-avatar-wrap {
+    border-radius: 50%;
+    padding: 3px;
+    border: 3px solid rgba(201, 151, 58, 0.3);
+    transition: border-color 0.5s, opacity 0.5s, filter 0.5s;
+  }
+  .draft-coin-avatar-wrap.spinning {
+    animation: coinSpin 0.35s linear infinite;
+  }
+  .draft-coin-avatar-wrap.winner {
+    border-color: var(--gold-light);
+    box-shadow: 0 0 28px rgba(201, 151, 58, 0.65), 0 0 8px rgba(201, 151, 58, 0.4);
+    animation: winnerPulse 0.65s ease forwards;
+  }
+  .draft-coin-avatar-wrap.loser {
+    opacity: 0.35;
+    filter: grayscale(0.85);
+  }
+
+  @keyframes coinSpin {
+    0%   { transform: rotateY(0deg) scale(1); }
+    50%  { transform: rotateY(180deg) scale(0.88); }
+    100% { transform: rotateY(360deg) scale(1); }
+  }
+
+  @keyframes winnerPulse {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.22); }
+    60%  { transform: scale(0.95); }
+    80%  { transform: scale(1.1); }
+    100% { transform: scale(1.05); }
+  }
+
+  .draft-coin-vs {
+    font-size: 1.4rem;
+    animation: vsSpin 0.4s linear infinite;
+    display: inline-block;
+  }
+  @keyframes vsSpin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .draft-coin-crown {
+    font-size: 2.2rem;
+    display: inline-block;
+    animation: crownBounce 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  @keyframes crownBounce {
+    0%   { transform: translateY(-24px) scale(0.6); opacity: 0; }
+    60%  { transform: translateY(6px) scale(1.15); opacity: 1; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  .draft-coin-name {
+    font-family: "Cinzel", serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    transition: color 0.4s;
+  }
+  .draft-coin-name.winner {
+    color: var(--gold-light);
+    animation: fadeInUp 0.4s ease;
+  }
+  .draft-coin-name.loser {
+    color: var(--text-muted);
+    opacity: 0.45;
+  }
+
+  .draft-coin-faction {
+    font-family: "Cinzel", serif;
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .draft-coin-faction.atl { color: var(--atl-light, #E8364A); }
+  .draft-coin-faction.tit { color: var(--tit-light, #3DCAD8); }
+
+  /* Result reveal */
+  .draft-coin-result {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    animation: fadeInUp 0.5s ease;
+  }
+  .draft-coin-result-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .draft-coin-result-faction {
+    font-family: "Cinzel", serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .draft-coin-result-faction.atl { color: var(--atl-light, #E8364A); }
+  .draft-coin-result-faction.tit { color: var(--tit-light, #3DCAD8); }
+  .draft-coin-result-sub {
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+  .draft-coin-starting {
+    font-family: "Cinzel", serif;
+    font-size: 0.58rem;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 0.15rem;
+    animation: fadeInUp 0.5s 0.35s ease both;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 }

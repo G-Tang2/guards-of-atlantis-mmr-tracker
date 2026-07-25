@@ -23,7 +23,7 @@ type SplitResult = {
 
 // ── Draft types ───────────────────────────────────────────────────────────────
 
-type DraftPhase = "select_captains" | "drafting" | "complete";
+type DraftPhase = "select_captains" | "coin_flip" | "drafting" | "complete";
 
 type DraftState = {
   phase: DraftPhase;
@@ -136,6 +136,7 @@ export default function TeamSplitterPage() {
   // Draft modal
   const [draftOpen, setDraftOpen] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
+  const [coinWinner, setCoinWinner] = useState<"atlantis" | "titans" | null>(null);
 
   useEffect(() => {
     supabaseClient
@@ -251,6 +252,7 @@ export default function TeamSplitterPage() {
 
   const startDraft = () => {
     if (!draft?.captainAtlantis || !draft?.captainTitans) return;
+    // Decide first pick now but reveal through animation
     const firstPick: "atlantis" | "titans" =
       Math.random() < 0.5 ? "atlantis" : "titans";
     const captainIds = new Set([
@@ -258,9 +260,12 @@ export default function TeamSplitterPage() {
       draft.captainTitans.id,
     ]);
     const remaining = pool.filter((p) => !captainIds.has(p.id));
+
+    // Store the resolved draft ready to begin, but show coin flip first
+    setCoinWinner(null);
     setDraft({
       ...draft,
-      phase: "drafting",
+      phase: "coin_flip",
       firstPick,
       currentPick: firstPick,
       pickNumber: 1,
@@ -268,6 +273,18 @@ export default function TeamSplitterPage() {
       titans: [draft.captainTitans],
       remaining,
     });
+
+    // Phase 1: spinning (1.8s) → reveal winner (after 2s)
+    setTimeout(() => {
+      setCoinWinner(firstPick);
+    }, 2000);
+
+    // Phase 2: auto-advance to drafting after reveal pause (5s total)
+    setTimeout(() => {
+      setDraft((prev) =>
+        prev ? { ...prev, phase: "drafting" } : prev
+      );
+    }, 5000);
   };
 
   const draftPick = (player: Player) => {
@@ -674,6 +691,83 @@ export default function TeamSplitterPage() {
               </div>
             )}
 
+
+            {/* ── Phase: Coin flip animation ── */}
+            {draft.phase === "coin_flip" && (
+              <div className="draft-body">
+                <div className="draft-coin-scene">
+                  <p className="draft-coin-label">
+                    {coinWinner ? "First pick goes to…" : "Deciding who picks first…"}
+                  </p>
+
+                  <div className="draft-coin-captains">
+                    {/* Atlantis captain */}
+                    <div className="draft-coin-captain">
+                      <div className={`draft-coin-avatar-wrap ${
+                        coinWinner === null
+                          ? "spinning"
+                          : coinWinner === "atlantis"
+                          ? "winner"
+                          : "loser"
+                      }`}>
+                        <PlayerAvatar
+                          avatarUrl={draft.captainAtlantis?.avatar_url}
+                          name={draft.captainAtlantis?.name ?? ""}
+                          size={64}
+                          borderColor={coinWinner === "atlantis" ? "var(--gold)" : coinWinner === "titans" ? "rgba(42,39,32,0.4)" : "var(--atl-light)"}
+                        />
+                      </div>
+                      <span className={`draft-coin-name ${
+                        coinWinner === null ? "" : coinWinner === "atlantis" ? "winner" : "loser"
+                      }`}>
+                        {draft.captainAtlantis?.name}
+                      </span>
+                      <span style={{ fontFamily:"'Cinzel',serif", fontSize:"0.65rem", color:"var(--atlantis-light)", letterSpacing:"0.08em", textTransform:"uppercase", fontWeight:"700" }}>
+                        Atlantis
+                      </span>
+                    </div>
+
+                    {/* VS spinner */}
+                    {!coinWinner && (
+                      <span className="draft-coin-vs">⚔</span>
+                    )}
+
+                    {/* Winner crown between them */}
+                    {coinWinner && (
+                      <span className="draft-coin-crown">👑</span>
+                    )}
+
+                    {/* Titans captain */}
+                    <div className="draft-coin-captain">
+                      <div className={`draft-coin-avatar-wrap ${
+                        coinWinner === null
+                          ? "spinning"
+                          : coinWinner === "titans"
+                          ? "winner"
+                          : "loser"
+                      }`}>
+                        <PlayerAvatar
+                          avatarUrl={draft.captainTitans?.avatar_url}
+                          name={draft.captainTitans?.name ?? ""}
+                          size={64}
+                          borderColor={coinWinner === "titans" ? "var(--gold)" : coinWinner === "atlantis" ? "rgba(42,39,32,0.4)" : "var(--tit-light)"}
+                        />
+                      </div>
+                      <span className={`draft-coin-name ${
+                        coinWinner === null ? "" : coinWinner === "titans" ? "winner" : "loser"
+                      }`}>
+                        {draft.captainTitans?.name}
+                      </span>
+                      <span style={{ fontFamily:"'Cinzel',serif", fontSize:"0.65rem", color:"var(--titans-light)", letterSpacing:"0.08em", textTransform:"uppercase", fontWeight:"700" }}>
+                        Titans
+                      </span>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
             {/* ── Phase 2: Snake draft ── */}
             {draft.phase === "drafting" && (
               <div className="draft-body">
@@ -771,7 +865,7 @@ export default function TeamSplitterPage() {
             {draft.phase === "complete" && (
               <div className="draft-body">
                 <p className="draft-note highlight">
-                  ✦ Draft complete — pick order has been hidden
+                  ✦ Draft complete!
                 </p>
 
                 <div className="draft-live-teams">
