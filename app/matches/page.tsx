@@ -26,7 +26,7 @@ const winConditionLabel: Record<string, string> = {
   LIFE_COUNTER: "LIFE COUNTER",
 };
 
-type Team = "atlantis" | "titans";
+type Team = "atlantis" | "titans" | "none";
 
 type MatchPlayer = {
   player_id: string;
@@ -186,7 +186,11 @@ export default function MatchHistoryPage() {
     } else {
       // Find which matches this player was in first (paginated + ordered by
       // match date), then fetch the full match data for just those matches.
-      const { data: mpData, error: mpError, count } = await supabaseClient
+      const {
+        data: mpData,
+        error: mpError,
+        count,
+      } = await supabaseClient
         .from("match_players")
         .select("match_id, matches!inner(created_at)", { count: "exact" })
         .eq("player_id", playerId)
@@ -428,7 +432,9 @@ export default function MatchHistoryPage() {
                 </span>
                 <span className="goa-match-winner">
                   <span className={`goa-winner-badge ${match.winner}`}>
-                    {match.winner} VICTORY{" "}
+                    {match.winner === "none"
+                      ? "DRAW"
+                      : `${match.winner.toUpperCase()} VICTORY`}{" "}
                     {formatWinCondition(match.win_condition)}
                   </span>
                 </span>
@@ -475,7 +481,11 @@ export default function MatchHistoryPage() {
                             alt={p.hero_id || "unknown hero"}
                             width={24}
                             height={24}
-                            style={{ objectFit: "contain", flexShrink: 0, marginLeft: "0.2rem" }}
+                            style={{
+                              objectFit: "contain",
+                              flexShrink: 0,
+                              marginLeft: "0.2rem",
+                            }}
                           />
                           {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
                           {renderStars(
@@ -530,7 +540,11 @@ export default function MatchHistoryPage() {
                             alt={p.hero_id || "unknown hero"}
                             width={24}
                             height={24}
-                            style={{ objectFit: "contain", flexShrink: 0 , marginLeft: "0.2rem"}}
+                            style={{
+                              objectFit: "contain",
+                              flexShrink: 0,
+                              marginLeft: "0.2rem",
+                            }}
                           />
                           {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
                           {renderStars(

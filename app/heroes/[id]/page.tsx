@@ -17,7 +17,7 @@ type Player = {
 
 type MatchPlayer = {
   player_id: string;
-  team: "atlantis" | "titans";
+  team: "atlantis" | "titans" | "none";
   mmr_before: number;
   mmr_after: number;
   hero_id?: string | null;
@@ -26,7 +26,7 @@ type MatchPlayer = {
 
 type Match = {
   id: string;
-  winner: "atlantis" | "titans";
+  winner: "atlantis" | "titans" | "none";
   created_at: string;
   atlantis_avg_mmr: number;
   titans_avg_mmr: number;
@@ -119,6 +119,7 @@ export default function HeroDetailPage() {
     matches.forEach((m) => {
       const heroPlayers = m.match_players.filter((mp) => mp.hero_id === heroId);
       heroPlayers.forEach((mp) => {
+        if (m.winner == "none") return; // skip if no winner (draw)
         const won = mp.team === m.winner;
         if (won) wins++;
         else losses++;
@@ -420,7 +421,9 @@ export default function HeroDetailPage() {
                 </span>
                 <span className="goa-match-winner">
                   <span className={`goa-winner-badge ${match.winner}`}>
-                    {match.winner} VICTORY
+                    {match.winner === "none"
+                      ? "DRAW"
+                      : `${match.winner.toUpperCase()} VICTORY`}
                   </span>
                 </span>
               </div>
@@ -473,9 +476,11 @@ export default function HeroDetailPage() {
                           fontFamily: "'Cinzel', serif",
                           fontSize: "0.65rem",
                           color:
-                            mp.team === match.winner
-                              ? "var(--gain)"
-                              : "var(--loss)",
+                            match.winner === "none"
+                              ? "rgba(201, 135, 36)"
+                              : mp.team === match.winner
+                                ? "var(--gain)"
+                                : "var(--loss)",
                           fontWeight: 600,
                         }}
                       >
@@ -488,7 +493,13 @@ export default function HeroDetailPage() {
                           color: "var(--text-muted)",
                         }}
                       >
-                        ({mp.team === match.winner ? "Won" : "Lost"})
+                        (
+                        {match.winner == "none"
+                          ? "Draw"
+                          : mp.team === match.winner
+                            ? "Won"
+                            : "Lost"}
+                        )
                       </span>
                     </span>
                   ))}

@@ -555,7 +555,7 @@
   .goa-winner-section {
     margin: 1rem;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 0.75rem;
   }
 
@@ -604,6 +604,13 @@
   }
   .goa-win-condition-btn.selected::before {
     opacity: 1;
+  }
+
+  .goa-win-condition-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    border-color: var(--border);
+    color: var(--text-muted);
   }
 
   .goa-filter-wrap {
@@ -670,6 +677,25 @@
     box-shadow: 0 0 16px rgba(42, 171, 184, 0.3);
   }
   .goa-faction-btn-t.selected::before {
+    opacity: 1;
+  }
+
+  .goa-faction-btn-d {
+    color: rgba(201, 135, 36);
+    border-color: rgba(202, 130, 21, 0.3);
+  }
+  .goa-faction-btn-d::before {
+    background: linear-gradient(
+      135deg,
+      rgba(126, 84, 22, 0.4),
+      rgba(95, 64, 17, 0.6)
+    );
+  }
+  .goa-faction-btn-d.selected {
+    border-color: rgba(201, 135, 36);
+    box-shadow: 0 0 16px rgba(202, 130, 21, 0.3);
+  }
+  .goa-faction-btn-d.selected::before {
     opacity: 1;
   }
 
@@ -1555,6 +1581,11 @@
     background: rgba(26, 107, 122, 0.3);
     color: var(--titans-light);
     border: 1px solid rgba(42, 171, 184, 0.4);
+  }
+  .goa-winner-badge.none {
+    background: rgba(122, 88, 26, 0.3);
+    color: rgba(201, 135, 36);
+    border: 1px solid rgba(187, 135, 40, 0.4);
   }
 
   .goa-teams {
@@ -3234,14 +3265,19 @@
     border-radius: 50%;
     padding: 3px;
     border: 3px solid rgba(201, 151, 58, 0.3);
-    transition: border-color 0.5s, opacity 0.5s, filter 0.5s;
+    transition:
+      border-color 0.5s,
+      opacity 0.5s,
+      filter 0.5s;
   }
   .draft-coin-avatar-wrap.spinning {
     animation: coinSpin 0.35s linear infinite;
   }
   .draft-coin-avatar-wrap.winner {
     border-color: var(--gold-light);
-    box-shadow: 0 0 28px rgba(201, 151, 58, 0.65), 0 0 8px rgba(201, 151, 58, 0.4);
+    box-shadow:
+      0 0 28px rgba(201, 151, 58, 0.65),
+      0 0 8px rgba(201, 151, 58, 0.4);
     animation: winnerPulse 0.65s ease forwards;
   }
   .draft-coin-avatar-wrap.loser {
@@ -3250,17 +3286,33 @@
   }
 
   @keyframes coinSpin {
-    0%   { transform: rotateY(0deg) scale(1); }
-    50%  { transform: rotateY(180deg) scale(0.88); }
-    100% { transform: rotateY(360deg) scale(1); }
+    0% {
+      transform: rotateY(0deg) scale(1);
+    }
+    50% {
+      transform: rotateY(180deg) scale(0.88);
+    }
+    100% {
+      transform: rotateY(360deg) scale(1);
+    }
   }
 
   @keyframes winnerPulse {
-    0%   { transform: scale(1); }
-    30%  { transform: scale(1.22); }
-    60%  { transform: scale(0.95); }
-    80%  { transform: scale(1.1); }
-    100% { transform: scale(1.05); }
+    0% {
+      transform: scale(1);
+    }
+    30% {
+      transform: scale(1.22);
+    }
+    60% {
+      transform: scale(0.95);
+    }
+    80% {
+      transform: scale(1.1);
+    }
+    100% {
+      transform: scale(1.05);
+    }
   }
 
   .draft-coin-vs {
@@ -3269,8 +3321,12 @@
     display: inline-block;
   }
   @keyframes vsSpin {
-    0%   { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
   }
 
   .draft-coin-crown {
@@ -3279,9 +3335,18 @@
     animation: crownBounce 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
   @keyframes crownBounce {
-    0%   { transform: translateY(-24px) scale(0.6); opacity: 0; }
-    60%  { transform: translateY(6px) scale(1.15); opacity: 1; }
-    100% { transform: translateY(0) scale(1); opacity: 1; }
+    0% {
+      transform: translateY(-24px) scale(0.6);
+      opacity: 0;
+    }
+    60% {
+      transform: translateY(6px) scale(1.15);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
   }
 
   .draft-coin-name {
@@ -3308,8 +3373,12 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
-  .draft-coin-faction.atl { color: var(--atl-light, #E8364A); }
-  .draft-coin-faction.tit { color: var(--tit-light, #3DCAD8); }
+  .draft-coin-faction.atl {
+    color: var(--atl-light, #e8364a);
+  }
+  .draft-coin-faction.tit {
+    color: var(--tit-light, #3dcad8);
+  }
 
   /* Result reveal */
   .draft-coin-result {
@@ -3333,8 +3402,12 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
-  .draft-coin-result-faction.atl { color: var(--atl-light, #E8364A); }
-  .draft-coin-result-faction.tit { color: var(--tit-light, #3DCAD8); }
+  .draft-coin-result-faction.atl {
+    color: var(--atl-light, #e8364a);
+  }
+  .draft-coin-result-faction.tit {
+    color: var(--tit-light, #3dcad8);
+  }
   .draft-coin-result-sub {
     font-family: "Cinzel", serif;
     font-size: 0.65rem;
@@ -3353,7 +3426,13 @@
   }
 
   @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }

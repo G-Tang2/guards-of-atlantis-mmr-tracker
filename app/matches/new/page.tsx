@@ -23,7 +23,7 @@ enum WinCondition {
 
 type Team = "atlantis" | "titans";
 
-type Winner = "" | "atlantis" | "titans";
+type Winner = "" | "atlantis" | "titans" | "none";
 import { supabaseClient } from "@/lib/supabase/client";
 import { calculateMMR } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
@@ -177,7 +177,7 @@ function NewMatchPageInner() {
           player_id: p.id,
           team: "atlantis",
           mmr_before: atlPlayers.find((x) => x.id === p.id)?.mmr,
-          mmr_after: p.newmmr,
+          mmr_after: p.newMmr,
           hero_id: atlantis.find((e) => e.player.id === p.id)?.hero?.id ?? null,
         })),
         ...result.titans.map((p) => ({
@@ -185,7 +185,7 @@ function NewMatchPageInner() {
           player_id: p.id,
           team: "titans",
           mmr_before: titPlayers.find((x) => x.id === p.id)?.mmr,
-          mmr_after: p.newmmr,
+          mmr_after: p.newMmr,
           hero_id: titans.find((e) => e.player.id === p.id)?.hero?.id ?? null,
         })),
       ];
@@ -199,7 +199,7 @@ function NewMatchPageInner() {
         [...result.atlantis, ...result.titans].map((p) =>
           supabaseClient
             .from("players")
-            .update({ mmr: Math.round(p.newmmr) })
+            .update({ mmr: Math.round(p.newMmr) })
             .eq("id", p.id),
         ),
       );
@@ -212,7 +212,8 @@ function NewMatchPageInner() {
       setTimeout(() => {
         router.push("/matches");
       }, 1000);
-    } catch {
+    } catch (err) {
+      console.error("Failed to save match", err);
       showToast("✦ Record cannot be saved. Try again.");
     } finally {
       setSaving(false);
@@ -401,10 +402,41 @@ function NewMatchPageInner() {
         </div>
       </div>
 
+      {/* Winner */}
+      <p className="winner-label">Declare the victor</p>
+      <div className="goa-winner-section">
+        <button
+          className={`goa-faction-btn goa-faction-btn-a ${winner === "atlantis" ? "selected" : ""}`}
+          onClick={() => {
+            setWinner(winner === "atlantis" ? "" : "atlantis");
+          }}
+        >
+          <span className="goa-faction-label">Atlantis</span>
+        </button>
+        <button
+          className={`goa-faction-btn goa-faction-btn-t ${winner === "titans" ? "selected" : ""}`}
+          onClick={() => {
+            setWinner(winner === "titans" ? "" : "titans");
+          }}
+        >
+          <span className="goa-faction-label">Titans</span>
+        </button>
+        <button
+          className={`goa-faction-btn goa-faction-btn-d ${winner === "none" ? "selected" : ""}`}
+          onClick={() => {
+            setWinner(winner === "none" ? "" : "none");
+            setWinCondition(null); // reset win condition when changing winner
+          }}
+        >
+          <span className="goa-faction-label">Draw</span>
+        </button>
+      </div>
+
       {/* Win condition */}
       <p className="winner-label">Victory Condition</p>
       <div className="goa-win-condition-section">
         <button
+          disabled={winner === "none"}
           className={`goa-win-condition-btn ${winCondition === WinCondition.THRONE ? "selected" : ""}`}
           onClick={() =>
             setWinCondition(
@@ -415,6 +447,7 @@ function NewMatchPageInner() {
           <span className="goa-faction-label">Throne</span>
         </button>
         <button
+          disabled={winner === "none"}
           className={`goa-win-condition-btn ${winCondition === WinCondition.LAST_PUSH ? "selected" : ""}`}
           onClick={() =>
             setWinCondition(
@@ -427,6 +460,7 @@ function NewMatchPageInner() {
           <span className="goa-faction-label">Last Push</span>
         </button>
         <button
+          disabled={winner === "none"}
           className={`goa-win-condition-btn ${winCondition === WinCondition.LIFE_COUNTER ? "selected" : ""}`}
           onClick={() =>
             setWinCondition(
@@ -437,23 +471,6 @@ function NewMatchPageInner() {
           }
         >
           <span className="goa-faction-label">Life Counter</span>
-        </button>
-      </div>
-
-      {/* Winner */}
-      <p className="winner-label">Declare the victor</p>
-      <div className="goa-winner-section">
-        <button
-          className={`goa-faction-btn goa-faction-btn-a ${winner === "atlantis" ? "selected" : ""}`}
-          onClick={() => setWinner(winner === "atlantis" ? "" : "atlantis")}
-        >
-          <span className="goa-faction-label">Atlantis</span>
-        </button>
-        <button
-          className={`goa-faction-btn goa-faction-btn-t ${winner === "titans" ? "selected" : ""}`}
-          onClick={() => setWinner(winner === "titans" ? "" : "titans")}
-        >
-          <span className="goa-faction-label">Titans</span>
         </button>
       </div>
 

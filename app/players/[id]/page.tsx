@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import { Hero, HEROES, HeroComplexity } from "@/lib/heroes";
+import { Hero, HEROES } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import React from "react";
 
