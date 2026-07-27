@@ -46,7 +46,7 @@ export default function HeroesPage() {
         const match = Array.isArray(mp.matches) ? mp.matches[0] : mp.matches;
         if (!match) return;
 
-        const won = mp.team === match.winner;
+        const won = mp.team === match.winner || match.winner == "none";
 
         if (!map.has(mp.hero_id)) {
           map.set(mp.hero_id, {

@@ -15,7 +15,7 @@ type Player = {
 
 type Match = {
   id: string;
-  winner: "atlantis" | "titans";
+  winner: "atlantis" | "titans" | "none";
   match_players: {
     player_id: string;
     team: "atlantis" | "titans";
@@ -76,7 +76,7 @@ export default function LeaderboardPage() {
         );
         if (!entry) return;
         matchesPlayed++;
-        if (entry.team === match.winner) wins++;
+        if (entry.team === match.winner || match.winner === "none") wins++;
         else losses++;
       });
       return {

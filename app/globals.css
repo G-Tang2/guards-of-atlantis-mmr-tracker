@@ -1494,6 +1494,12 @@
     border: 1px solid rgba(196, 42, 58, 0.22);
   }
 
+  .goa-match-badge.draw {
+    background: rgba(122, 88, 26, 0.3);
+    color: rgba(201, 135, 36);
+    border: 1px solid rgba(187, 135, 40, 0.4);
+  }
+
   .goa-match-card {
     border: 1px solid var(--border);
     border-radius: 4px;
@@ -2318,6 +2324,9 @@
   }
   .goa-chart-dot.loss {
     stroke: var(--loss);
+  }
+  .goa-chart-dot.draw {
+    stroke: rgba(201, 135, 36);
   }
   .goa-chart-label {
     font-family: "Cinzel", serif;

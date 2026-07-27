@@ -28,7 +28,7 @@ type MatchPlayer = {
 
 type Match = {
   id: string;
-  winner: "atlantis" | "titans";
+  winner: "atlantis" | "titans" | "none";
   created_at: string;
   atlantis_avg_mmr: number;
   titans_avg_mmr: number;
@@ -52,6 +52,12 @@ type H2HEntry = {
   againstMatches: number;
 };
 
+type TrendPoint = {
+  mmr: number;
+  result: "win" | "loss" | "draw";
+  date: string;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const formatDate = (s: string) => {
@@ -64,11 +70,7 @@ const heroById = (id: string | null): Hero | null =>
 
 // ─── MMR Sparkline chart ───────────────────────────────────────────────────────
 
-function MmrChart({
-  points,
-}: {
-  points: { mmr: number; won: boolean; date: string }[];
-}) {
+function MmrChart({ points }: { points: TrendPoint[] }) {
   if (points.length < 2) {
     return (
       <p className="goa-chart-empty">Not enough battles to chart a trend</p>
@@ -144,7 +146,7 @@ function MmrChart({
           cx={xOf(i)}
           cy={yOf(p.mmr)}
           r={3}
-          className={`goa-chart-dot ${p.won ? "win" : "loss"}`}
+          className={`goa-chart-dot ${p.result}`}
         />
       ))}
 
@@ -281,23 +283,31 @@ export default function PlayerProfilePage() {
     useMemo(() => {
       let w = 0,
         l = 0;
-      const trend: { mmr: number; won: boolean; date: string }[] = [];
+      const trend: TrendPoint[] = [];
 
       const chronological = [...myMatches].reverse();
       chronological.forEach((m) => {
         const me = m.match_players.find((mp) => mp.player_id === playerId);
         if (!me) return;
-        const won = me.team === m.winner;
+        const won = me.team === m.winner || m.winner === "none";
         if (won) w++;
         else l++;
-        trend.push({ mmr: me.mmr_after, won, date: m.created_at });
+
+        const result: "win" | "loss" | "draw" =
+          m.winner === "none"
+            ? "draw"
+            : me.team === m.winner
+              ? "win"
+              : "loss";
+
+        trend.push({ mmr: me.mmr_after, result, date: m.created_at });
       });
 
       let streak = 0;
       for (const m of myMatches) {
         const me = m.match_players.find((mp) => mp.player_id === playerId);
         if (!me) break;
-        const won = me.team === m.winner;
+        const won = me.team === m.winner || m.winner === "none";
         if (streak === 0) {
           streak = won ? 1 : -1;
         } else if (streak > 0 && won) streak++;
@@ -325,7 +335,7 @@ export default function PlayerProfilePage() {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
       if (!me) return;
       const myTeam = me.team;
-      const won = myTeam === m.winner;
+      const won = myTeam === m.winner || m.winner == "none";
 
       m.match_players.forEach((mp) => {
         if (mp.player_id === playerId) return;
@@ -371,7 +381,7 @@ export default function PlayerProfilePage() {
     myMatches.forEach((m) => {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
       if (!me || !me.hero_id) return;
-      const won = me.team === m.winner;
+      const won = me.team === m.winner || m.winner === "none";
       const cur = map.get(me.hero_id) ?? { wins: 0, losses: 0 };
       map.set(me.hero_id, {
         wins: cur.wins + (won ? 1 : 0),
@@ -517,7 +527,8 @@ export default function PlayerProfilePage() {
                 }}
               >
                 ● <span style={{ color: "var(--gain)" }}>Win</span> &nbsp; ●{" "}
-                <span style={{ color: "var(--loss)" }}>Loss</span>
+                <span style={{ color: "var(--loss)" }}>Loss</span> &nbsp; ●{" "}
+                <span style={{ color: "var(--muted)" }}>Draw</span>
               </span>
               <span
                 style={{
@@ -577,7 +588,7 @@ export default function PlayerProfilePage() {
           {myMatches.map((m) => {
             const me = m.match_players.find((mp) => mp.player_id === playerId)!;
             if (!me) return null;
-            const won = me.team === m.winner;
+            const won = me.team === m.winner || m.winner === "none";
             const delta = me.mmr_after - me.mmr_before;
             const hero = me.hero_id ? heroById(me.hero_id) : null;
 
@@ -591,8 +602,8 @@ export default function PlayerProfilePage() {
 
             return (
               <div key={m.id} className="goa-profile-match-row">
-                <div className={`goa-match-badge ${won ? "win" : "loss"}`}>
-                  {won ? "Victory" : "Defeat"}
+                <div className={`goa-match-badge ${m.winner==="none" ? "draw" : won ? "win" : "loss"}`}>
+                  {m.winner==="none"? "Draw" : won ? "Victory" : "Defeat"}
                 </div>
 
                 <div className="goa-match-info">

@@ -119,8 +119,7 @@ export default function HeroDetailPage() {
     matches.forEach((m) => {
       const heroPlayers = m.match_players.filter((mp) => mp.hero_id === heroId);
       heroPlayers.forEach((mp) => {
-        if (m.winner == "none") return; // skip if no winner (draw)
-        const won = mp.team === m.winner;
+        const won = mp.team === m.winner || m.winner == "none";
         if (won) wins++;
         else losses++;
 
