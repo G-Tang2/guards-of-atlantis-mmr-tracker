@@ -26,6 +26,7 @@ type MatchPlayer = {
 
 type Match = {
   id: string;
+  match_number?: number;
   winner: "atlantis" | "titans" | "none";
   created_at: string;
   atlantis_avg_mmr: number;
@@ -56,7 +57,18 @@ export default function HeroDetailPage() {
     if (!heroId) return;
 
     const load = async () => {
-      // Get all match_ids where this hero was played
+      // 1. Fetch all match IDs ordered ascending to calculate global match numbers
+      const { data: allMatches } = await supabaseClient
+        .from("matches")
+        .select("id")
+        .order("created_at", { ascending: true });
+
+      const matchNumberMap = new Map<string, number>();
+      allMatches?.forEach((m, index) => {
+        matchNumberMap.set(m.id, index + 1);
+      });
+
+      // 2. Get all match_ids where this hero was played
       const { data: mpData, error: mpError } = await supabaseClient
         .from("match_players")
         .select("match_id")
@@ -69,7 +81,7 @@ export default function HeroDetailPage() {
 
       const matchIds = [...new Set(mpData.map((r) => r.match_id))];
 
-      // Fetch those matches with full details
+      // 3. Fetch details for those hero matches
       const { data: mData, error: mError } = await supabaseClient
         .from("matches")
         .select(
@@ -92,6 +104,7 @@ export default function HeroDetailPage() {
 
       const normalized: Match[] = mData.map((m: any) => ({
         ...m,
+        match_number: matchNumberMap.get(m.id),
         match_players: (m.match_players ?? [])
           .map((mp: any) => {
             const p = Array.isArray(mp.players) ? mp.players[0] : mp.players;
@@ -416,6 +429,17 @@ export default function HeroDetailPage() {
             <div key={match.id} className="goa-match-card">
               <div className="goa-match-header">
                 <span className="goa-match-date">
+                  {match.match_number && (
+                    <span
+                      style={{
+                        marginRight: "0.4rem",
+                        opacity: 0.75,
+                        fontWeight: 600,
+                      }}
+                    >
+                      #{match.match_number}
+                    </span>
+                  )}
                   {formatDate(match.created_at)}
                 </span>
                 <span className="goa-match-winner">

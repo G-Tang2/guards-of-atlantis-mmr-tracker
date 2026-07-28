@@ -3,9 +3,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES, Hero } from "@/lib/heroes";
-import Image from "next/image";
 
 type HeroStat = {
   hero: Hero;
@@ -14,6 +14,7 @@ type HeroStat = {
   losses: number;
   winRate: number;
   players: Set<string>;
+  lastPlayedGame: number | null;
 };
 
 type SortKey = "name" | "played" | "winRate" | "wins" | "losses" | "complexity";
@@ -24,46 +25,60 @@ export default function HeroesPage() {
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("played");
   const [sortAsc, setSortAsc] = useState(false);
+  const threshold = 7;
 
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabaseClient
-        .from("match_players")
-        .select("hero_id, team, player_id, matches ( winner )");
+      // Fetch matches ordered by newest first to calculate last played and overall stats
+      const { data: matches, error } = await supabaseClient
+        .from("matches")
+        .select(
+          "id, created_at, winner, match_players ( hero_id, team, player_id )",
+        )
+        .order("created_at", { ascending: false });
 
-      if (error || !data) {
+      if (error || !matches) {
         setLoading(false);
         return;
       }
 
       const map = new Map<string, HeroStat>();
 
-      data.forEach((mp) => {
-        if (!mp.hero_id) return;
-        const hero = HEROES.find((h) => h.id === mp.hero_id);
-        if (!hero) return;
+      // Initialize all heroes so we can easily track unplayed ones
+      HEROES.forEach((hero) => {
+        map.set(hero.id, {
+          hero,
+          played: 0,
+          wins: 0,
+          losses: 0,
+          winRate: 0,
+          players: new Set(),
+          lastPlayedGame: null,
+        });
+      });
 
-        const match = Array.isArray(mp.matches) ? mp.matches[0] : mp.matches;
-        if (!match) return;
+      // Process matches
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      matches.forEach((match: any, gameIndex: number) => {
+        const mps = match.match_players ?? [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        mps.forEach((mp: any) => {
+          if (!mp.hero_id) return;
+          const entry = map.get(mp.hero_id);
+          if (!entry) return;
 
-        const won = mp.team === match.winner || match.winner == "none";
+          // Set lastPlayedGame if this is the first time we see the hero (newest match)
+          if (entry.lastPlayedGame === null) {
+            entry.lastPlayedGame = gameIndex + 1;
+          }
 
-        if (!map.has(mp.hero_id)) {
-          map.set(mp.hero_id, {
-            hero,
-            played: 0,
-            wins: 0,
-            losses: 0,
-            winRate: 0,
-            players: new Set(),
-          });
-        }
+          entry.played++;
+          entry.players.add(mp.player_id);
 
-        const entry = map.get(mp.hero_id)!;
-        entry.played++;
-        entry.players.add(mp.player_id);
-        if (won) entry.wins++;
-        else entry.losses++;
+          const won = mp.team === match.winner || match.winner === "none";
+          if (won) entry.wins++;
+          else entry.losses++;
+        });
       });
 
       const stats = Array.from(map.values()).map((s) => ({
@@ -87,7 +102,22 @@ export default function HeroesPage() {
 
   const renderStars = (n: number | string) => "★".repeat(Number(n) || 0);
 
-  const sorted = useMemo(() => {
+  // 1. Filter and sort heroes for the "Unplayed" section at the top
+  const forgottenHeroes = useMemo(() => {
+    return heroStats
+      .filter((s) => s.lastPlayedGame === null || s.lastPlayedGame > threshold)
+      .sort((a, b) => {
+        // Never-played first, then by how long ago (further back = higher priority)
+        if (a.lastPlayedGame === null && b.lastPlayedGame !== null) return -1;
+        if (a.lastPlayedGame !== null && b.lastPlayedGame === null) return 1;
+        if (a.lastPlayedGame === null && b.lastPlayedGame === null)
+          return a.hero.name.localeCompare(b.hero.name);
+        return b.lastPlayedGame! - a.lastPlayedGame!; // longer ago = first
+      });
+  }, [heroStats, threshold]);
+
+  // 2. Sort the main compendium table
+  const sortedTable = useMemo(() => {
     const list = [...heroStats];
     list.sort((a, b) => {
       let diff = 0;
@@ -102,20 +132,6 @@ export default function HeroesPage() {
     });
     return list;
   }, [heroStats, sortKey, sortAsc]);
-
-  // Also list heroes with 0 games
-  const allHeroRows = useMemo(() => {
-    const withData = new Set(sorted.map((s) => s.hero.id));
-    const zeros = HEROES.filter((h) => !withData.has(h.id)).map((h) => ({
-      hero: h,
-      played: 0,
-      wins: 0,
-      losses: 0,
-      winRate: 0,
-      players: new Set<string>(),
-    }));
-    return [...sorted, ...zeros];
-  }, [sorted]);
 
   const sortCols: { key: SortKey; label: string }[] = [
     { key: "name", label: "hero" },
@@ -165,6 +181,125 @@ export default function HeroesPage() {
         <h1 className="goa-title">Hero Compendium</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
+
+      {/* Forgotten Heroes Section - Compact Grid */}
+      {forgottenHeroes.length > 0 && (
+        <div style={{ margin: "0.6rem 0.75rem 1rem" }}>
+          <div
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--gold)",
+              padding: "0.5rem",
+              paddingTop: "0rem",
+              borderBottom: "1px solid var(--border)",
+              marginBottom: "0.5rem",
+            }}
+          >
+            <div>💰 Bounty Heroes</div>
+            <div
+              style={{
+                fontSize: "0.62rem",
+                color: "var(--text-muted)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontWeight: 500,
+              }}
+            >
+              <span>
+                Not picked in {threshold}+ games · Bonus 5 MMR awarded on play
+              </span>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+              gap: "0.35rem",
+            }}
+          >
+            {forgottenHeroes.map((s) => (
+              <div
+                key={s.hero.id}
+                onClick={() => router.push(`/heroes/${s.hero.id}`)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0.35rem 0.5rem",
+                  border: "1px solid rgba(201,151,58,0.18)",
+                  background: "rgba(28,26,20,0.85)",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  gap: "0.4rem",
+                  transition: "background 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.background =
+                    "rgba(42,39,32,0.9)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.background =
+                    "rgba(28,26,20,0.85)";
+                }}
+              >
+                <div
+                  style={{
+                    width: 22,
+                    height: 22,
+                    position: "relative",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Image
+                    src={s.hero.icon}
+                    alt={s.hero.name}
+                    fill
+                    style={{ objectFit: "contain" }}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display =
+                        "none";
+                    }}
+                  />
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      fontFamily: "'Crimson Pro', serif",
+                      fontSize: "0.85rem",
+                      lineHeight: "1.1",
+                      color: "var(--text-primary)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {s.hero.name}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "'Cinzel', serif",
+                      fontSize: "0.6rem",
+                      color: "var(--text-muted)",
+                      letterSpacing: "0.04em",
+                      lineHeight: "1",
+                      marginTop: "0.1rem",
+                    }}
+                  >
+                    {s.lastPlayedGame === null
+                      ? "Never played"
+                      : `${s.lastPlayedGame} ${s.lastPlayedGame === 1 ? "game" : "games"} ago`}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Sort pills */}
       <div className="goa-sort-bar" style={{ marginTop: "0.3rem" }}>
@@ -221,7 +356,7 @@ export default function HeroesPage() {
           ))}
         </div>
 
-        {allHeroRows.length === 0 && (
+        {sortedTable.length === 0 && (
           <div
             style={{
               textAlign: "center",
@@ -237,7 +372,7 @@ export default function HeroesPage() {
           </div>
         )}
 
-        {allHeroRows.map((s) => {
+        {sortedTable.map((s) => {
           const wrColor =
             s.played === 0
               ? "var(--text-muted)"
@@ -274,7 +409,7 @@ export default function HeroesPage() {
                   "rgba(28,26,20,0.85)";
               }}
             >
-              {/* Name */}
+              {/* Name & Sub-details */}
               <div>
                 <div
                   style={{
@@ -319,16 +454,33 @@ export default function HeroesPage() {
                     </span>
                   )}
                 </div>
+
+                {/* Stars + Last Played Info */}
                 <div
                   style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
                     color: "var(--text-muted)",
-                    letterSpacing: ".2em",
-                    textTransform: "uppercase",
                     fontFamily: "'Cinzel', serif",
-                    fontSize: "0.7rem",
+                    fontSize: "0.62rem",
+                    marginTop: "0.1rem",
                   }}
                 >
-                  {renderStars(s.hero.complexity)}
+                  <span
+                    style={{
+                      letterSpacing: ".15em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {renderStars(s.hero.complexity)}
+                  </span>
+                  <span>·</span>
+                  <span style={{ letterSpacing: "0.04em" }}>
+                    {s.lastPlayedGame === null
+                      ? "Never played"
+                      : `${s.lastPlayedGame} ${s.lastPlayedGame === 1 ? "game" : "games"} ago`}
+                  </span>
                 </div>
 
                 {/* Win rate bar */}

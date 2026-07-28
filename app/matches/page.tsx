@@ -227,17 +227,9 @@ export default function MatchHistoryPage() {
     else setLoading(false);
   };
 
-  // Refetch the first page whenever the filter changes (this also covers
-  // the very first load, since filterPlayerId starts as "").
-  // This is the standard "fetch data in response to a changed dependency"
-  // effect (see https://react.dev/learn/synchronizing-with-effects#fetching-data) —
-  // fetchMatches synchronously flips the loading flag before its own await,
-  // which the set-state-in-effect lint can't distinguish from unwanted
-  // derived-state updates, so it's suppressed here intentionally.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchMatches(filterPlayerId, 0, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterPlayerId]);
 
   const handleLoadMore = () => {
@@ -290,9 +282,6 @@ export default function MatchHistoryPage() {
   const goToProfile = (id: string) => router.push(`/players/${id}`);
 
   const hasMore = matches.length < totalCount;
-
-  // Don't show stale stats from a previously selected player once the
-  // filter is cleared (avoids needing an extra effect just to null it out).
   const displayedStats = filterPlayerId ? playerStats : null;
 
   if (loading) {
@@ -404,7 +393,8 @@ export default function MatchHistoryPage() {
           </div>
         )}
 
-        {matches.map((match) => {
+        {matches.map((match, index) => {
+          const matchNumber = totalCount - index;
           const atlantis = match.match_players.filter(
             (p) => p.team === "atlantis",
           );
@@ -428,7 +418,10 @@ export default function MatchHistoryPage() {
             >
               <div className="goa-match-header">
                 <span className="goa-match-date">
-                  {formatDate(match.created_at)}
+                  <span style={{ opacity: 0.75, marginRight: "0.35rem" }}>
+                    #{matchNumber}
+                  </span>
+                  · {formatDate(match.created_at)}
                 </span>
                 <span className="goa-match-winner">
                   <span className={`goa-winner-badge ${match.winner}`}>
