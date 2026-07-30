@@ -341,28 +341,10 @@ export default function TeamSplitterPage() {
 
   if (loading) {
     return (
-      <div
-        className="goa-root"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚔️</div>
-          <p
-            style={{
-              fontFamily: "'Cinzel',serif",
-              fontSize: "0.75rem",
-              letterSpacing: "0.2em",
-              color: "var(--muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Summoning players…
-          </p>
+      <div className="goa-root goa-loading-screen">
+        <div className="goa-loading-inner">
+          <div className="goa-loading-icon">⚔️</div>
+          <p className="goa-loading-text">Summoning players…</p>
         </div>
       </div>
     );
@@ -385,16 +367,7 @@ export default function TeamSplitterPage() {
         <div className="goa-card-head">
           Player Pool
           {pool.length > 0 && (
-            <span
-              style={{
-                marginLeft: "auto",
-                fontFamily: "'Cinzel',serif",
-                fontSize: "0.6rem",
-                color: "var(--muted)",
-              }}
-            >
-              {pool.length} summoned
-            </span>
+            <span className="goa-card-count">{pool.length} summoned</span>
           )}
         </div>
         <div className="goa-card-body">
@@ -498,19 +471,7 @@ export default function TeamSplitterPage() {
       </div>
 
       {!canSplit && (
-        <p
-          style={{
-            textAlign: "center",
-            fontFamily: "'Cinzel',serif",
-            fontSize: "0.62rem",
-            letterSpacing: "0.12em",
-            color: "var(--muted)",
-            textTransform: "uppercase",
-            margin: "0 0.75rem 0.75rem",
-          }}
-        >
-          Add at least 2 players to split
-        </p>
+        <p className="goa-splitter-hint">Add at least 2 players to split</p>
       )}
 
       {/* Result */}
@@ -550,16 +511,7 @@ export default function TeamSplitterPage() {
                           name={p.name}
                           size={20}
                         />
-                        <span
-                          style={{
-                            flex: 1,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {p.name}
-                        </span>
+                        <span className="goa-result-player-name">{p.name}</span>
                         <span className="goa-result-player-mmr">
                           {p.mmr} MMR
                         </span>
@@ -722,9 +674,7 @@ export default function TeamSplitterPage() {
                       }`}>
                         {draft.captainAtlantis?.name}
                       </span>
-                      <span style={{ fontFamily:"'Cinzel',serif", fontSize:"0.65rem", color:"var(--atlantis-light)", letterSpacing:"0.08em", textTransform:"uppercase", fontWeight:"700" }}>
-                        Atlantis
-                      </span>
+                      <span className="draft-coin-faction atl">Atlantis</span>
                     </div>
 
                     {/* VS spinner */}
@@ -758,9 +708,7 @@ export default function TeamSplitterPage() {
                       }`}>
                         {draft.captainTitans?.name}
                       </span>
-                      <span style={{ fontFamily:"'Cinzel',serif", fontSize:"0.65rem", color:"var(--titans-light)", letterSpacing:"0.08em", textTransform:"uppercase", fontWeight:"700" }}>
-                        Titans
-                      </span>
+                      <span className="draft-coin-faction tit">Titans</span>
                     </div>
                   </div>
 
@@ -880,15 +828,7 @@ export default function TeamSplitterPage() {
                           >
                             {faction === "atlantis" ? "Atlantis" : "Titans"}
                           </span>
-                          <span
-                            style={{
-                              fontFamily: "'Cinzel',serif",
-                              fontSize: "0.55rem",
-                              color: "var(--muted)",
-                              marginLeft: "0.35rem",
-                              alignContent: "center",
-                            }}
-                          >
+                          <span className="draft-live-team-avg">
                             AVG MMR: {memberAvg}
                           </span>
                         </div>
@@ -900,13 +840,7 @@ export default function TeamSplitterPage() {
                               size={20}
                             />
                             <span className="draft-live-name">{p.name}</span>
-                            <span
-                              style={{
-                                fontFamily: "'Cinzel',serif",
-                                fontSize: "0.58rem",
-                                color: "var(--muted)",
-                              }}
-                            >
+                            <span className="draft-live-mmr sm">
                               {p.mmr} MMR
                             </span>
                           </div>
@@ -925,7 +859,7 @@ export default function TeamSplitterPage() {
         </div>
       )}
 
-      <div className="goa-divider" style={{ marginTop: "0.5rem" }} />
+      <div className="goa-divider mt-lg" />
     </main>
   );
 }

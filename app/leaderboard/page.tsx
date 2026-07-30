@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Checkbox } from "@/components/ui/checkbox";
+import { didWin } from "@/lib/match";
 
 type Player = {
   id: string;
@@ -108,12 +109,10 @@ export default function LeaderboardPage() {
           matches: 0,
         };
         stats.matches++;
-        if (match.winner !== "none") {
-          if (mp.team === match.winner) {
-            stats.wins++;
-          } else {
-            stats.losses++;
-          }
+        if (didWin(mp.team, match.winner)) {
+          stats.wins++;
+        } else {
+          stats.losses++;
         }
         statsMap.set(mp.player_id, stats);
       });
@@ -325,28 +324,10 @@ export default function LeaderboardPage() {
 
   if (loading) {
     return (
-      <div
-        className="goa-root"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🏆</div>
-          <p
-            style={{
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.75rem",
-              letterSpacing: "0.2em",
-              color: "var(--muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Tallying the honours…
-          </p>
+      <div className="goa-root goa-loading-screen">
+        <div className="goa-loading-inner">
+          <div className="goa-loading-icon">🏆</div>
+          <p className="goa-loading-text">Tallying the honours…</p>
         </div>
       </div>
     );
@@ -409,7 +390,7 @@ export default function LeaderboardPage() {
           >
             {label}
             {sortKey === key && (
-              <span style={{ fontSize: "0.55rem" }}>{sortAsc ? "▲" : "▼"}</span>
+              <span className="goa-sort-arrow sm">{sortAsc ? "▲" : "▼"}</span>
             )}
           </button>
         ))}
@@ -495,16 +476,16 @@ export default function LeaderboardPage() {
                       : `#${rank}`}
                 {hasShield && (
                   <span
+                    className="goa-rank-badge"
                     title={`Protected: the player below has higher MMR but hasn't beaten this player head-to-head. Becomes inactive (and loses protection) in ${gamesUntilInactive} more game${gamesUntilInactive === 1 ? "" : "s"} if they don't play.`}
-                    style={{ marginLeft: "4px", fontSize: "0.7em" }}
                   >
                     🛡️{gamesUntilInactive}
                   </span>
                 )}
                 {needsSword && (
                   <span
+                    className="goa-rank-badge"
                     title="Blocked: has higher MMR than the player above but must beat them to claim this rank"
-                    style={{ marginLeft: "4px", fontSize: "0.7em" }}
                   >
                     ⚔️
                   </span>
@@ -521,16 +502,13 @@ export default function LeaderboardPage() {
               </span>
               <span className="goa-cell-mmr">{p.mmr}</span>
               <span
-                className="goa-cell-wr"
-                style={{
-                  color: p.winRate >= 50 ? "var(--gain)" : "var(--loss)",
-                }}
+                className={`goa-cell-wr ${p.winRate >= 50 ? "good" : "bad"}`}
               >
                 {p.winRate.toFixed(1)}%
               </span>
               <span className="goa-cell-wl">
                 <span className="goa-wins">{p.wins}</span>
-                <span style={{ color: "var(--muted)" }}>/</span>
+                <span className="goa-wl-sep">/</span>
                 <span className="goa-losses">{p.losses}</span>
               </span>
               <span className="goa-cell-m">{p.matches}</span>

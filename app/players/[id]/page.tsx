@@ -1,12 +1,19 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  CSSProperties,
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import { Hero, HEROES } from "@/lib/heroes";
+import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
-import React from "react";
+import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +41,28 @@ type Match = {
   titans_avg_mmr: number;
   match_players: MatchPlayer[];
 };
+
+// Supabase returns the embedded `players` relation as an array when it
+// can't infer a one-to-one cardinality from the foreign key, and as a
+// single object when it can — normalize both shapes when loading.
+type RawMatchPlayer = {
+  player_id: string;
+  team: "atlantis" | "titans";
+  mmr_before: number;
+  mmr_after: number;
+  hero_id?: string | null;
+  players: Player | Player[] | null;
+};
+
+type RawMatch = {
+  id: string;
+  winner: "atlantis" | "titans" | "none";
+  created_at: string;
+  atlantis_avg_mmr: number;
+  titans_avg_mmr: number;
+  match_players: RawMatchPlayer[];
+};
+
 type HeroStat = {
   hero: Hero;
   played: number;
@@ -57,16 +86,6 @@ type TrendPoint = {
   result: "win" | "loss" | "draw";
   date: string;
 };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const formatDate = (s: string) => {
-  const d = new Date(s);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
-};
-
-const heroById = (id: string | null): Hero | null =>
-  id ? (HEROES.find((h) => h.id === id) ?? null) : null;
 
 // ─── MMR Sparkline chart ───────────────────────────────────────────────────────
 
@@ -181,7 +200,7 @@ export default function PlayerProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !player) return;
     setAvatarUploading(true);
@@ -247,19 +266,18 @@ export default function PlayerProfilePage() {
 
       setPlayer(pData ?? null);
 
-      const normalized: Match[] = (mData ?? [])
-        .filter((m: any) =>
-          m.match_players.some((mp: any) => mp.player_id === playerId),
-        )
-        .map((m: any) => ({
+      const rawMatches = (mData ?? []) as RawMatch[];
+      const normalized: Match[] = rawMatches
+        .filter((m) => m.match_players.some((mp) => mp.player_id === playerId))
+        .map((m) => ({
           ...m,
           match_players: m.match_players
-            .map((mp: any) => {
+            .map((mp): MatchPlayer | null => {
               const p = Array.isArray(mp.players) ? mp.players[0] : mp.players;
               if (!p) return null;
               return { ...mp, hero_id: mp.hero_id ?? null, players: { ...p } };
             })
-            .filter(Boolean),
+            .filter((mp): mp is MatchPlayer => mp !== null),
         }));
 
       setMatches(normalized);
@@ -289,7 +307,7 @@ export default function PlayerProfilePage() {
       chronological.forEach((m) => {
         const me = m.match_players.find((mp) => mp.player_id === playerId);
         if (!me) return;
-        const won = me.team === m.winner || m.winner === "none";
+        const won = didWin(me.team, m.winner);
         if (won) w++;
         else l++;
 
@@ -307,7 +325,7 @@ export default function PlayerProfilePage() {
       for (const m of myMatches) {
         const me = m.match_players.find((mp) => mp.player_id === playerId);
         if (!me) break;
-        const won = me.team === m.winner || m.winner === "none";
+        const won = didWin(me.team, m.winner);
         if (streak === 0) {
           streak = won ? 1 : -1;
         } else if (streak > 0 && won) streak++;
@@ -335,7 +353,7 @@ export default function PlayerProfilePage() {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
       if (!me) return;
       const myTeam = me.team;
-      const won = myTeam === m.winner || m.winner == "none";
+      const won = didWin(myTeam, m.winner);
 
       m.match_players.forEach((mp) => {
         if (mp.player_id === playerId) return;
@@ -381,7 +399,7 @@ export default function PlayerProfilePage() {
     myMatches.forEach((m) => {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
       if (!me || !me.hero_id) return;
-      const won = me.team === m.winner || m.winner === "none";
+      const won = didWin(me.team, m.winner);
       const cur = map.get(me.hero_id) ?? { wins: 0, losses: 0 };
       map.set(me.hero_id, {
         wins: cur.wins + (won ? 1 : 0),
@@ -390,7 +408,7 @@ export default function PlayerProfilePage() {
     });
     return Array.from(map.entries())
       .map(([heroId, { wins, losses }]) => {
-        const hero = HEROES.find((h) => h.id === heroId);
+        const hero = getHero(heroId);
         if (!hero) return null;
         const played = wins + losses;
         return {
@@ -409,14 +427,12 @@ export default function PlayerProfilePage() {
     return (
       <div className="goa-root">
         <div className="goa-loading">
-          <div style={{ fontSize: "2rem" }}>⚔️</div>
+          <div className="goa-loading-emoji">⚔️</div>
           <p>Consulting the archives…</p>
         </div>
       </div>
     );
   }
-
-  const renderStars = (n: number) => "★".repeat(n);
 
   const streakLabel =
     streak > 0
@@ -424,8 +440,7 @@ export default function PlayerProfilePage() {
       : streak < 0
         ? `${Math.abs(streak)}L streak`
         : "—";
-  const streakColor =
-    streak > 0 ? "var(--gain)" : streak < 0 ? "var(--loss)" : "var(--muted)";
+  const streakClass = streak > 0 ? "gain" : streak < 0 ? "loss" : "muted";
 
   return (
     <main className="goa-root">
@@ -458,7 +473,7 @@ export default function PlayerProfilePage() {
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          style={{ display: "none" }}
+          className="hidden"
           onChange={handleAvatarChange}
         />
         <h1 className="goa-profile-player-name">{player.name}</h1>
@@ -473,7 +488,10 @@ export default function PlayerProfilePage() {
           <div className="goa-stat-lbl">Win Rate</div>
           <div className="goa-stat-val">{winRate}%</div>
           <div className="goa-win-bar-wrap">
-            <div className="goa-win-bar" style={{ width: `${winRate}%` }} />
+            <div
+              className="goa-win-bar"
+              style={{ "--bar-width": `${winRate}%` } as CSSProperties}
+            />
           </div>
         </div>
 
@@ -495,10 +513,7 @@ export default function PlayerProfilePage() {
 
         <div className="goa-stat-tile">
           <div className="goa-stat-lbl">Streak</div>
-          <div
-            className="goa-stat-val"
-            style={{ color: streakColor, fontSize: "1rem" }}
-          >
+          <div className={`goa-stat-val sm ${streakClass}`}>
             {streakLabel}
           </div>
           <div className="goa-stat-sub">current run</div>
@@ -511,33 +526,13 @@ export default function PlayerProfilePage() {
         <div className="goa-chart-wrap">
           <MmrChart points={mmrTrend} />
           {mmrTrend.length >= 2 && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginTop: "0.5rem",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "'Cinzel', serif",
-                  fontSize: "0.58rem",
-                  color: "var(--muted)",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                ● <span style={{ color: "var(--gain)" }}>Win</span> &nbsp; ●{" "}
-                <span style={{ color: "var(--loss)" }}>Loss</span> &nbsp; ●{" "}
-                <span style={{ color: "var(--muted)" }}>Draw</span>
+            <div className="goa-chart-footer">
+              <span className="goa-chart-footer-text">
+                ● <span className="goa-text-gain">Win</span> &nbsp; ●{" "}
+                <span className="goa-text-loss">Loss</span> &nbsp; ●{" "}
+                <span>Draw</span>
               </span>
-              <span
-                style={{
-                  fontFamily: "'Cinzel', serif",
-                  fontSize: "0.58rem",
-                  color: "var(--muted)",
-                  letterSpacing: "0.06em",
-                }}
-              >
+              <span className="goa-chart-footer-text">
                 {totalMatches} battles charted
               </span>
             </div>
@@ -570,27 +565,15 @@ export default function PlayerProfilePage() {
           <div className="goa-profile-sec-head">Recent Battles</div>
 
           {myMatches.length === 0 && (
-            <p
-              style={{
-                textAlign: "center",
-                padding: "1.5rem",
-                fontFamily: "'Cinzel', serif",
-                fontSize: "0.72rem",
-                color: "var(--text-muted)",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-              }}
-            >
-              No battles on record
-            </p>
+            <p className="goa-empty-note">No battles on record</p>
           )}
 
           {myMatches.map((m) => {
-            const me = m.match_players.find((mp) => mp.player_id === playerId)!;
+            const me = m.match_players.find((mp) => mp.player_id === playerId);
             if (!me) return null;
-            const won = me.team === m.winner || m.winner === "none";
+            const won = didWin(me.team, m.winner);
             const delta = me.mmr_after - me.mmr_before;
-            const hero = me.hero_id ? heroById(me.hero_id) : null;
+            const hero = me.hero_id ? getHero(me.hero_id) : null;
 
             const myTeammates = m.match_players
               .filter((mp) => mp.team === me.team && mp.player_id !== playerId)
@@ -612,73 +595,39 @@ export default function PlayerProfilePage() {
                   </div>
                   {/* Hero played */}
                   {hero && (
-                    <div
-                      style={{
-                        marginTop: "0.15rem",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.25rem",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontFamily: "'Cinzel',serif",
-                          fontSize: "0.8rem",
-                          color: "var(--text-muted)",
-                          letterSpacing: "0.06em",
-                        }}
-                      >
+                    <div className="goa-match-hero-row">
+                      <span className="goa-match-hero-label">
                         {hero.name} {renderStars(Number(hero.complexity))}
                       </span>
                     </div>
                   )}
                   {/* My team */}
-                  <div
-                    className="goa-match-teams"
-                    style={{ marginTop: "0.15rem" }}
-                  >
+                  <div className="goa-match-teams">
                     {myTeammates.length > 0 && (
-                      <span
-                        style={{
-                          color: "var(--text-muted)",
-                          fontSize: "0.75rem",
-                        }}
-                      >
+                      <span className="goa-match-teams-list">
                         {" "}
                         with{" "}
-                        <>
-                          {myTeammates.map((p, i) => (
-                            <React.Fragment key={p.id}>
-                              {i > 0 && ", "}
-                              <span className="goa-vs-player">{p.name}</span>
-                            </React.Fragment>
-                          ))}
-                        </>
+                        {myTeammates.map((p, i) => (
+                          <Fragment key={p.id}>
+                            {i > 0 && ", "}
+                            <span className="goa-vs-player">{p.name}</span>
+                          </Fragment>
+                        ))}
                       </span>
                     )}
                   </div>
                   {/* Enemy team */}
-                  <div
-                    className="goa-match-teams"
-                    style={{ marginTop: "0.15rem" }}
-                  >
+                  <div className="goa-match-teams">
                     {enemies.length > 0 && (
-                      <span
-                        style={{
-                          color: "var(--text-muted)",
-                          fontSize: "0.75rem",
-                        }}
-                      >
+                      <span className="goa-match-teams-list">
                         {" "}
                         vs{" "}
-                        <>
-                          {enemies.map((p, i) => (
-                            <React.Fragment key={p.id}>
-                              {i > 0 && ", "}
-                              <span className="goa-vs-player">{p.name}</span>
-                            </React.Fragment>
-                          ))}
-                        </>
+                        {enemies.map((p, i) => (
+                          <Fragment key={p.id}>
+                            {i > 0 && ", "}
+                            <span className="goa-vs-player">{p.name}</span>
+                          </Fragment>
+                        ))}
                       </span>
                     )}
                   </div>
@@ -702,30 +651,12 @@ export default function PlayerProfilePage() {
           <div className="goa-profile-sec-head">Hero Performance</div>
 
           {heroStats.length === 0 && (
-            <p
-              style={{
-                textAlign: "center",
-                padding: "1.5rem",
-                fontFamily: "'Cinzel', serif",
-                fontSize: "0.72rem",
-                color: "var(--text-muted)",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-              }}
-            >
-              No hero data recorded yet
-            </p>
+            <p className="goa-empty-note">No hero data recorded yet</p>
           )}
 
           {heroStats.map((hs) => {
             const wrClass =
               hs.winRate >= 60 ? "good" : hs.winRate >= 45 ? "mid" : "bad";
-            const barColor =
-              hs.winRate >= 60
-                ? "linear-gradient(90deg, var(--gain), rgba(93,187,138,0.6))"
-                : hs.winRate >= 45
-                  ? "linear-gradient(90deg, var(--gold), rgba(201,151,58,0.6))"
-                  : "linear-gradient(90deg, var(--loss), rgba(196,74,74,0.6))";
             return (
               <div key={hs.hero.id} className="goa-hero-stat-row">
                 <div className="goa-hero-stat-info">
@@ -738,8 +669,10 @@ export default function PlayerProfilePage() {
 
                   <div className="goa-hero-stat-bar-wrap">
                     <div
-                      className="goa-hero-stat-bar-fill"
-                      style={{ width: `${hs.winRate}%`, background: barColor }}
+                      className={`goa-hero-stat-bar-fill ${wrClass}`}
+                      style={
+                        { "--bar-width": `${hs.winRate}%` } as CSSProperties
+                      }
                     />
                   </div>
                   <div className="goa-hero-stat-games">
@@ -751,9 +684,9 @@ export default function PlayerProfilePage() {
                     {hs.winRate}%
                   </div>
                   <div className="goa-hero-stat-wl">
-                    <span style={{ color: "var(--gain)" }}>{hs.wins}W</span>
-                    <span style={{ color: "var(--text-muted)" }}>/</span>
-                    <span style={{ color: "var(--loss)" }}>{hs.losses}L</span>
+                    <span className="goa-text-gain">{hs.wins}W</span>
+                    <span>/</span>
+                    <span className="goa-text-loss">{hs.losses}L</span>
                   </div>
                 </div>
               </div>
@@ -783,13 +716,7 @@ export default function PlayerProfilePage() {
             return (
               <div key={entry.opponent.id} className="goa-h2h-row">
                 <div className="goa-h2h-name">
-                  <span
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.35rem",
-                    }}
-                  >
+                  <span className="goa-h2h-name-row">
                     <PlayerAvatar
                       avatarUrl={entry.opponent.avatar_url}
                       name={entry.opponent.name}
@@ -803,16 +730,13 @@ export default function PlayerProfilePage() {
                 <div className="goa-h2h-bars">
                   {entry.withMatches > 0 && (
                     <div className="goa-h2h-bar-row">
-                      <span
-                        className="goa-h2h-bar-lbl"
-                        style={{ color: "var(--atl)" }}
-                      >
-                        With
-                      </span>
+                      <span className="goa-h2h-bar-lbl atl">With</span>
                       <div className="goa-h2h-bar-track">
                         <div
                           className="goa-h2h-bar-fill with"
-                          style={{ width: `${withRate}%` }}
+                          style={
+                            { "--bar-width": `${withRate}%` } as CSSProperties
+                          }
                         />
                       </div>
                       <span className="goa-h2h-bar-stat">
@@ -823,16 +747,15 @@ export default function PlayerProfilePage() {
 
                   {entry.againstMatches > 0 && (
                     <div className="goa-h2h-bar-row">
-                      <span
-                        className="goa-h2h-bar-lbl"
-                        style={{ color: "var(--tit)" }}
-                      >
-                        Vs
-                      </span>
+                      <span className="goa-h2h-bar-lbl tit">Vs</span>
                       <div className="goa-h2h-bar-track">
                         <div
                           className="goa-h2h-bar-fill against"
-                          style={{ width: `${againstRate}%` }}
+                          style={
+                            {
+                              "--bar-width": `${againstRate}%`,
+                            } as CSSProperties
+                          }
                         />
                       </div>
                       <span className="goa-h2h-bar-stat">

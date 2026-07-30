@@ -336,28 +336,10 @@ function NewMatchPageInner() {
 
   if (loading) {
     return (
-      <div
-        className="goa-root goa-bg"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚔️</div>
-          <p
-            style={{
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.8rem",
-              letterSpacing: "0.2em",
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Loading existing players…
-          </p>
+      <div className="goa-root goa-bg goa-loading-screen">
+        <div className="goa-loading-inner">
+          <div className="goa-loading-icon">⚔️</div>
+          <p className="goa-loading-text xl">Loading existing players…</p>
         </div>
       </div>
     );

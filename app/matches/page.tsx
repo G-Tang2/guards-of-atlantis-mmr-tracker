@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
-import { HEROES } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
 
 type Player = {
   id: string;
@@ -49,15 +49,12 @@ type Match = {
   match_players: MatchPlayer[];
 };
 
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = String(date.getFullYear()).slice(-2);
-  return `${day}/${month}/${year}`;
-};
-
 const sortByName = (a: Player, b: Player) => a.name.localeCompare(b.name);
+
+const formatWinCondition = (wc?: WinCondition | null) => {
+  if (!wc) return "";
+  return `BY ${winConditionLabel[wc]}`;
+};
 
 const MATCHES_PER_PAGE = 5;
 
@@ -85,10 +82,33 @@ const MATCH_SELECT = `
   )
 `;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const normalizeMatch = (match: any): Match => {
+// Supabase returns the embedded `players` relation as an array when it
+// can't infer a one-to-one cardinality from the foreign key, and as a
+// single object when it can — normalize both shapes here.
+type RawMatchPlayer = {
+  player_id: string;
+  team: string;
+  mmr_before: number;
+  mmr_after: number;
+  hero_id?: string;
+  players: Player | Player[] | null;
+};
+
+type RawMatch = {
+  id: string;
+  winner: string;
+  win_condition: string | null;
+  created_at: string;
+  atlantis_avg_mmr: number;
+  titans_avg_mmr: number;
+  atlantis_mmr_change: number;
+  titans_mmr_change: number;
+  match_players: RawMatchPlayer[] | null;
+};
+
+const normalizeMatch = (match: RawMatch): Match => {
   const normalizedMatchPlayers: MatchPlayer[] = (match.match_players ?? [])
-    .map((mp: any): MatchPlayer | null => {
+    .map((mp): MatchPlayer | null => {
       const player = Array.isArray(mp.players) ? mp.players[0] : mp.players;
       if (!player) return null;
       return {
@@ -128,6 +148,73 @@ type PlayerStats = {
   name: string;
 };
 
+type TeamPanelProps = {
+  label: string;
+  labelClass: "atl" | "tit";
+  players: MatchPlayer[];
+  avgMmr: number;
+  mmrChange: number;
+  onSelectPlayer: (id: string) => void;
+};
+
+function TeamPanel({
+  label,
+  labelClass,
+  players,
+  avgMmr,
+  mmrChange,
+  onSelectPlayer,
+}: TeamPanelProps) {
+  return (
+    <div className="goa-team">
+      <div className="flex justify-between">
+        <span className={`goa-team-head ${labelClass}`}>{label}</span>
+        <span className={`goa-delta ${mmrChange >= 0 ? "pos" : "neg"}`}>
+          {mmrChange >= 0 ? "▲" : "▼"}
+          {Math.abs(mmrChange)}
+        </span>
+      </div>
+      <div className="goa-avg-mmr">Avg {Math.round(avgMmr)} MMR</div>
+      {players.map((p) => {
+        const hero = getHero(p.hero_id);
+        return (
+          <div
+            key={p.player_id}
+            className="goa-player-entry"
+            onClick={() => onSelectPlayer(p.player_id)}
+          >
+            <div className="goa-player-info">
+              <span className="goa-player-name">
+                <PlayerAvatar
+                  avatarUrl={p.players.avatar_url}
+                  name={p.players.name}
+                  size={32}
+                />
+                {p.players.name}
+              </span>
+              <span className="goa-mmr-change">
+                {p.mmr_before} → {p.mmr_after}
+              </span>
+            </div>
+            <span className="goa-display-hero">
+              {hero && (
+                <Image
+                  src={hero.icon}
+                  alt={hero.name}
+                  width={24}
+                  height={24}
+                  className="goa-display-hero-icon"
+                />
+              )}
+              {hero?.name} {renderStars(Number(hero?.complexity ?? 0))}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function MatchHistoryPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -136,13 +223,6 @@ export default function MatchHistoryPage() {
   const [filterPlayerId, setFilterPlayerId] = useState("");
   const [totalCount, setTotalCount] = useState(0);
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
-
-  const renderStars = (n: number) => "★".repeat(n);
-
-  const formatWinCondition = (wc?: WinCondition | null) => {
-    if (!wc) return "";
-    return `BY ${winConditionLabel[wc]}`;
-  };
 
   // Load the player list once (small table, needed for the filter dropdown).
   useEffect(() => {
@@ -259,7 +339,7 @@ export default function MatchHistoryPage() {
           ? row.matches[0]
           : row.matches;
         if (!matchInfo) return;
-        if (row.team === matchInfo.winner) wins++;
+        if (didWin(row.team, matchInfo.winner)) wins++;
         else losses++;
       });
 
@@ -286,28 +366,10 @@ export default function MatchHistoryPage() {
 
   if (loading) {
     return (
-      <div
-        className="goa-root"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📜</div>
-          <p
-            style={{
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.75rem",
-              letterSpacing: "0.2em",
-              color: "var(--muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Consulting the archives…
-          </p>
+      <div className="goa-root goa-loading-screen">
+        <div className="goa-loading-inner">
+          <div className="goa-loading-icon">📜</div>
+          <p className="goa-loading-text">Consulting the archives…</p>
         </div>
       </div>
     );
@@ -354,31 +416,27 @@ export default function MatchHistoryPage() {
             {displayedStats.name}
           </div>
           <div className="goa-stats-grid">
-            <div className="goa-stat">
-              <div className="goa-stat-label">Rating</div>
-              <div className="goa-stat-value">{displayedStats.mmr}</div>
+            <div className="goa-stat-tile">
+              <div className="goa-stat-lbl">Rating</div>
+              <div className="goa-stat-val">{displayedStats.mmr}</div>
               <div className="goa-stat-sub">current MMR</div>
             </div>
-            <div className="goa-stat">
-              <div className="goa-stat-label">Win Rate</div>
-              <div className="goa-stat-value">
+            <div className="goa-stat-tile">
+              <div className="goa-stat-lbl">Win Rate</div>
+              <div className="goa-stat-val">
                 {displayedStats.winRate.toFixed(1)}%
               </div>
               <div className="goa-stat-sub">
                 {displayedStats.wins + displayedStats.losses} battles
               </div>
             </div>
-            <div className="goa-stat">
-              <div className="goa-stat-label">Victories</div>
-              <div className="goa-stat-value" style={{ color: "var(--gain)" }}>
-                {displayedStats.wins}
-              </div>
+            <div className="goa-stat-tile">
+              <div className="goa-stat-lbl">Victories</div>
+              <div className="goa-stat-val gain">{displayedStats.wins}</div>
             </div>
-            <div className="goa-stat">
-              <div className="goa-stat-label">Defeats</div>
-              <div className="goa-stat-value" style={{ color: "var(--loss)" }}>
-                {displayedStats.losses}
-              </div>
+            <div className="goa-stat-tile">
+              <div className="goa-stat-lbl">Defeats</div>
+              <div className="goa-stat-val loss">{displayedStats.losses}</div>
             </div>
           </div>
         </div>
@@ -418,9 +476,7 @@ export default function MatchHistoryPage() {
             >
               <div className="goa-match-header">
                 <span className="goa-match-date">
-                  <span style={{ opacity: 0.75, marginRight: "0.35rem" }}>
-                    #{matchNumber}
-                  </span>
+                  <span className="goa-match-number">#{matchNumber}</span>
                   · {formatDate(match.created_at)}
                 </span>
                 <span className="goa-match-winner">
@@ -434,123 +490,22 @@ export default function MatchHistoryPage() {
               </div>
 
               <div className="goa-teams">
-                {/* Atlantis */}
-                <div className="goa-team">
-                  <div className="flex justify-between">
-                    <span className="goa-team-head atl">Atlantis</span>
-                    <span
-                      className={`goa-delta ${match.atlantis_mmr_change >= 0 ? "pos" : "neg"}`}
-                    >
-                      {match.atlantis_mmr_change >= 0 ? "▲" : "▼"}
-                      {Math.abs(match.atlantis_mmr_change)}
-                    </span>
-                  </div>
-                  <div className="goa-avg-mmr">
-                    Avg {Math.round(match.atlantis_avg_mmr)} MMR
-                  </div>
-                  {atlantis.map((p) => {
-                    return (
-                      <div
-                        key={p.player_id}
-                        className="goa-player-entry"
-                        onClick={() => goToProfile(p.player_id)}
-                      >
-                        <div className="goa-player-info">
-                          <span className="goa-player-name">
-                            <PlayerAvatar
-                              avatarUrl={p.players.avatar_url}
-                              name={p.players.name}
-                              size={32}
-                            />
-                            {p.players.name}
-                          </span>
-                          <span className="goa-mmr-change">
-                            {p.mmr_before} → {p.mmr_after}
-                          </span>
-                        </div>
-                        <span className="goa-display-hero">
-                          <Image
-                            src={"/heroes/" + p.hero_id + "_icon.png"}
-                            alt={p.hero_id || "unknown hero"}
-                            width={24}
-                            height={24}
-                            style={{
-                              objectFit: "contain",
-                              flexShrink: 0,
-                              marginLeft: "0.2rem",
-                            }}
-                          />
-                          {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
-                          {renderStars(
-                            parseInt(
-                              HEROES.find((h) => h.id === p.hero_id)
-                                ?.complexity || "",
-                            ),
-                          )}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Titans */}
-                <div className="goa-team">
-                  <div className="flex justify-between">
-                    <span className="goa-team-head tit">Titans</span>
-                    <span
-                      className={`goa-delta ${match.titans_mmr_change >= 0 ? "pos" : "neg"}`}
-                    >
-                      {match.titans_mmr_change >= 0 ? "▲" : "▼"}
-                      {Math.abs(match.titans_mmr_change)}
-                    </span>
-                  </div>
-                  <div className="goa-avg-mmr">
-                    Avg {Math.round(match.titans_avg_mmr)} MMR
-                  </div>
-                  {titans.map((p) => {
-                    return (
-                      <div
-                        key={p.player_id}
-                        className="goa-player-entry"
-                        onClick={() => goToProfile(p.player_id)}
-                      >
-                        <div className="goa-player-info">
-                          <span className="goa-player-name">
-                            <PlayerAvatar
-                              avatarUrl={p.players.avatar_url}
-                              name={p.players.name}
-                              size={32}
-                            />
-                            {p.players.name}
-                          </span>
-                          <span className="goa-mmr-change">
-                            {p.mmr_before} → {p.mmr_after}
-                          </span>
-                        </div>
-                        <span className="goa-display-hero">
-                          <Image
-                            src={"/heroes/" + p.hero_id + "_icon.png"}
-                            alt={p.hero_id || "unknown hero"}
-                            width={24}
-                            height={24}
-                            style={{
-                              objectFit: "contain",
-                              flexShrink: 0,
-                              marginLeft: "0.2rem",
-                            }}
-                          />
-                          {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
-                          {renderStars(
-                            parseInt(
-                              HEROES.find((h) => h.id === p.hero_id)
-                                ?.complexity || "",
-                            ),
-                          )}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <TeamPanel
+                  label="Atlantis"
+                  labelClass="atl"
+                  players={atlantis}
+                  avgMmr={match.atlantis_avg_mmr}
+                  mmrChange={match.atlantis_mmr_change}
+                  onSelectPlayer={goToProfile}
+                />
+                <TeamPanel
+                  label="Titans"
+                  labelClass="tit"
+                  players={titans}
+                  avgMmr={match.titans_avg_mmr}
+                  mmrChange={match.titans_mmr_change}
+                  onSelectPlayer={goToProfile}
+                />
               </div>
             </div>
           );
@@ -558,27 +513,8 @@ export default function MatchHistoryPage() {
       </div>
 
       {matches.length > 0 && (
-        <div
-          className="goa-pagination"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "0.75rem",
-            marginBottom: "2rem",
-          }}
-        >
-          <p
-            className="goa-pagination-count"
-            style={{
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.7rem",
-              letterSpacing: "0.15em",
-              color: "var(--muted)",
-              textTransform: "uppercase",
-              margin: 0,
-            }}
-          >
+        <div className="goa-pagination">
+          <p className="goa-pagination-count">
             Showing {matches.length} of {totalCount} battles
           </p>
           {hasMore && (
@@ -586,15 +522,6 @@ export default function MatchHistoryPage() {
               className="goa-load-more"
               onClick={handleLoadMore}
               disabled={loadingMore}
-              style={{
-                fontFamily: "'Cinzel', serif",
-                fontSize: "0.75rem",
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                padding: "0.6rem 1.5rem",
-                cursor: loadingMore ? "default" : "pointer",
-                opacity: loadingMore ? 0.6 : 1,
-              }}
             >
               {loadingMore ? "Loading…" : "Load More Battles"}
             </button>

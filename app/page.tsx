@@ -79,8 +79,8 @@ export default function Home() {
           </div>
         </Link>
         <Link href="/heroes" className="goa-nav-link">
-          <div className="goa-nav-btn" style={{ borderColor: "rgba(201,151,58,0.3)" }}>
-            <div className="goa-nav-accent" style={{ background: "linear-gradient(180deg, #C9973A, #7A5A1A)" }} />
+          <div className="goa-nav-btn hero">
+            <div className="goa-nav-accent" />
             <div className="goa-nav-inner">
               <div className="goa-nav-left">
                 <span className="goa-nav-icon">🦸</span>

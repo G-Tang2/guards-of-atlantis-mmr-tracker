@@ -1,11 +1,23 @@
 // app/heroes/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES, Hero } from "@/lib/heroes";
+import { didWin, renderStars } from "@/lib/match";
+
+type RawMatch = {
+  id: string;
+  created_at: string;
+  winner: string;
+  match_players: {
+    hero_id: string | null;
+    team: string;
+    player_id: string;
+  }[];
+};
 
 type HeroStat = {
   hero: Hero;
@@ -58,11 +70,9 @@ export default function HeroesPage() {
       });
 
       // Process matches
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      matches.forEach((match: any, gameIndex: number) => {
+      (matches as RawMatch[]).forEach((match, gameIndex) => {
         const mps = match.match_players ?? [];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        mps.forEach((mp: any) => {
+        mps.forEach((mp) => {
           if (!mp.hero_id) return;
           const entry = map.get(mp.hero_id);
           if (!entry) return;
@@ -75,8 +85,7 @@ export default function HeroesPage() {
           entry.played++;
           entry.players.add(mp.player_id);
 
-          const won = mp.team === match.winner || match.winner === "none";
-          if (won) entry.wins++;
+          if (didWin(mp.team, match.winner)) entry.wins++;
           else entry.losses++;
         });
       });
@@ -99,8 +108,6 @@ export default function HeroesPage() {
       setSortAsc(key === "name");
     }
   };
-
-  const renderStars = (n: number | string) => "★".repeat(Number(n) || 0);
 
   // 1. Filter and sort heroes for the "Unplayed" section at the top
   const forgottenHeroes = useMemo(() => {
@@ -144,28 +151,10 @@ export default function HeroesPage() {
 
   if (loading) {
     return (
-      <div
-        className="goa-root"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🦸</div>
-          <p
-            style={{
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.78rem",
-              letterSpacing: "0.2em",
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Gathering hero stats…
-          </p>
+      <div className="goa-root goa-loading-screen">
+        <div className="goa-loading-inner">
+          <div className="goa-loading-icon">🦸</div>
+          <p className="goa-loading-text wide">Gathering hero stats…</p>
         </div>
       </div>
     );
@@ -184,112 +173,38 @@ export default function HeroesPage() {
 
       {/* Forgotten Heroes Section - Compact Grid */}
       {forgottenHeroes.length > 0 && (
-        <div style={{ margin: "0.6rem 0.75rem 1rem" }}>
-          <div
-            style={{
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "var(--gold)",
-              padding: "0.5rem",
-              paddingTop: "0rem",
-              borderBottom: "1px solid var(--border)",
-              marginBottom: "0.5rem",
-            }}
-          >
+        <div className="goa-bounty-section">
+          <div className="goa-bounty-header">
             <div>💰 Bounty Heroes</div>
-            <div
-              style={{
-                fontSize: "0.62rem",
-                color: "var(--text-muted)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                fontWeight: 500,
-              }}
-            >
+            <div className="goa-bounty-header-sub">
               <span>
                 Not picked in {threshold}+ games · Bonus 5 MMR awarded on play
               </span>
             </div>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-              gap: "0.35rem",
-            }}
-          >
+          <div className="goa-bounty-grid">
             {forgottenHeroes.map((s) => (
               <div
                 key={s.hero.id}
+                className="goa-bounty-card"
                 onClick={() => router.push(`/heroes/${s.hero.id}`)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  padding: "0.35rem 0.5rem",
-                  border: "1px solid rgba(201,151,58,0.18)",
-                  background: "rgba(28,26,20,0.85)",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  gap: "0.4rem",
-                  transition: "background 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.background =
-                    "rgba(42,39,32,0.9)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.background =
-                    "rgba(28,26,20,0.85)";
-                }}
               >
-                <div
-                  style={{
-                    width: 22,
-                    height: 22,
-                    position: "relative",
-                    flexShrink: 0,
-                  }}
-                >
+                <div className="goa-bounty-card-icon-wrap">
                   <Image
                     src={s.hero.icon}
                     alt={s.hero.name}
                     fill
-                    style={{ objectFit: "contain" }}
+                    className="object-contain"
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).style.display =
                         "none";
                     }}
                   />
                 </div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div
-                    style={{
-                      fontFamily: "'Crimson Pro', serif",
-                      fontSize: "0.85rem",
-                      lineHeight: "1.1",
-                      color: "var(--text-primary)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {s.hero.name}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "'Cinzel', serif",
-                      fontSize: "0.6rem",
-                      color: "var(--text-muted)",
-                      letterSpacing: "0.04em",
-                      lineHeight: "1",
-                      marginTop: "0.1rem",
-                    }}
-                  >
+                <div className="min-w-0 flex-1">
+                  <div className="goa-bounty-card-name">{s.hero.name}</div>
+                  <div className="goa-bounty-card-meta">
                     {s.lastPlayedGame === null
                       ? "Never played"
                       : `${s.lastPlayedGame} ${s.lastPlayedGame === 1 ? "game" : "games"} ago`}
@@ -302,7 +217,7 @@ export default function HeroesPage() {
       )}
 
       {/* Sort pills */}
-      <div className="goa-sort-bar" style={{ marginTop: "0.3rem" }}>
+      <div className="goa-sort-bar mt-sm">
         {sortCols.map(({ key, label }) => (
           <button
             key={key}
@@ -318,18 +233,9 @@ export default function HeroesPage() {
       </div>
 
       {/* Hero table */}
-      <div className="goa-table-wrap" style={{ margin: "0.6rem 0.75rem 2rem" }}>
+      <div className="goa-table-wrap">
         {/* Column headers */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 30px 50px 30px 30px",
-            padding: "0.45rem 0.75rem",
-            borderBottom: "1px solid var(--border)",
-            background: "rgba(42,39,32,0.6)",
-            gap: "0.25rem",
-          }}
-        >
+        <div className="goa-heroes-col-header">
           {[
             { key: "name", label: "Hero" },
             { key: "played", label: "GP" },
@@ -339,17 +245,8 @@ export default function HeroesPage() {
           ].map(({ key, label }) => (
             <span
               key={key}
+              className={`goa-heroes-col-head ${key === "name" ? "left" : ""}`}
               onClick={() => handleSort(key as SortKey)}
-              style={{
-                fontFamily: "'Cinzel', serif",
-                fontSize: "0.75rem",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                userSelect: "none",
-                textAlign: key === "name" ? "left" : "center",
-              }}
             >
               {label}
             </span>
@@ -357,126 +254,54 @@ export default function HeroesPage() {
         </div>
 
         {sortedTable.length === 0 && (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "2rem",
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.7rem",
-              color: "var(--text-muted)",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            No heroes found
-          </div>
+          <div className="goa-heroes-empty">No heroes found</div>
         )}
 
         {sortedTable.map((s) => {
-          const wrColor =
+          const wrClass =
             s.played === 0
-              ? "var(--text-muted)"
+              ? "muted"
               : s.winRate >= 60
-                ? "var(--gain)"
+                ? "good"
                 : s.winRate >= 45
-                  ? "var(--gold-light)"
-                  : "var(--loss)";
+                  ? "mid"
+                  : "bad";
 
           return (
             <div
               key={s.hero.id}
+              className={`goa-heroes-row ${s.played > 0 ? "clickable" : ""}`}
               onClick={() =>
                 s.played > 0 && router.push(`/heroes/${s.hero.id}`)
               }
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 30px 50px 30px 30px",
-                alignItems: "center",
-                padding: "0.55rem 0.75rem",
-                borderBottom: "1px solid rgba(201,151,58,0.08)",
-                background: "rgba(28,26,20,0.85)",
-                gap: "0.25rem",
-                cursor: s.played > 0 ? "pointer" : "default",
-                transition: "background 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                if (s.played > 0)
-                  (e.currentTarget as HTMLDivElement).style.background =
-                    "rgba(42,39,32,0.9)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.background =
-                  "rgba(28,26,20,0.85)";
-              }}
             >
               {/* Name & Sub-details */}
               <div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                  }}
-                >
+                <div className="goa-heroes-name-row">
                   <span
-                    style={{
-                      fontFamily: "'Crimson Pro', serif",
-                      fontSize: "1rem",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                      color:
-                        s.played > 0
-                          ? "var(--text-primary)"
-                          : "var(--text-muted)",
-                    }}
+                    className={`goa-heroes-name ${s.played > 0 ? "" : "dim"}`}
                   >
                     <Image
                       src={s.hero.icon}
                       alt={s.hero.name}
                       width={24}
                       height={24}
-                      style={{ objectFit: "contain", flexShrink: 0 }}
+                      className="object-contain shrink-0"
                     />
                     {s.hero.name}
                   </span>
                   {s.played > 0 && (
-                    <span
-                      style={{
-                        fontFamily: "'Cinzel', serif",
-                        fontSize: "1.1rem",
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      ›
-                    </span>
+                    <span className="goa-heroes-row-arrow">›</span>
                   )}
                 </div>
 
                 {/* Stars + Last Played Info */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.35rem",
-                    color: "var(--text-muted)",
-                    fontFamily: "'Cinzel', serif",
-                    fontSize: "0.62rem",
-                    marginTop: "0.1rem",
-                  }}
-                >
-                  <span
-                    style={{
-                      letterSpacing: ".15em",
-                      textTransform: "uppercase",
-                    }}
-                  >
+                <div className="goa-heroes-sub-row">
+                  <span className="goa-heroes-stars">
                     {renderStars(s.hero.complexity)}
                   </span>
                   <span>·</span>
-                  <span style={{ letterSpacing: "0.04em" }}>
+                  <span className="goa-heroes-last-played">
                     {s.lastPlayedGame === null
                       ? "Never played"
                       : `${s.lastPlayedGame} ${s.lastPlayedGame === 1 ? "game" : "games"} ago`}
@@ -485,28 +310,12 @@ export default function HeroesPage() {
 
                 {/* Win rate bar */}
                 {s.played > 0 && (
-                  <div
-                    style={{
-                      marginTop: "0.25rem",
-                      height: "3px",
-                      background: "rgba(42,39,32,0.8)",
-                      borderRadius: "2px",
-                      overflow: "hidden",
-                      maxWidth: "120px",
-                    }}
-                  >
+                  <div className="goa-heroes-bar-wrap">
                     <div
-                      style={{
-                        height: "100%",
-                        width: `${s.winRate}%`,
-                        borderRadius: "2px",
-                        background:
-                          s.winRate >= 60
-                            ? "linear-gradient(90deg, var(--gain), rgba(93,187,138,0.6))"
-                            : s.winRate >= 45
-                              ? "linear-gradient(90deg, var(--gold), rgba(201,151,58,0.6))"
-                              : "linear-gradient(90deg, var(--loss), rgba(196,74,74,0.6))",
-                      }}
+                      className={`goa-heroes-bar-fill ${wrClass}`}
+                      style={
+                        { "--bar-width": `${s.winRate}%` } as CSSProperties
+                      }
                     />
                   </div>
                 )}
@@ -514,49 +323,26 @@ export default function HeroesPage() {
 
               {/* GP */}
               <span
-                style={{
-                  fontFamily: "'Cinzel', serif",
-                  fontSize: "0.9rem",
-                  color:
-                    s.played > 0 ? "var(--gold-light)" : "var(--text-muted)",
-                  textAlign: "center",
-                }}
+                className={`goa-heroes-stat-cell ${s.played > 0 ? "gold" : "muted"}`}
               >
                 {s.played > 0 ? s.played : "—"}
               </span>
 
               {/* Win % */}
-              <span
-                style={{
-                  fontFamily: "'Cinzel', serif",
-                  fontSize: "0.9rem",
-                  color: wrColor,
-                  textAlign: "center",
-                }}
-              >
+              <span className={`goa-heroes-stat-cell ${wrClass}`}>
                 {s.played > 0 ? `${s.winRate}%` : "—"}
               </span>
 
               {/* Wins */}
               <span
-                style={{
-                  fontFamily: "'Cinzel', serif",
-                  fontSize: "0.9rem",
-                  color: s.wins > 0 ? "var(--gain)" : "var(--text-muted)",
-                  textAlign: "center",
-                }}
+                className={`goa-heroes-stat-cell ${s.wins > 0 ? "gain" : "muted"}`}
               >
                 {s.wins > 0 ? s.wins : "—"}
               </span>
 
               {/* Losses */}
               <span
-                style={{
-                  fontFamily: "'Cinzel', serif",
-                  fontSize: "0.9rem",
-                  color: s.losses > 0 ? "var(--loss)" : "var(--text-muted)",
-                  textAlign: "center",
-                }}
+                className={`goa-heroes-stat-cell ${s.losses > 0 ? "loss" : "muted"}`}
               >
                 {s.losses > 0 ? s.losses : "—"}
               </span>

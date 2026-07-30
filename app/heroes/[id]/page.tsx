@@ -1,12 +1,13 @@
 // app/heroes/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import { HEROES, Hero } from "@/lib/heroes";
+import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import Image from "next/image";
+import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
 
 type Player = {
   id: string;
@@ -36,19 +37,87 @@ type Match = {
   match_players: MatchPlayer[];
 };
 
-const formatDate = (s: string) => {
-  const d = new Date(s);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
+// Supabase returns the embedded `players` relation as an array when it
+// can't infer a one-to-one cardinality from the foreign key, and as a
+// single object when it can — normalize both shapes when loading.
+type RawMatch = Omit<Match, "match_players"> & {
+  match_players: (Omit<MatchPlayer, "players"> & {
+    players: Player | Player[] | null;
+  })[];
 };
 
-const renderStars = (n: number | string) => "★".repeat(Number(n) || 0);
+type TeamPanelProps = {
+  label: string;
+  labelClass: "atl" | "tit";
+  players: MatchPlayer[];
+  avgMmr: number;
+  mmrChange: number;
+  highlightHeroId: string;
+  onSelectPlayer: (id: string) => void;
+};
+
+function TeamPanel({
+  label,
+  labelClass,
+  players,
+  avgMmr,
+  mmrChange,
+  highlightHeroId,
+  onSelectPlayer,
+}: TeamPanelProps) {
+  return (
+    <div className="goa-team">
+      <div className="flex justify-between">
+        <span className={`goa-team-head ${labelClass}`}>{label}</span>
+        <span className={`goa-delta ${mmrChange >= 0 ? "pos" : "neg"}`}>
+          {mmrChange >= 0 ? "▲" : "▼"}
+          {Math.abs(mmrChange)}
+        </span>
+      </div>
+      <div className="goa-avg-mmr">Avg {Math.round(avgMmr)} MMR</div>
+      {players.map((p) => {
+        const playedHero = getHero(p.hero_id);
+        const isHighlighted = p.hero_id === highlightHeroId;
+        return (
+          <div
+            key={p.player_id}
+            className="goa-player-entry clickable"
+            onClick={() => onSelectPlayer(p.player_id)}
+          >
+            <div className="goa-player-info">
+              <span className="goa-player-name">
+                <PlayerAvatar
+                  avatarUrl={p.players.avatar_url}
+                  name={p.players.name}
+                  size={20}
+                />
+                {p.players.name}
+              </span>
+              <span className="goa-mmr-change">
+                {p.mmr_before} → {p.mmr_after}
+              </span>
+            </div>
+            {playedHero && (
+              <span
+                className={`goa-display-hero ${isHighlighted ? "highlight" : ""}`}
+              >
+                <Image src={playedHero.icon} alt={playedHero.name} width={24} height={24} />
+                {playedHero.name} {renderStars(playedHero.complexity)}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function HeroDetailPage() {
   const params = useParams();
   const router = useRouter();
   const heroId = params?.id as string;
 
-  const hero: Hero | undefined = HEROES.find((h) => h.id === heroId);
+  const hero: Hero | undefined = getHero(heroId);
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,16 +171,17 @@ export default function HeroDetailPage() {
         return;
       }
 
-      const normalized: Match[] = mData.map((m: any) => ({
+      const rawMatches = mData as RawMatch[];
+      const normalized: Match[] = rawMatches.map((m) => ({
         ...m,
         match_number: matchNumberMap.get(m.id),
         match_players: (m.match_players ?? [])
-          .map((mp: any) => {
+          .map((mp): MatchPlayer | null => {
             const p = Array.isArray(mp.players) ? mp.players[0] : mp.players;
             if (!p) return null;
             return { ...mp, players: { ...p } };
           })
-          .filter(Boolean),
+          .filter((mp): mp is MatchPlayer => mp !== null),
       }));
 
       setMatches(normalized);
@@ -132,7 +202,7 @@ export default function HeroDetailPage() {
     matches.forEach((m) => {
       const heroPlayers = m.match_players.filter((mp) => mp.hero_id === heroId);
       heroPlayers.forEach((mp) => {
-        const won = mp.team === m.winner || m.winner == "none";
+        const won = didWin(mp.team, m.winner);
         if (won) wins++;
         else losses++;
 
@@ -160,28 +230,10 @@ export default function HeroDetailPage() {
 
   if (!hero) {
     return (
-      <div
-        className="goa-root"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚔</div>
-          <p
-            style={{
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.78rem",
-              letterSpacing: "0.2em",
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Hero not found
-          </p>
+      <div className="goa-root goa-loading-screen">
+        <div className="goa-loading-inner">
+          <div className="goa-loading-icon">⚔</div>
+          <p className="goa-loading-text wide">Hero not found</p>
         </div>
       </div>
     );
@@ -189,41 +241,25 @@ export default function HeroDetailPage() {
 
   if (loading) {
     return (
-      <div
-        className="goa-root"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🦸</div>
-          <p
-            style={{
-              fontFamily: "'Cinzel', serif",
-              fontSize: "0.78rem",
-              letterSpacing: "0.2em",
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Consulting the chronicles…
-          </p>
+      <div className="goa-root goa-loading-screen">
+        <div className="goa-loading-inner">
+          <div className="goa-loading-icon">🦸</div>
+          <p className="goa-loading-text wide">Consulting the chronicles…</p>
         </div>
       </div>
     );
   }
 
-  const wrColor =
+  // .goa-stat-val's default color is already gold-light, so the 45-59
+  // "mid" tier needs no modifier class.
+  const wrClass =
     stats.played === 0
-      ? "var(--text-muted)"
+      ? "text-muted"
       : stats.winRate >= 60
-        ? "var(--gain)"
+        ? "gain"
         : stats.winRate >= 45
-          ? "var(--gold-light)"
-          : "var(--loss)";
+          ? ""
+          : "loss";
 
   return (
     <main className="goa-root">
@@ -234,41 +270,31 @@ export default function HeroDetailPage() {
       {/* Hero header */}
       <header className="goa-header">
         <Image
-          src={`/heroes/${hero.id}_icon.png`}
+          src={hero.icon}
           alt={hero.name}
           width={100}
           height={100}
-          style={{
-            objectFit: "contain",
-            flexShrink: 0,
-            display: "flex",
-            justifySelf: "center",
-          }}
+          className="object-contain shrink-0 flex justify-self-center"
         />
         <h1 className="goa-title">{hero.name}</h1>
         <p className="goa-subtitle">{renderStars(hero.complexity ?? 1)}</p>
       </header>
 
       {/* Stat tiles */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "0.5rem",
-          margin: "0.75rem",
-        }}
-      >
+      <div className="goa-stats-grid">
         {/* Win Rate */}
         <div className="goa-stat-tile">
           <div className="goa-stat-lbl">Win Rate</div>
-          <div className="goa-stat-val" style={{ color: wrColor }}>
+          <div className={`goa-stat-val ${wrClass}`}>
             {stats.played === 0 ? "—" : `${stats.winRate}%`}
           </div>
           {stats.played > 0 && (
             <div className="goa-win-bar-wrap">
               <div
                 className="goa-win-bar"
-                style={{ width: `${stats.winRate}%` }}
+                style={
+                  { "--bar-width": `${stats.winRate}%` } as CSSProperties
+                }
               />
             </div>
           )}
@@ -284,30 +310,23 @@ export default function HeroDetailPage() {
         {/* Wins */}
         <div className="goa-stat-tile">
           <div className="goa-stat-lbl">Victories</div>
-          <div className="goa-stat-val" style={{ color: "var(--gain)" }}>
-            {stats.wins}
-          </div>
+          <div className="goa-stat-val gain">{stats.wins}</div>
         </div>
 
         {/* Losses */}
         <div className="goa-stat-tile">
           <div className="goa-stat-lbl">Defeats</div>
-          <div className="goa-stat-val" style={{ color: "var(--loss)" }}>
-            {stats.losses}
-          </div>
+          <div className="goa-stat-val loss">{stats.losses}</div>
         </div>
       </div>
 
       {/* Players who used this hero */}
       {stats.players.length > 0 && (
-        <div className="goa-stats-card" style={{ margin: "0 0.75rem 0.75rem" }}>
-          <div
-            className="goa-stats-head"
-            style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
-          >
+        <div className="goa-stats-card tight-top">
+          <div className="goa-stats-head">
             <span>⚔</span> Played by
           </div>
-          <div style={{ padding: "0.25rem 0" }}>
+          <div className="goa-hero-players-list">
             {stats.players.map(({ player, wins, losses }) => {
               const pr =
                 wins + losses === 0
@@ -316,68 +335,25 @@ export default function HeroDetailPage() {
               return (
                 <div
                   key={player.id}
+                  className="goa-hero-player-row"
                   onClick={() => router.push(`/players/${player.id}`)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.55rem",
-                    padding: "0.45rem 0.85rem",
-                    borderBottom: "1px solid rgba(201,151,58,0.07)",
-                    cursor: "pointer",
-                    transition: "background 0.12s",
-                  }}
-                  onMouseEnter={(e) =>
-                    ((e.currentTarget as HTMLDivElement).style.background =
-                      "rgba(42,39,32,0.6)")
-                  }
-                  onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLDivElement).style.background =
-                      "transparent")
-                  }
                 >
                   <PlayerAvatar
                     avatarUrl={player.avatar_url}
                     name={player.name}
                     size={28}
                   />
+                  <span className="goa-hero-player-name">{player.name}</span>
                   <span
-                    style={{
-                      flex: 1,
-                      fontFamily: "'Crimson Pro', serif",
-                      fontSize: "0.95rem",
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {player.name}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "'Cinzel', serif",
-                      fontSize: "0.65rem",
-                      color: pr >= 50 ? "var(--gain)" : "var(--loss)",
-                    }}
+                    className={`goa-hero-player-pr ${pr >= 50 ? "goa-text-gain" : "goa-text-loss"}`}
                   >
                     {pr}%
                   </span>
-                  <span
-                    style={{
-                      fontFamily: "'Cinzel', serif",
-                      fontSize: "0.62rem",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    <span style={{ color: "var(--gain)" }}>{wins}W</span>/
-                    <span style={{ color: "var(--loss)" }}>{losses}L</span>
+                  <span className="goa-hero-player-wl">
+                    <span className="goa-text-gain">{wins}W</span>/
+                    <span className="goa-text-loss">{losses}L</span>
                   </span>
-                  <span
-                    style={{
-                      fontFamily: "'Cinzel', serif",
-                      fontSize: "0.55rem",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    ›
-                  </span>
+                  <span className="goa-hero-player-arrow">›</span>
                 </div>
               );
             })}
@@ -386,23 +362,7 @@ export default function HeroDetailPage() {
       )}
 
       {/* Match history for this hero */}
-      <div
-        style={{
-          margin: "0 0.75rem",
-          borderBottom: "1px solid var(--border)",
-          paddingBottom: "0.4rem",
-          marginBottom: "0.5rem",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.4rem",
-          fontFamily: "'Cinzel', serif",
-          fontSize: "0.7rem",
-          fontWeight: 600,
-          letterSpacing: "0.15em",
-          textTransform: "uppercase",
-          color: "var(--gold)",
-        }}
-      >
+      <div className="goa-match-history-header">
         <span>📜</span> Match History
       </div>
 
@@ -430,13 +390,7 @@ export default function HeroDetailPage() {
               <div className="goa-match-header">
                 <span className="goa-match-date">
                   {match.match_number && (
-                    <span
-                      style={{
-                        marginRight: "0.4rem",
-                        opacity: 0.75,
-                        fontWeight: 600,
-                      }}
-                    >
+                    <span className="goa-match-number wide bold">
                       #{match.match_number}
                     </span>
                   )}
@@ -453,40 +407,17 @@ export default function HeroDetailPage() {
 
               {/* Hero used by banner */}
               {heroPlayers.length > 0 && (
-                <div
-                  style={{
-                    padding: "0.3rem 0.75rem",
-                    background: "rgba(201,151,58,0.07)",
-                    borderBottom: "1px solid rgba(201,151,58,0.12)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "'Cinzel', serif",
-                      fontSize: "0.58rem",
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      color: "var(--text-muted)",
-                    }}
-                  >
+                <div className="goa-hero-used-by-banner">
+                  <span className="goa-hero-used-by-label">
                     {hero.name} played by:
                   </span>
                   {heroPlayers.map((mp) => (
                     <span
                       key={mp.player_id}
+                      className="goa-hero-used-by-player"
                       onClick={(e) => {
                         e.stopPropagation();
                         router.push(`/players/${mp.player_id}`);
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.25rem",
-                        cursor: "pointer",
                       }}
                     >
                       <PlayerAvatar
@@ -495,27 +426,17 @@ export default function HeroDetailPage() {
                         size={18}
                       />
                       <span
-                        style={{
-                          fontFamily: "'Cinzel', serif",
-                          fontSize: "0.65rem",
-                          color:
-                            match.winner === "none"
-                              ? "rgba(201, 135, 36)"
-                              : mp.team === match.winner
-                                ? "var(--gain)"
-                                : "var(--loss)",
-                          fontWeight: 600,
-                        }}
+                        className={`goa-hero-used-by-name ${
+                          match.winner === "none"
+                            ? "draw"
+                            : mp.team === match.winner
+                              ? "win"
+                              : "loss"
+                        }`}
                       >
                         {mp.players.name}
                       </span>
-                      <span
-                        style={{
-                          fontFamily: "'Cinzel', serif",
-                          fontSize: "0.55rem",
-                          color: "var(--text-muted)",
-                        }}
-                      >
+                      <span className="goa-hero-used-by-result">
                         (
                         {match.winner == "none"
                           ? "Draw"
@@ -530,144 +451,31 @@ export default function HeroDetailPage() {
               )}
 
               <div className="goa-teams">
-                {/* Atlantis */}
-                <div className="goa-team">
-                  <div
-                    style={{ display: "flex", justifyContent: "space-between" }}
-                  >
-                    <span className="goa-team-head atl">Atlantis</span>
-                    <span
-                      className={`goa-delta ${match.atlantis_mmr_change >= 0 ? "pos" : "neg"}`}
-                    >
-                      {match.atlantis_mmr_change >= 0 ? "▲" : "▼"}
-                      {Math.abs(match.atlantis_mmr_change)}
-                    </span>
-                  </div>
-                  <div className="goa-avg-mmr">
-                    Avg {Math.round(match.atlantis_avg_mmr)} MMR
-                  </div>
-                  {atlantis.map((p) => (
-                    <div
-                      key={p.player_id}
-                      className="goa-player-entry"
-                      onClick={() => router.push(`/players/${p.player_id}`)}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <div className="goa-player-info">
-                        <span className="goa-player-name">
-                          <PlayerAvatar
-                            avatarUrl={p.players.avatar_url}
-                            name={p.players.name}
-                            size={20}
-                          />
-                          {p.players.name}
-                        </span>
-                        <span className="goa-mmr-change">
-                          {p.mmr_before} → {p.mmr_after}
-                        </span>
-                      </div>
-                      {p.hero_id && (
-                        <span
-                          className="goa-display-hero"
-                          style={{
-                            color:
-                              p.hero_id === heroId
-                                ? "var(--gold-light)"
-                                : "var(--text-muted)",
-                            fontWeight: p.hero_id === heroId ? 700 : 400,
-                          }}
-                        >
-                          <Image
-                            src={`/heroes/${p.hero_id}_icon.png`}
-                            alt={hero.name}
-                            width={24}
-                            height={24}
-                          />
-                          {HEROES.find((h) => h.id === p.hero_id)?.name}
-                          {renderStars(
-                            parseInt(
-                              HEROES.find((h) => h.id === p.hero_id)
-                                ?.complexity || "",
-                            ),
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Titans */}
-                <div className="goa-team">
-                  <div
-                    style={{ display: "flex", justifyContent: "space-between" }}
-                  >
-                    <span className="goa-team-head tit">Titans</span>
-                    <span
-                      className={`goa-delta ${match.titans_mmr_change >= 0 ? "pos" : "neg"}`}
-                    >
-                      {match.titans_mmr_change >= 0 ? "▲" : "▼"}
-                      {Math.abs(match.titans_mmr_change)}
-                    </span>
-                  </div>
-                  <div className="goa-avg-mmr">
-                    Avg {Math.round(match.titans_avg_mmr)} MMR
-                  </div>
-                  {titans.map((p) => (
-                    <div
-                      key={p.player_id}
-                      className="goa-player-entry"
-                      onClick={() => router.push(`/players/${p.player_id}`)}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <div className="goa-player-info">
-                        <span className="goa-player-name">
-                          <PlayerAvatar
-                            avatarUrl={p.players.avatar_url}
-                            name={p.players.name}
-                            size={20}
-                          />
-                          {p.players.name}
-                        </span>
-                        <span className="goa-mmr-change">
-                          {p.mmr_before} → {p.mmr_after}
-                        </span>
-                      </div>
-                      {p.hero_id && (
-                        <span
-                          className="goa-display-hero"
-                          style={{
-                            color:
-                              p.hero_id === heroId
-                                ? "var(--gold-light)"
-                                : "var(--text-muted)",
-                            fontWeight: p.hero_id === heroId ? 700 : 400,
-                          }}
-                        >
-                          <Image
-                            src={`/heroes/${p.hero_id}_icon.png`}
-                            alt={hero.name}
-                            width={24}
-                            height={24}
-                          />
-                          {HEROES.find((h) => h.id === p.hero_id)?.name}{" "}
-                          {renderStars(
-                            parseInt(
-                              HEROES.find((h) => h.id === p.hero_id)
-                                ?.complexity || "",
-                            ),
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                <TeamPanel
+                  label="Atlantis"
+                  labelClass="atl"
+                  players={atlantis}
+                  avgMmr={match.atlantis_avg_mmr}
+                  mmrChange={match.atlantis_mmr_change}
+                  highlightHeroId={heroId}
+                  onSelectPlayer={(id) => router.push(`/players/${id}`)}
+                />
+                <TeamPanel
+                  label="Titans"
+                  labelClass="tit"
+                  players={titans}
+                  avgMmr={match.titans_avg_mmr}
+                  mmrChange={match.titans_mmr_change}
+                  highlightHeroId={heroId}
+                  onSelectPlayer={(id) => router.push(`/players/${id}`)}
+                />
               </div>
             </div>
           );
         })}
       </div>
 
-      <div style={{ height: "2rem" }} />
+      <div className="goa-spacer-lg" />
     </main>
   );
 }
