@@ -968,7 +968,7 @@
   .goa-header-row,
   .goa-row {
     display: grid;
-    grid-template-columns: 38px 1fr 58px 50px 50px 42px;
+    grid-template-columns: 50px 1fr 58px 50px 50px 42px;
     gap: 0.35rem;
     align-items: center;
   }

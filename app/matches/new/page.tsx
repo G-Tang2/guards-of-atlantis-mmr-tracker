@@ -2,11 +2,17 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { supabaseClient } from "@/lib/supabase/client";
+import { calculateMMR } from "@/lib/mmr";
+import { HeroPicker } from "@/components/HeroPicker";
+import { Hero } from "@/lib/heroes";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 type Player = {
   id: string;
   name: string;
   mmr: number;
+  rank: number;
   avatar_url?: string | null;
   last_played_match_number: number;
 };
@@ -23,13 +29,9 @@ enum WinCondition {
 }
 
 type Team = "atlantis" | "titans";
-
 type Winner = "" | "atlantis" | "titans" | "none";
-import { supabaseClient } from "@/lib/supabase/client";
-import { calculateMMR } from "@/lib/mmr";
-import { HeroPicker } from "@/components/HeroPicker";
-import { Hero } from "@/lib/heroes";
-import { PlayerAvatar } from "@/components/PlayerAvatar";
+
+const INACTIVE_GAME_THRESHOLD = 5;
 
 function NewMatchPageInner() {
   const router = useRouter();
@@ -55,7 +57,6 @@ function NewMatchPageInner() {
       if (!error && data) {
         setPlayers(data);
 
-        // Pre-populate teams from URL params (?atlantis=id1,id2&titans=id3,id4)
         const atlantisParam = searchParams.get("atlantis");
         const titansParam = searchParams.get("titans");
 
@@ -79,7 +80,7 @@ function NewMatchPageInner() {
       setLoading(false);
     };
     loadPlayers();
-  }, []);
+  }, [searchParams]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -160,6 +161,7 @@ function NewMatchPageInner() {
         .from("matches")
         .insert({
           winner,
+          win_condition: winCondition,
           atlantis_avg_mmr: result.meta.atlantisAvg,
           titans_avg_mmr: result.meta.titansAvg,
           atlantis_mmr_change: result.meta.atlantisDelta,
@@ -171,11 +173,21 @@ function NewMatchPageInner() {
 
       if (error) throw error;
 
+      const newMatchNumber = match.match_number;
+      const matchParticipantIds = new Set([
+        ...result.atlantis.map((p) => p.id),
+        ...result.titans.map((p) => p.id),
+      ]);
+      const teamByPlayerId = new Map<string, Team>([
+        ...atlantis.map((e): [string, Team] => [e.player.id, "atlantis"]),
+        ...titans.map((e): [string, Team] => [e.player.id, "titans"]),
+      ]);
+
       // Denormalize match_number onto every match_player row
       const matchPlayers = [
         ...result.atlantis.map((p) => ({
           match_id: match.id,
-          match_number: match.match_number,
+          match_number: newMatchNumber,
           player_id: p.id,
           team: "atlantis",
           mmr_before: atlPlayers.find((x) => x.id === p.id)?.mmr,
@@ -184,7 +196,7 @@ function NewMatchPageInner() {
         })),
         ...result.titans.map((p) => ({
           match_id: match.id,
-          match_number: match.match_number,
+          match_number: newMatchNumber,
           player_id: p.id,
           team: "titans",
           mmr_before: titPlayers.find((x) => x.id === p.id)?.mmr,
@@ -198,14 +210,106 @@ function NewMatchPageInner() {
         .insert(matchPlayers);
       if (mpError) throw mpError;
 
-      // Update MMR + last_played_match_number for every participant
+// Combine updated match participants with non-participating players
+      const updatedParticipantsMap = new Map(
+        [...result.atlantis, ...result.titans].map((p) => [
+          p.id,
+          Math.round(p.newMmr),
+        ]),
+      );
+
+      const allPlayersPostMatch = players.map((p) => {
+        const isParticipant = matchParticipantIds.has(p.id);
+        const postMatchMmr = updatedParticipantsMap.get(p.id) ?? p.mmr;
+        return {
+          ...p,
+          postMatchMmr,
+          lostMmr: isParticipant && postMatchMmr < p.mmr,
+          last_played_match_number: isParticipant
+            ? newMatchNumber
+            : (p.last_played_match_number ?? 0),
+          isParticipant,
+        };
+      });
+
+      // Baseline order = current standings (existing rank), so protection
+      // is evaluated against who was actually ranked above whom.
+      const workingOrder = [...allPlayersPostMatch].sort((a, b) => {
+        const rankA = a.rank ?? Number.MAX_SAFE_INTEGER;
+        const rankB = b.rank ?? Number.MAX_SAFE_INTEGER;
+        if (rankA !== rankB) return rankA - rankB;
+        return b.postMatchMmr - a.postMatchMmr;
+      });
+
+      // Best (lowest) pre-match rank on the losing side of this match —
+      // winning against a team that included this player proves the
+      // winners beat someone ranked at least that high.
+      const losingPool =
+        winner === "atlantis" ? titans : winner === "titans" ? atlantis : [];
+      const losingTeamBestRank = losingPool.reduce<number | undefined>(
+        (best, e) =>
+          best === undefined || e.player.rank < best ? e.player.rank : best,
+        undefined,
+      );
+
+      // Player A can overtake player B only if A's post-match MMR is higher
+      // AND either: A's team won this match against a losing side that
+      // included someone ranked at least as high as B (B doesn't need to
+      // have played, or even be on the losing team — a teammate of A works
+      // too); or A sat out this match while B played it and lost MMR; or B
+      // has been inactive for at least INACTIVE_GAME_THRESHOLD games.
+      const canOvertake = (
+        a: (typeof workingOrder)[number],
+        b: (typeof workingOrder)[number],
+      ) => {
+        if (a.postMatchMmr <= b.postMatchMmr) return false;
+
+        const aBeatSomeoneAboveB =
+          a.isParticipant &&
+          winner !== "none" &&
+          teamByPlayerId.get(a.id) === winner &&
+          losingTeamBestRank !== undefined &&
+          losingTeamBestRank <= b.rank;
+        const aSatOutBLost = !a.isParticipant && b.isParticipant && b.lostMmr;
+        const bInactive =
+          newMatchNumber > 0 &&
+          b.last_played_match_number <= newMatchNumber - INACTIVE_GAME_THRESHOLD;
+
+        return aBeatSomeoneAboveB || aSatOutBLost || bInactive;
+      };
+
+      // Let each player climb past the player directly above them in the
+      // working order for as long as the overtake rule permits it.
+      for (let i = 1; i < workingOrder.length; i++) {
+        let j = i;
+        while (j > 0 && canOvertake(workingOrder[j], workingOrder[j - 1])) {
+          [workingOrder[j - 1], workingOrder[j]] = [
+            workingOrder[j],
+            workingOrder[j - 1],
+          ];
+          j--;
+        }
+      }
+
+      const computedRanks = new Map<string, number>(
+        workingOrder.map((p, idx) => [p.id, idx + 1]),
+      );
+
+      // Pass 1: Temporarily clear ranks to prevent Supabase 409 Unique Constraint errors
+      await supabaseClient
+        .from("players")
+        .update({ rank: null })
+        .in("id", allPlayersPostMatch.map((p) => p.id));
+
+      // Pass 2: Update final MMR, last_played_match_number, and computed ranks
       await Promise.all(
-        [...result.atlantis, ...result.titans].map((p) =>
+        allPlayersPostMatch.map((p) =>
           supabaseClient
             .from("players")
             .update({
-              mmr: Math.round(p.newMmr),
-              last_played_match_number: match.match_number,
+              mmr: p.postMatchMmr,
+              rank: computedRanks.get(p.id),
+              last_played_match_number: p.last_played_match_number,
             })
             .eq("id", p.id),
         ),
@@ -435,7 +539,7 @@ function NewMatchPageInner() {
           className={`goa-faction-btn goa-faction-btn-d ${winner === "none" ? "selected" : ""}`}
           onClick={() => {
             setWinner(winner === "none" ? "" : "none");
-            setWinCondition(null); // reset win condition when changing winner
+            setWinCondition(null);
           }}
         >
           <span className="goa-faction-label">Draw</span>
