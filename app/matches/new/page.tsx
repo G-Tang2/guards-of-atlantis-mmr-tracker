@@ -8,6 +8,7 @@ type Player = {
   name: string;
   mmr: number;
   avatar_url?: string | null;
+  last_played_match_number: number;
 };
 
 type PoolEntry = {
@@ -159,21 +160,22 @@ function NewMatchPageInner() {
         .from("matches")
         .insert({
           winner,
-          win_condition: winCondition,
           atlantis_avg_mmr: result.meta.atlantisAvg,
           titans_avg_mmr: result.meta.titansAvg,
           atlantis_mmr_change: result.meta.atlantisDelta,
           titans_mmr_change: result.meta.titansDelta,
           expected_atlantis_win: result.meta.expectedA,
         })
-        .select()
+        .select("id, match_number")
         .single();
 
       if (error) throw error;
 
+      // Denormalize match_number onto every match_player row
       const matchPlayers = [
         ...result.atlantis.map((p) => ({
           match_id: match.id,
+          match_number: match.match_number,
           player_id: p.id,
           team: "atlantis",
           mmr_before: atlPlayers.find((x) => x.id === p.id)?.mmr,
@@ -182,6 +184,7 @@ function NewMatchPageInner() {
         })),
         ...result.titans.map((p) => ({
           match_id: match.id,
+          match_number: match.match_number,
           player_id: p.id,
           team: "titans",
           mmr_before: titPlayers.find((x) => x.id === p.id)?.mmr,
@@ -195,14 +198,21 @@ function NewMatchPageInner() {
         .insert(matchPlayers);
       if (mpError) throw mpError;
 
+      // Update MMR + last_played_match_number for every participant
       await Promise.all(
         [...result.atlantis, ...result.titans].map((p) =>
           supabaseClient
             .from("players")
-            .update({ mmr: Math.round(p.newMmr) })
+            .update({
+              mmr: Math.round(p.newMmr),
+              last_played_match_number: match.match_number,
+            })
             .eq("id", p.id),
         ),
       );
+
+      // Refresh the co-played materialized view so protected ranking is current
+      await supabaseClient.rpc("refresh_player_co_played");
 
       showToast("⚔ Victory inscribed in the archives");
       setAtlantis([]);
