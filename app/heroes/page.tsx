@@ -216,6 +216,11 @@ export default function HeroesPage() {
         </div>
       )}
 
+      {/* Hero table title */}
+      <div className="goa-match-history-header lg">
+        <span>🦸</span> Hero Statistics
+      </div>
+
       {/* Sort pills */}
       <div className="goa-sort-bar mt-sm">
         {sortCols.map(({ key, label }) => (

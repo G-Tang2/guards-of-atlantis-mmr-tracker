@@ -976,7 +976,7 @@
   }
   .goa-bounty-header {
     font-family: "Cinzel", serif;
-    font-size: 0.75rem;
+    font-size: 0.9rem;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -988,6 +988,7 @@
   }
   .goa-bounty-header-sub {
     font-size: 0.62rem;
+    letter-spacing: normal;
     color: var(--text-muted);
     display: flex;
     align-items: center;
@@ -1899,6 +1900,9 @@
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--gold);
+  }
+  .goa-match-history-header.lg {
+    font-size: 0.9rem;
   }
   .goa-hero-used-by-banner {
     padding: 0.3rem 0.75rem;

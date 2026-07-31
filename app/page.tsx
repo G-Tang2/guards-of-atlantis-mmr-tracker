@@ -86,7 +86,9 @@ export default function Home() {
                 <span className="goa-nav-icon">🦸</span>
                 <div className="goa-nav-text">
                   <span className="goa-nav-label">Hero Compendium</span>
-                  <span className="goa-nav-desc">Win rates & hero stats</span>
+                  <span className="goa-nav-desc">
+                    Win rates, hero stats & bounties
+                  </span>
                 </div>
               </div>
               <span className="goa-nav-arrow">›</span>
