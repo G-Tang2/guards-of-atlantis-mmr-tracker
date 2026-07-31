@@ -274,10 +274,6 @@ export default function HeroDetailPage() {
 
   return (
     <main className="goa-root">
-      <button className="goa-back" onClick={() => router.back()}>
-        <span className="goa-back-arrow">‹</span> Hero Compendium
-      </button>
-
       {/* Hero header */}
       <header className="goa-header">
         <Image

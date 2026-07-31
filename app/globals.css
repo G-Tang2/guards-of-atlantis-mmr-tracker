@@ -2398,29 +2398,6 @@
     }
   }
 
-  /* ── Back button (all pages) ── */
-  .goa-back {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.9rem 0.9rem 0;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-family: "Cinzel", serif;
-    font-size: 0.78rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: color 0.15s;
-  }
-  .goa-back:hover {
-    color: var(--gold-light);
-  }
-  .goa-back-arrow {
-    font-size: 0.9rem;
-  }
-
   /* ── Match card win/loss border (battle archive) ── */
   .goa-match-card.match-win {
     border-color: rgba(93, 187, 138, 0.55);

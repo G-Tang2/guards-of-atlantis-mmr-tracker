@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
@@ -189,7 +189,6 @@ function MmrChart({ points }: { points: TrendPoint[] }) {
 
 export default function PlayerProfilePage() {
   const params = useParams();
-  const router = useRouter();
   const playerId = params?.id as string;
 
   const [player, setPlayer] = useState<Player | null>(null);
@@ -447,11 +446,6 @@ export default function PlayerProfilePage() {
 
   return (
     <main className="goa-root">
-      {/* Back */}
-      <button className="goa-back" onClick={() => router.back()}>
-        <span className="goa-back-arrow">‹</span> Back
-      </button>
-
       {/* Hero */}
       <div className="goa-hero-banner">
         <div

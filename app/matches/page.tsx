@@ -380,9 +380,6 @@ export default function MatchHistoryPage() {
 
   return (
     <main className="goa-root">
-      <button className="goa-back" onClick={() => router.back()}>
-        <span className="goa-back-arrow">‹</span> Home
-      </button>
       <header className="goa-header">
         <div className="goa-crown">
           <ScrollText size={30} />

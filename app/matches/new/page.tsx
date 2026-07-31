@@ -352,9 +352,6 @@ function NewMatchPageInner() {
 
   return (
     <div className="goa-root goa-bg">
-      <button className="goa-back" onClick={() => router.back()}>
-        <span className="goa-back-arrow">‹</span> Home
-      </button>
       {/* Header */}
       <header className="goa-header">
         <h1 className="goa-title">Record of Battle</h1>

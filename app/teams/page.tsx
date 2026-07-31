@@ -475,10 +475,6 @@ export default function TeamSplitterPage() {
 
   return (
     <main className="goa-root">
-      <button className="goa-back" onClick={() => router.back()}>
-        ‹ Home
-      </button>
-
       <header className="goa-header">
         <div className="goa-crown">
           <Swords size={30} />
