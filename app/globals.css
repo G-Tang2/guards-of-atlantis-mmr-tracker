@@ -2055,6 +2055,8 @@
     object-fit: contain;
     flex-shrink: 0;
     margin-left: 0.2rem;
+    width: 24px;
+    height: 24px;
   }
   .goa-display-hero.highlight {
     color: var(--gold-light);
@@ -2328,6 +2330,8 @@
     flex-shrink: 0;
     display: flex;
     justify-self: center;
+    width: 18px;
+    height: 18px;
   }
 
   /* Role filter bar */
@@ -3299,6 +3303,7 @@
   }
   .goa-loading-emoji {
     font-size: 2rem;
+    animation: loadingPulse 1.4s ease-in-out infinite;
   }
 
   /* Full-page "loading" splash screens (icon + caption), used by every
@@ -3317,6 +3322,24 @@
     margin-bottom: 0.5rem;
     display: flex;
     justify-content: center;
+    animation: loadingPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes loadingPulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.88);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .goa-loading-icon,
+    .goa-loading-emoji {
+      animation: none;
+    }
   }
   .goa-loading-text {
     font-family: "Cinzel", serif;

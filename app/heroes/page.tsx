@@ -201,6 +201,7 @@ export default function HeroesPage() {
                     src={s.hero.icon}
                     alt={s.hero.name}
                     fill
+                    sizes="22px"
                     className="object-contain"
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).style.display =
@@ -297,7 +298,7 @@ export default function HeroesPage() {
                       alt={s.hero.name}
                       width={24}
                       height={24}
-                      className="object-contain shrink-0"
+                      className="object-contain shrink-0 size-6"
                     />
                     {s.hero.name}
                   </span>

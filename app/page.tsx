@@ -8,7 +8,14 @@ export default function Home() {
       {/* Hero */}
       <div className="goa-hero">
         <div className="goa-emblem">
-          <Image src="/goa-logo.png" alt="logo" width={300} height={225} priority/>
+          <Image
+            src="/goa-logo.png"
+            alt="logo"
+            width={300}
+            height={225}
+            className="w-[300px] h-[225px]"
+            priority
+          />
         </div>
         <p className="goa-hero-sub">MMR Tracker</p>
       </div>

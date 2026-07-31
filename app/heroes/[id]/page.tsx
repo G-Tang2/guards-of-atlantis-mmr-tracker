@@ -102,7 +102,13 @@ function TeamPanel({
               <span
                 className={`goa-display-hero ${isHighlighted ? "highlight" : ""}`}
               >
-                <Image src={playedHero.icon} alt={playedHero.name} width={24} height={24} />
+                <Image
+                  src={playedHero.icon}
+                  alt={playedHero.name}
+                  width={24}
+                  height={24}
+                  className="size-6"
+                />
                 {playedHero.name} {renderStars(playedHero.complexity)}
               </span>
             )}
@@ -279,7 +285,7 @@ export default function HeroDetailPage() {
           alt={hero.name}
           width={100}
           height={100}
-          className="object-contain shrink-0 flex justify-self-center"
+          className="object-contain shrink-0 flex justify-self-center size-25"
         />
         <h1 className="goa-title">{hero.name}</h1>
         <p className="goa-subtitle">{renderStars(hero.complexity ?? 1)}</p>
