@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { Swords, Crown, Dices, Scale } from "lucide-react";
 
 type Player = {
   id: string;
@@ -343,7 +344,9 @@ export default function TeamSplitterPage() {
     return (
       <div className="goa-root goa-loading-screen">
         <div className="goa-loading-inner">
-          <div className="goa-loading-icon">⚔️</div>
+          <div className="goa-loading-icon">
+            <Swords size={32} />
+          </div>
           <p className="goa-loading-text">Summoning players…</p>
         </div>
       </div>
@@ -357,7 +360,9 @@ export default function TeamSplitterPage() {
       </button>
 
       <header className="goa-header">
-        <div className="goa-crown">⚔️</div>
+        <div className="goa-crown">
+          <Swords size={30} />
+        </div>
         <h1 className="goa-title">Divide the Host</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
@@ -449,7 +454,9 @@ export default function TeamSplitterPage() {
           onClick={openDraft}
           disabled={!canDraft}
         >
-          <span className="goa-split-icon">👑</span>
+          <span className="goa-split-icon">
+            <Crown size={26} />
+          </span>
           Captain&apos;s Draft
         </button>
         <button
@@ -457,7 +464,9 @@ export default function TeamSplitterPage() {
           onClick={handleRandom}
           disabled={!canSplit}
         >
-          <span className="goa-split-icon">🎲</span>
+          <span className="goa-split-icon">
+            <Dices size={26} />
+          </span>
           Random
         </button>
         <button
@@ -465,7 +474,9 @@ export default function TeamSplitterPage() {
           onClick={handleBalanced}
           disabled={!canSplit}
         >
-          <span className="goa-split-icon">⚖️</span>
+          <span className="goa-split-icon">
+            <Scale size={26} />
+          </span>
           Balanced
         </button>
       </div>
@@ -479,12 +490,19 @@ export default function TeamSplitterPage() {
         <>
           <div className="goa-result">
             <div className="goa-result-head">
-              <span className="goa-result-title">
+              <span className="goa-result-title inline-flex items-center gap-1">
+                {result.mode === "balanced" ? (
+                  <Scale size={14} />
+                ) : result.mode === "draft" ? (
+                  <Crown size={14} />
+                ) : (
+                  <Dices size={14} />
+                )}
                 {result.mode === "balanced"
-                  ? "⚖️ Balanced"
+                  ? "Balanced"
                   : result.mode === "draft"
-                    ? "👑 Draft"
-                    : "🎲 Random"}{" "}
+                    ? "Draft"
+                    : "Random"}{" "}
                 Teams
               </span>
               <span className="goa-result-diff">
@@ -524,8 +542,12 @@ export default function TeamSplitterPage() {
           </div>
 
           <div className="goa-btn-wrap">
-            <button className="goa-btn" onClick={handleGoToBattle}>
-              ⚔ Begin the Battle
+            <button
+              className="goa-btn inline-flex items-center justify-center gap-2"
+              onClick={handleGoToBattle}
+            >
+              <Swords size={18} />
+              Begin the Battle
             </button>
           </div>
         </>
@@ -542,7 +564,10 @@ export default function TeamSplitterPage() {
           <div className="draft-sheet">
             {/* Header */}
             <div className="draft-head">
-              <span className="draft-head-title">👑 Captain&apos;s Draft</span>
+              <span className="draft-head-title inline-flex items-center gap-1.5">
+                <Crown size={16} />
+                Captain&apos;s Draft
+              </span>
               <button className="draft-close" onClick={closeDraft}>
                 ✕
               </button>
@@ -556,10 +581,11 @@ export default function TeamSplitterPage() {
                 </p>
 
                 <button
-                  className="draft-random-btn"
+                  className="draft-random-btn inline-flex items-center justify-center gap-1.5"
                   onClick={randomiseCaptains}
                 >
-                  🎲 Randomise Captains
+                  <Dices size={16} />
+                  Randomise Captains
                 </button>
 
                 <div className="draft-captain-grid">
@@ -679,12 +705,16 @@ export default function TeamSplitterPage() {
 
                     {/* VS spinner */}
                     {!coinWinner && (
-                      <span className="draft-coin-vs">⚔</span>
+                      <span className="draft-coin-vs">
+                        <Swords size={24} />
+                      </span>
                     )}
 
                     {/* Winner crown between them */}
                     {coinWinner && (
-                      <span className="draft-coin-crown">👑</span>
+                      <span className="draft-coin-crown">
+                        <Crown size={30} />
+                      </span>
                     )}
 
                     {/* Titans captain */}
@@ -791,7 +821,7 @@ export default function TeamSplitterPage() {
                         {members.map((p, i) => (
                           <div key={p.id} className="draft-live-row">
                             <span className="draft-live-num">
-                              {i === 0 ? "👑" : i + 1}
+                              {i === 0 ? <Crown size={11} /> : i + 1}
                             </span>
                             <PlayerAvatar
                               avatarUrl={p.avatar_url}

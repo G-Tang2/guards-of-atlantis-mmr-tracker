@@ -14,6 +14,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
+import { Swords, Loader2 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -427,7 +428,9 @@ export default function PlayerProfilePage() {
     return (
       <div className="goa-root">
         <div className="goa-loading">
-          <div className="goa-loading-emoji">⚔️</div>
+          <div className="goa-loading-emoji">
+            <Swords size={28} />
+          </div>
           <p>Consulting the archives…</p>
         </div>
       </div>
@@ -461,7 +464,11 @@ export default function PlayerProfilePage() {
             size={80}
             borderColor="var(--gold)"
           />
-          {avatarUploading && <div className="goa-avatar-uploading">⏳</div>}
+          {avatarUploading && (
+            <div className="goa-avatar-uploading">
+              <Loader2 size={22} className="animate-spin" />
+            </div>
+          )}
 
           {/* Always visible semi-opaque helper badge */}
           <div className="goa-avatar-edit-btn">

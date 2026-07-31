@@ -6,6 +6,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { didWin } from "@/lib/match";
+import { Trophy, Medal, Shield, Swords } from "lucide-react";
 
 type Player = {
   id: string;
@@ -313,7 +314,6 @@ export default function LeaderboardPage() {
 
   const top3 = sorted.slice(0, 3);
   const plinthClass = ["first", "second", "third"];
-  const medalEmoji = ["🥇", "🥈", "🥉"];
   const sortCols: { key: SortKey; label: string }[] = [
     { key: "rank", label: "Rank" },
     { key: "mmr", label: "MMR" },
@@ -329,7 +329,9 @@ export default function LeaderboardPage() {
     return (
       <div className="goa-root goa-loading-screen">
         <div className="goa-loading-inner">
-          <div className="goa-loading-icon">🏆</div>
+          <div className="goa-loading-icon">
+            <Trophy size={32} />
+          </div>
           <p className="goa-loading-text">Tallying the honours…</p>
         </div>
       </div>
@@ -342,7 +344,9 @@ export default function LeaderboardPage() {
         <span className="goa-back-arrow">‹</span> Home
       </button>
       <header className="goa-header">
-        <div className="goa-crown">🏆</div>
+        <div className="goa-crown">
+          <Trophy size={30} />
+        </div>
         <h1 className="goa-title">Hall of Honour</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
@@ -375,7 +379,9 @@ export default function LeaderboardPage() {
                 <span className="goa-podium-name">{p.name}</span>
                 <span className="goa-podium-mmr">{p.mmr} MMR</span>
                 <div className={`goa-podium-plinth ${cls}`}>
-                  <span className="goa-podium-medal">{medalEmoji[idx]}</span>
+                  <span className="goa-podium-medal">
+                    <Medal size={20} />
+                  </span>
                 </div>
               </div>
             );
@@ -470,19 +476,18 @@ export default function LeaderboardPage() {
               onClick={() => goToProfile(p.id)}
             >
               <span className={`goa-cell-rank ${rankCls}`}>
-                {rank === 1
-                  ? "🥇"
-                  : rank === 2
-                    ? "🥈"
-                    : rank === 3
-                      ? "🥉"
-                      : `#${rank}`}
+                {rank <= 3 ? (
+                  <Medal size={14} className="inline-block align-middle" />
+                ) : (
+                  `#${rank}`
+                )}
                 {hasShield && (
                   <span
                     className="goa-rank-badge"
                     title={`Protected: the player below has higher MMR but hasn't beaten this player head-to-head. Becomes inactive (and loses protection) in ${gamesUntilInactive} more game${gamesUntilInactive === 1 ? "" : "s"} if they don't play.`}
                   >
-                    🛡️{gamesUntilInactive}
+                    <Shield size={11} className="inline-block align-text-bottom" />
+                    {gamesUntilInactive}
                   </span>
                 )}
                 {needsSword && (
@@ -490,7 +495,7 @@ export default function LeaderboardPage() {
                     className="goa-rank-badge"
                     title="Blocked: has higher MMR than the player above but must beat them to claim this rank"
                   >
-                    ⚔️
+                    <Swords size={11} className="inline-block align-text-bottom" />
                   </span>
                 )}
               </span>

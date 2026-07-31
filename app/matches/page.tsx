@@ -6,6 +6,7 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
+import { ScrollText, Swords } from "lucide-react";
 
 type Player = {
   id: string;
@@ -368,7 +369,9 @@ export default function MatchHistoryPage() {
     return (
       <div className="goa-root goa-loading-screen">
         <div className="goa-loading-inner">
-          <div className="goa-loading-icon">📜</div>
+          <div className="goa-loading-icon">
+            <ScrollText size={32} />
+          </div>
           <p className="goa-loading-text">Consulting the archives…</p>
         </div>
       </div>
@@ -381,7 +384,9 @@ export default function MatchHistoryPage() {
         <span className="goa-back-arrow">‹</span> Home
       </button>
       <header className="goa-header">
-        <div className="goa-crown">📜</div>
+        <div className="goa-crown">
+          <ScrollText size={30} />
+        </div>
         <h1 className="goa-title">Battle Archives</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
@@ -393,7 +398,7 @@ export default function MatchHistoryPage() {
           value={filterPlayerId}
           onChange={(e) => setFilterPlayerId(e.target.value)}
         >
-          <option value="">⚔ All Players</option>
+          <option value="">All Players</option>
           {[...players].sort(sortByName).map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -446,7 +451,9 @@ export default function MatchHistoryPage() {
       <div className="goa-matches">
         {matches.length === 0 && (
           <div className="goa-empty">
-            <div className="goa-empty-icon">⚔</div>
+            <div className="goa-empty-icon">
+              <Swords size={34} />
+            </div>
             <p>No battles recorded</p>
           </div>
         )}

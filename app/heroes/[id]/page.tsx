@@ -8,6 +8,7 @@ import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import Image from "next/image";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
+import { Swords, Shield, ScrollText, ChartNoAxesCombined } from "lucide-react";
 
 type Player = {
   id: string;
@@ -232,7 +233,9 @@ export default function HeroDetailPage() {
     return (
       <div className="goa-root goa-loading-screen">
         <div className="goa-loading-inner">
-          <div className="goa-loading-icon">⚔</div>
+          <div className="goa-loading-icon">
+            <Swords size={30} />
+          </div>
           <p className="goa-loading-text wide">Hero not found</p>
         </div>
       </div>
@@ -243,7 +246,9 @@ export default function HeroDetailPage() {
     return (
       <div className="goa-root goa-loading-screen">
         <div className="goa-loading-inner">
-          <div className="goa-loading-icon">🦸</div>
+          <div className="goa-loading-icon">
+            <ChartNoAxesCombined size={30} />
+          </div>
           <p className="goa-loading-text wide">Consulting the chronicles…</p>
         </div>
       </div>
@@ -324,7 +329,7 @@ export default function HeroDetailPage() {
       {stats.players.length > 0 && (
         <div className="goa-stats-card tight-top">
           <div className="goa-stats-head">
-            <span>⚔</span> Played by
+            <Swords size={14} /> Played by
           </div>
           <div className="goa-hero-players-list">
             {stats.players.map(({ player, wins, losses }) => {
@@ -363,13 +368,15 @@ export default function HeroDetailPage() {
 
       {/* Match history for this hero */}
       <div className="goa-match-history-header">
-        <span>📜</span> Match History
+        <ScrollText size={14} /> Match History
       </div>
 
       <div className="goa-matches">
         {matches.length === 0 && (
           <div className="goa-empty">
-            <div className="goa-empty-icon">⚔</div>
+            <div className="goa-empty-icon">
+              <Swords size={34} />
+            </div>
             <p>No matches recorded</p>
           </div>
         )}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Swords, ScrollText, Trophy, Users, Shield, ChartNoAxesCombined } from "lucide-react";
 
 export default function Home() {
   return (
@@ -19,7 +20,9 @@ export default function Home() {
             <div className="goa-nav-accent" />
             <div className="goa-nav-inner">
               <div className="goa-nav-left">
-                <span className="goa-nav-icon">⚔️</span>
+                <span className="goa-nav-icon">
+                  <Swords size={22} />
+                </span>
                 <div className="goa-nav-text">
                   <span className="goa-nav-label">Record Battle</span>
                   <span className="goa-nav-desc">Log a new match result</span>
@@ -35,7 +38,9 @@ export default function Home() {
             <div className="goa-nav-accent" />
             <div className="goa-nav-inner">
               <div className="goa-nav-left">
-                <span className="goa-nav-icon">📜</span>
+                <span className="goa-nav-icon">
+                  <ScrollText size={22} />
+                </span>
                 <div className="goa-nav-text">
                   <span className="goa-nav-label">Battle Archives</span>
                   <span className="goa-nav-desc">Browse match history</span>
@@ -51,7 +56,9 @@ export default function Home() {
             <div className="goa-nav-accent" />
             <div className="goa-nav-inner">
               <div className="goa-nav-left">
-                <span className="goa-nav-icon">🏆</span>
+                <span className="goa-nav-icon">
+                  <Trophy size={22} />
+                </span>
                 <div className="goa-nav-text">
                   <span className="goa-nav-label">Hall of Honour</span>
                   <span className="goa-nav-desc">MMR rankings & stats</span>
@@ -66,7 +73,9 @@ export default function Home() {
             <div className="goa-nav-accent" />
             <div className="goa-nav-inner">
               <div className="goa-nav-left">
-                <span className="goa-nav-icon">👥</span>
+                <span className="goa-nav-icon">
+                  <Users size={22} />
+                </span>
                 <div className="goa-nav-text">
                   <span className="goa-nav-label">Assemble Teams</span>
                   <span className="goa-nav-desc">
@@ -83,7 +92,9 @@ export default function Home() {
             <div className="goa-nav-accent" />
             <div className="goa-nav-inner">
               <div className="goa-nav-left">
-                <span className="goa-nav-icon">🦸</span>
+                <span className="goa-nav-icon">
+                  <ChartNoAxesCombined size={22} />
+                </span>
                 <div className="goa-nav-text">
                   <span className="goa-nav-label">Hero Compendium</span>
                   <span className="goa-nav-desc">

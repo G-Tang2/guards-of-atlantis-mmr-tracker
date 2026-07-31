@@ -7,6 +7,7 @@ import { calculateMMR } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
 import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { Swords } from "lucide-react";
 
 type Player = {
   id: string;
@@ -318,7 +319,7 @@ function NewMatchPageInner() {
       // Refresh the co-played materialized view so protected ranking is current
       await supabaseClient.rpc("refresh_player_co_played");
 
-      showToast("⚔ Victory inscribed in the archives");
+      showToast("Victory inscribed in the archives");
       setAtlantis([]);
       setTitans([]);
       setWinner("");
@@ -338,7 +339,9 @@ function NewMatchPageInner() {
     return (
       <div className="goa-root goa-bg goa-loading-screen">
         <div className="goa-loading-inner">
-          <div className="goa-loading-icon">⚔️</div>
+          <div className="goa-loading-icon">
+            <Swords size={30} />
+          </div>
           <p className="goa-loading-text xl">Loading existing players…</p>
         </div>
       </div>
@@ -379,7 +382,8 @@ function NewMatchPageInner() {
                 className="goa-battle-option"
                 onClick={() => addPlayer(p.name, "atlantis")}
               >
-                ⚔ {p.name}
+                <Swords size={14} className="inline-block align-text-bottom" />{" "}
+                {p.name}
               </button>
             ))}
             {filterPlayers(availablePlayers, atlantisSearch).length === 0 && (
@@ -448,7 +452,8 @@ function NewMatchPageInner() {
                 className="goa-battle-option"
                 onClick={() => addPlayer(p.name, "titans")}
               >
-                ⚔ {p.name}
+                <Swords size={14} className="inline-block align-text-bottom" />{" "}
+                {p.name}
               </button>
             ))}
             {filterPlayers(availablePlayers, titansSearch).length === 0 && (
@@ -575,11 +580,18 @@ function NewMatchPageInner() {
       {/* Save */}
       <div className="goa-btn-wrap">
         <button
-          className="goa-btn"
+          className="goa-btn inline-flex items-center justify-center gap-2"
           onClick={handleSave}
           disabled={!canSave || saving}
         >
-          {saving ? "✦ Inscribing…" : "⚔ Inscribe to the Archives"}
+          {saving ? (
+            "✦ Inscribing…"
+          ) : (
+            <>
+              <Swords size={18} />
+              Inscribe to the Archives
+            </>
+          )}
         </button>
       </div>
 

@@ -7,6 +7,7 @@ import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES, Hero } from "@/lib/heroes";
 import { didWin, renderStars } from "@/lib/match";
+import { Coins, ChartNoAxesCombined } from "lucide-react";
 
 type RawMatch = {
   id: string;
@@ -153,7 +154,9 @@ export default function HeroesPage() {
     return (
       <div className="goa-root goa-loading-screen">
         <div className="goa-loading-inner">
-          <div className="goa-loading-icon">🦸</div>
+          <div className="goa-loading-icon">
+            <ChartNoAxesCombined size={32} />
+          </div>
           <p className="goa-loading-text wide">Gathering hero stats…</p>
         </div>
       </div>
@@ -175,7 +178,10 @@ export default function HeroesPage() {
       {forgottenHeroes.length > 0 && (
         <div className="goa-bounty-section">
           <div className="goa-bounty-header">
-            <div>💰 Bounty Heroes</div>
+            <div className="inline-flex items-center gap-1.5">
+              <Coins size={16} />
+              Bounty Heroes
+            </div>
             <div className="goa-bounty-header-sub">
               <span>
                 Not picked in {threshold}+ games · Bonus 5 MMR awarded on play
@@ -218,7 +224,7 @@ export default function HeroesPage() {
 
       {/* Hero table title */}
       <div className="goa-match-history-header lg">
-        <span>🦸</span> Hero Statistics
+        <ChartNoAxesCombined size={16} /> Hero Statistics
       </div>
 
       {/* Sort pills */}

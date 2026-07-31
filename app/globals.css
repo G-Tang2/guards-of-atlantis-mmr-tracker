@@ -910,6 +910,16 @@
 
   .goa-podium-medal {
     font-size: 1.5rem; /* Increased from 1.4rem */
+    display: flex;
+  }
+  .goa-podium-plinth.first .goa-podium-medal {
+    color: var(--gold-light);
+  }
+  .goa-podium-plinth.second .goa-podium-medal {
+    color: #c0c0c0;
+  }
+  .goa-podium-plinth.third .goa-podium-medal {
+    color: #cd7f32;
   }
   .goa-podium-rank {
     font-family: "Cinzel", serif;
@@ -2127,6 +2137,8 @@
   .goa-empty .goa-empty-icon {
     font-size: 2.15rem; /* Increased from 2rem */
     margin-bottom: 0.75rem;
+    display: flex;
+    justify-content: center;
     opacity: 0.5;
   }
 
@@ -3127,7 +3139,8 @@
 
   .goa-split-icon {
     font-size: 1.5rem;
-    display: block;
+    display: flex;
+    justify-content: center;
     margin-bottom: 0.3rem;
   }
   .goa-split-desc {
@@ -3302,6 +3315,8 @@
   .goa-loading-icon {
     font-size: 2rem;
     margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: center;
   }
   .goa-loading-text {
     font-family: "Cinzel", serif;
@@ -3803,6 +3818,8 @@
     width: 14px;
     text-align: center;
     flex-shrink: 0;
+    display: flex;
+    justify-content: center;
   }
   .draft-live-name {
     font-family: "Crimson Pro", serif;
