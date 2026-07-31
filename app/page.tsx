@@ -116,7 +116,9 @@ export default function Home() {
   };
 
   return (
-    <main className="goa-root goa-home-root">
+    <main
+      className={`goa-root goa-home-root ${expanded ? "updates-expanded" : ""}`}
+    >
       {/* Hero */}
       <div className="goa-hero">
         <div className="goa-emblem">

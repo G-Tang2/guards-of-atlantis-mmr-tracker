@@ -1486,6 +1486,17 @@
     );
     min-height: 0;
   }
+  /* Once the update feed is expanded, let the window actually grow
+     instead of staying pinned to viewport height with an inner
+     scrollbar — swap the hard height for a floor so content can push
+     the page taller and the page itself scrolls, same as every other
+     route. */
+  .goa-home-root.updates-expanded {
+    height: auto;
+    min-height: calc(
+      100dvh - env(safe-area-inset-top) - 56px - env(safe-area-inset-bottom)
+    );
+  }
 
   .goa-hero::after {
     content: "";
