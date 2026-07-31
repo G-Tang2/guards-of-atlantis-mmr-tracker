@@ -16,12 +16,18 @@ const crimsonPro = Crimson_Pro({
 export const metadata: Metadata = {
   title: "Guards of Atlantis MMR Tracker",
   description: "Track match results and MMR for Guards of Atlantis II.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "GoA MMR Tracker",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#1c1a14",
 };
 
 export default function RootLayout({
