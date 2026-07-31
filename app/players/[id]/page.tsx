@@ -10,11 +10,12 @@ import {
   useState,
 } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { Swords, Loader2 } from "lucide-react";
+import { Swords, Loader2, X, Camera } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -185,6 +186,167 @@ function MmrChart({ points }: { points: TrendPoint[] }) {
   );
 }
 
+// ─── Tag-style player filter (type to search, click to add a badge) ──────────
+
+function PlayerTagFilter({
+  placeholder,
+  options,
+  selected,
+  onToggle,
+  emptyMessage,
+}: {
+  placeholder: string;
+  options: Player[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  emptyMessage: string;
+}) {
+  const [search, setSearch] = useState("");
+  const [focused, setFocused] = useState(false);
+
+  const selectedPlayers = selected
+    .map((id) => options.find((p) => p.id === id))
+    .filter((p): p is Player => !!p);
+
+  const suggestions = options.filter(
+    (p) =>
+      !selected.includes(p.id) &&
+      p.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  return (
+    <div className="goa-multiselect">
+      <div className="goa-filter-input-row">
+        {selectedPlayers.map((p) => (
+          <span key={p.id} className="goa-filter-badge">
+            {p.name}
+            <button
+              type="button"
+              className="goa-filter-badge-remove"
+              onClick={() => onToggle(p.id)}
+            >
+              <X size={10} />
+            </button>
+          </span>
+        ))}
+        <input
+          className="goa-filter-input"
+          placeholder={selectedPlayers.length === 0 ? placeholder : "Add another…"}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+      </div>
+      {focused && options.length > 0 && (
+        <div className="goa-multiselect-panel">
+          {suggestions.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="goa-multiselect-option"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onToggle(p.id);
+                setSearch("");
+              }}
+            >
+              {p.name}
+            </button>
+          ))}
+          {suggestions.length === 0 && (
+            <p className="goa-pool-empty">No matches</p>
+          )}
+        </div>
+      )}
+      {options.length === 0 && (
+        <p className="goa-pool-empty">{emptyMessage}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Tag-style hero filter (type to search, click to select a single hero) ───
+
+function HeroTagFilter({
+  placeholder,
+  options,
+  selectedId,
+  onSelect,
+  onClear,
+  emptyMessage,
+}: {
+  placeholder: string;
+  options: Hero[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  onClear: () => void;
+  emptyMessage: string;
+}) {
+  const [search, setSearch] = useState("");
+  const [focused, setFocused] = useState(false);
+
+  const selectedHero = options.find((h) => h.id === selectedId) ?? null;
+
+  const suggestions = options.filter(
+    (h) =>
+      h.id !== selectedId && h.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  return (
+    <div className="goa-multiselect">
+      <div className="goa-filter-input-row">
+        {selectedHero && (
+          <span className="goa-filter-badge">
+            {selectedHero.name}
+            <button
+              type="button"
+              className="goa-filter-badge-remove"
+              onClick={onClear}
+            >
+              <X size={10} />
+            </button>
+          </span>
+        )}
+        {!selectedHero && (
+          <input
+            className="goa-filter-input"
+            placeholder={placeholder}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+          />
+        )}
+      </div>
+      {focused && !selectedHero && options.length > 0 && (
+        <div className="goa-multiselect-panel">
+          {suggestions.map((h) => (
+            <button
+              key={h.id}
+              type="button"
+              className="goa-multiselect-option"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onSelect(h.id);
+                setSearch("");
+              }}
+            >
+              {h.name}
+            </button>
+          ))}
+          {suggestions.length === 0 && (
+            <p className="goa-pool-empty">No matches</p>
+          )}
+        </div>
+      )}
+      {options.length === 0 && (
+        <p className="goa-pool-empty">{emptyMessage}</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PlayerProfilePage() {
@@ -201,6 +363,30 @@ export default function PlayerProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // History tab: pagination + filters
+  const HISTORY_PAGE_SIZE = 10;
+  const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE);
+  const [heroFilter, setHeroFilter] = useState("");
+  const [withFilter, setWithFilter] = useState<string[]>([]);
+  const [againstFilter, setAgainstFilter] = useState<string[]>([]);
+
+  const updateHeroFilter = (v: string) => {
+    setHeroFilter(v);
+    setHistoryLimit(HISTORY_PAGE_SIZE);
+  };
+  const toggleWithFilter = (id: string) => {
+    setWithFilter((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+    setHistoryLimit(HISTORY_PAGE_SIZE);
+  };
+  const toggleAgainstFilter = (id: string) => {
+    setAgainstFilter((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+    setHistoryLimit(HISTORY_PAGE_SIZE);
+  };
+
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !player) return;
@@ -209,7 +395,7 @@ export default function PlayerProfilePage() {
       const url = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (ev) => {
-          const img = new Image();
+          const img = new window.Image();
           img.onload = () => {
             const SIZE = 200;
             const canvas = document.createElement("canvas");
@@ -424,6 +610,57 @@ export default function PlayerProfilePage() {
       .sort((a, b) => b.played - a.played);
   }, [myMatches, playerId]);
 
+  // ── History filters ──────────────────────────────────────────────────────────
+
+  const playedWithOptions = useMemo(
+    () =>
+      h2hStats
+        .filter((e) => e.withMatches > 0)
+        .map((e) => e.opponent)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [h2hStats],
+  );
+
+  const playedAgainstOptions = useMemo(
+    () =>
+      h2hStats
+        .filter((e) => e.againstMatches > 0)
+        .map((e) => e.opponent)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [h2hStats],
+  );
+
+  const filteredMatches = useMemo(() => {
+    if (!heroFilter && withFilter.length === 0 && againstFilter.length === 0)
+      return myMatches;
+    return myMatches.filter((m) => {
+      const me = m.match_players.find((mp) => mp.player_id === playerId);
+      if (!me) return false;
+      if (heroFilter && me.hero_id !== heroFilter) return false;
+      if (
+        withFilter.length > 0 &&
+        !withFilter.every((id) =>
+          m.match_players.some(
+            (mp) => mp.player_id === id && mp.team === me.team,
+          ),
+        )
+      )
+        return false;
+      if (
+        againstFilter.length > 0 &&
+        !againstFilter.every((id) =>
+          m.match_players.some(
+            (mp) => mp.player_id === id && mp.team !== me.team,
+          ),
+        )
+      )
+        return false;
+      return true;
+    });
+  }, [myMatches, playerId, heroFilter, withFilter, againstFilter]);
+
+  const visibleMatches = filteredMatches.slice(0, historyLimit);
+
   if (loading || !player) {
     return (
       <div className="goa-root">
@@ -467,7 +704,7 @@ export default function PlayerProfilePage() {
 
           {/* Always visible semi-opaque helper badge */}
           <div className="goa-avatar-edit-btn">
-            <span className="goa-avatar-edit-icon"></span>
+            <Camera size={10} className="goa-avatar-edit-icon" />
             <span className="goa-avatar-edit-text">Edit</span>
           </div>
         </div>
@@ -566,11 +803,43 @@ export default function PlayerProfilePage() {
         <div className="goa-profile-section">
           <div className="goa-profile-sec-head">Recent Battles</div>
 
+          {myMatches.length > 0 && (
+            <div className="goa-history-filters">
+              <HeroTagFilter
+                placeholder="Hero played…"
+                options={[...heroStats]
+                  .map((hs) => hs.hero)
+                  .sort((a, b) => a.name.localeCompare(b.name))}
+                selectedId={heroFilter}
+                onSelect={updateHeroFilter}
+                onClear={() => updateHeroFilter("")}
+                emptyMessage="No heroes played yet"
+              />
+              <PlayerTagFilter
+                placeholder="Played with…"
+                options={playedWithOptions}
+                selected={withFilter}
+                onToggle={toggleWithFilter}
+                emptyMessage="No teammates yet"
+              />
+              <PlayerTagFilter
+                placeholder="Played against…"
+                options={playedAgainstOptions}
+                selected={againstFilter}
+                onToggle={toggleAgainstFilter}
+                emptyMessage="No opponents yet"
+              />
+            </div>
+          )}
+
           {myMatches.length === 0 && (
             <p className="goa-empty-note">No battles on record</p>
           )}
+          {myMatches.length > 0 && filteredMatches.length === 0 && (
+            <p className="goa-empty-note">No battles match these filters</p>
+          )}
 
-          {myMatches.map((m) => {
+          {visibleMatches.map((m) => {
             const me = m.match_players.find((mp) => mp.player_id === playerId);
             if (!me) return null;
             const won = didWin(me.team, m.winner);
@@ -644,6 +913,25 @@ export default function PlayerProfilePage() {
               </div>
             );
           })}
+
+          {filteredMatches.length > 0 && (
+            <div className="goa-pagination">
+              <p className="goa-pagination-count">
+                Showing {visibleMatches.length} of {filteredMatches.length}{" "}
+                battles
+              </p>
+              {historyLimit < filteredMatches.length && (
+                <button
+                  className="goa-load-more"
+                  onClick={() =>
+                    setHistoryLimit((n) => n + HISTORY_PAGE_SIZE)
+                  }
+                >
+                  Load 10 More
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -665,6 +953,14 @@ export default function PlayerProfilePage() {
                 className="goa-hero-stat-row clickable"
                 onClick={() => router.push(`/heroes/${hs.hero.id}`)}
               >
+                <div className="goa-hero-stat-icon">
+                  <Image
+                    src={hs.hero.icon}
+                    alt={hs.hero.name}
+                    width={36}
+                    height={36}
+                  />
+                </div>
                 <div className="goa-hero-stat-info">
                   <div className="goa-hero-stat-hero-info">
                     <div className="goa-hero-stat-name">{hs.hero.name}</div>
@@ -720,7 +1016,11 @@ export default function PlayerProfilePage() {
                 : Math.round((entry.againstWins / entry.againstMatches) * 100);
 
             return (
-              <div key={entry.opponent.id} className="goa-h2h-row">
+              <div
+                key={entry.opponent.id}
+                className="goa-h2h-row clickable"
+                onClick={() => router.push(`/players/${entry.opponent.id}`)}
+              >
                 <div className="goa-h2h-name">
                   <span className="goa-h2h-name-row">
                     <PlayerAvatar
