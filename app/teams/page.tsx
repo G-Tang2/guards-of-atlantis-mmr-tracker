@@ -4,7 +4,18 @@ import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
-import { Swords, Crown, Dices, Scale } from "lucide-react";
+import { Swords, Crown, Dices, Scale, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 
 type Player = {
   id: string;
@@ -13,14 +24,12 @@ type Player = {
   avatar_url?: string | null;
 };
 
-type SplitResult = {
-  atlantis: Player[];
-  titans: Player[];
-  atlantisAvg: number;
-  titansAvg: number;
-  diff: number;
-  mode: "random" | "balanced" | "draft";
-} | null;
+// The three places a player can sit: unassigned, or on one of the two
+// teams. Players move freely between all three via drag-and-drop.
+type Column = "pool" | "atlantis" | "titans";
+type Columns = Record<Column, Player[]>;
+
+type Split = { atlantis: Player[]; titans: Player[] };
 
 // ── Draft types ───────────────────────────────────────────────────────────────
 
@@ -56,22 +65,13 @@ const shuffle = <T,>(arr: T[]): T[] => {
   return result;
 };
 
-const randomSplit = (pool: Player[]): SplitResult => {
+const randomSplit = (pool: Player[]): Split => {
   const shuffled = shuffle(pool);
   const mid = Math.ceil(shuffled.length / 2);
-  const atlantis = shuffled.slice(0, mid);
-  const titans = shuffled.slice(mid);
-  return {
-    atlantis,
-    titans,
-    atlantisAvg: avg(atlantis),
-    titansAvg: avg(titans),
-    diff: Math.abs(avg(atlantis) - avg(titans)),
-    mode: "random",
-  };
+  return { atlantis: shuffled.slice(0, mid), titans: shuffled.slice(mid) };
 };
 
-const balancedSplit = (pool: Player[]): SplitResult => {
+const balancedSplit = (pool: Player[]): Split => {
   const n = pool.length;
   const totalMMR = pool.reduce((s, p) => s + p.mmr, 0);
   let bestDiff = Infinity;
@@ -101,14 +101,7 @@ const balancedSplit = (pool: Player[]): SplitResult => {
     (bestMask & (1 << i) ? atlantis : titans).push(pool[i]);
   }
 
-  return {
-    atlantis,
-    titans,
-    atlantisAvg: avg(atlantis),
-    titansAvg: avg(titans),
-    diff: Math.abs(avg(atlantis) - avg(titans)),
-    mode: "balanced",
-  };
+  return { atlantis, titans };
 };
 
 // Snake pick order: 1,2,2,1,1,2,2,1… (first pick alternates every two picks)
@@ -122,22 +115,141 @@ const snakeFaction = (
   return Math.floor(pickNumber / 2) % 2 === 0 ? firstPick : second;
 };
 
+// ── Drag-and-drop: move a player between the Pool, Atlantis and Titans ────────
+
+function DraggablePlayerRow({
+  player,
+  column,
+  onRemove,
+}: {
+  player: Player;
+  column: Column;
+  onRemove: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: player.id, data: { column } });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`goa-result-player draggable ${isDragging ? "dragging" : ""}`}
+      style={{
+        transform: transform ? CSS.Translate.toString(transform) : undefined,
+      }}
+    >
+      <span
+        className="goa-result-player-grab"
+        {...listeners}
+        {...attributes}
+      >
+        <GripVertical size={14} className="goa-result-player-grip" />
+        <PlayerAvatar
+          avatarUrl={player.avatar_url}
+          name={player.name}
+          size={20}
+        />
+        <span className="goa-result-player-name">{player.name}</span>
+      </span>
+      <span className="goa-result-player-mmr">{player.mmr} MMR</span>
+      <button
+        className="goa-remove"
+        onClick={() => onRemove(player.id)}
+        aria-label={`Remove ${player.name}`}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function DroppableColumn({
+  column,
+  label,
+  labelClass,
+  avgMmr,
+  emptyHint,
+  members,
+  onRemove,
+}: {
+  column: Column;
+  label: string;
+  labelClass?: string;
+  avgMmr?: number;
+  emptyHint: string;
+  members: Player[];
+  onRemove: (id: string) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: column });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`goa-result-team ${isOver ? "drag-over" : ""}`}
+    >
+      <div className={`goa-result-team-head ${labelClass ?? ""}`}>
+        {label}
+      </div>
+      {avgMmr !== undefined && (
+        <div className="goa-result-avg">Avg {avgMmr} MMR</div>
+      )}
+      {members.length === 0 && <p className="goa-pool-empty">{emptyHint}</p>}
+      {members.map((p) => (
+        <DraggablePlayerRow
+          key={p.id}
+          player={p}
+          column={column}
+          onRemove={onRemove}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function TeamSplitterPage() {
   const router = useRouter();
 
-  // Pool state
+  // Roster data
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [pool, setPool] = useState<Player[]>([]);
 
-  // Split result
-  const [result, setResult] = useState<SplitResult>(null);
+  // The merged pool + teams table — every summoned player lives in
+  // exactly one of these three columns at all times.
+  const [columns, setColumns] = useState<Columns>({
+    pool: [],
+    atlantis: [],
+    titans: [],
+  });
 
   // Draft modal
   const [draftOpen, setDraftOpen] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [coinWinner, setCoinWinner] = useState<"atlantis" | "titans" | null>(null);
+
+  // Drag-and-drop: require a small movement before a drag starts, so it
+  // doesn't hijack a plain tap/scroll on the rows.
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const from = active.data.current?.column as Column | undefined;
+    const to = over.id as Column;
+    if (!from || from === to) return;
+
+    const playerId = active.id as string;
+    setColumns((prev) => {
+      const player = prev[from].find((p) => p.id === playerId);
+      if (!player) return prev;
+      return {
+        ...prev,
+        [from]: prev[from].filter((p) => p.id !== playerId),
+        [to]: [...prev[to], player],
+      };
+    });
+  };
 
   useEffect(() => {
     supabaseClient
@@ -150,9 +262,11 @@ export default function TeamSplitterPage() {
       });
   }, []);
 
+  const allAdded = [...columns.pool, ...columns.atlantis, ...columns.titans];
+
   const available = allPlayers.filter(
     (p) =>
-      !pool.some((x) => x.id === p.id) &&
+      !allAdded.some((x) => x.id === p.id) &&
       p.name.toLowerCase().includes(search.toLowerCase()),
   );
 
@@ -172,29 +286,42 @@ export default function TeamSplitterPage() {
       (p) => p.name.toLowerCase() === name.trim().toLowerCase(),
     );
     const player = existing ?? (await upsertPlayer(name.trim()));
-    if (!pool.some((p) => p.id === player.id)) {
-      setPool((prev) => [...prev, player]);
-      if (!allPlayers.some((p) => p.id === player.id))
-        setAllPlayers((prev) => [...prev, player]);
-    }
+    setColumns((prev) => {
+      const already = [...prev.pool, ...prev.atlantis, ...prev.titans].some(
+        (p) => p.id === player.id,
+      );
+      return already ? prev : { ...prev, pool: [...prev.pool, player] };
+    });
+    if (!allPlayers.some((p) => p.id === player.id))
+      setAllPlayers((prev) => [...prev, player]);
     setSearch("");
-    setResult(null);
   };
 
-  const removeFromPool = (id: string) => {
-    setPool((prev) => prev.filter((p) => p.id !== id));
-    setResult(null);
+  const removePlayer = (id: string) => {
+    setColumns((prev) => ({
+      pool: prev.pool.filter((p) => p.id !== id),
+      atlantis: prev.atlantis.filter((p) => p.id !== id),
+      titans: prev.titans.filter((p) => p.id !== id),
+    }));
   };
 
   // ── Split handlers ──────────────────────────────────────────────────────────
 
-  const handleRandom = () => setResult(randomSplit(pool));
-  const handleBalanced = () => setResult(balancedSplit(pool));
+  const handleRandom = () => {
+    const { atlantis, titans } = randomSplit(allAdded);
+    setColumns({ pool: [], atlantis, titans });
+  };
+  const handleBalanced = () => {
+    const { atlantis, titans } = balancedSplit(allAdded);
+    setColumns({ pool: [], atlantis, titans });
+  };
+
+  const canBattle = columns.atlantis.length > 0 && columns.titans.length > 0;
 
   const handleGoToBattle = () => {
-    if (!result) return;
-    const atlantisIds = result.atlantis.map((p) => p.id).join(",");
-    const titansIds = result.titans.map((p) => p.id).join(",");
+    if (!canBattle) return;
+    const atlantisIds = columns.atlantis.map((p) => p.id).join(",");
+    const titansIds = columns.titans.map((p) => p.id).join(",");
     router.push(`/matches/new?atlantis=${atlantisIds}&titans=${titansIds}`);
   };
 
@@ -240,7 +367,7 @@ export default function TeamSplitterPage() {
   };
 
   const randomiseCaptains = () => {
-    const [a, b] = shuffle(pool);
+    const [a, b] = shuffle(allAdded);
     setDraft((prev) =>
       prev ? { ...prev, captainAtlantis: a, captainTitans: b } : prev,
     );
@@ -260,7 +387,7 @@ export default function TeamSplitterPage() {
       draft.captainAtlantis.id,
       draft.captainTitans.id,
     ]);
-    const remaining = pool.filter((p) => !captainIds.has(p.id));
+    const remaining = allAdded.filter((p) => !captainIds.has(p.id));
 
     // Store the resolved draft ready to begin, but show coin flip first
     setCoinWinner(null);
@@ -326,19 +453,12 @@ export default function TeamSplitterPage() {
 
   const confirmDraft = () => {
     if (!draft || draft.phase !== "complete") return;
-    setResult({
-      atlantis: draft.atlantis,
-      titans: draft.titans,
-      atlantisAvg: avg(draft.atlantis),
-      titansAvg: avg(draft.titans),
-      diff: Math.abs(avg(draft.atlantis) - avg(draft.titans)),
-      mode: "draft",
-    });
+    setColumns({ pool: [], atlantis: draft.atlantis, titans: draft.titans });
     closeDraft();
   };
 
-  const canSplit = pool.length >= 2;
-  const canDraft = pool.length >= 3; // need at least 2 captains + 1 player
+  const canSplit = allAdded.length >= 2;
+  const canDraft = allAdded.length >= 3; // need at least 2 captains + 1 player
 
   if (loading) {
     return (
@@ -367,12 +487,12 @@ export default function TeamSplitterPage() {
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
 
-      {/* Player pool */}
+      {/* Assemble Teams — merged pool + team table */}
       <div className="goa-card">
         <div className="goa-card-head">
-          Player Pool
-          {pool.length > 0 && (
-            <span className="goa-card-count">{pool.length} summoned</span>
+          Assemble Teams
+          {allAdded.length > 0 && (
+            <span className="goa-card-count">{allAdded.length} summoned</span>
           )}
         </div>
         <div className="goa-card-body">
@@ -380,10 +500,7 @@ export default function TeamSplitterPage() {
             className="goa-search"
             placeholder="Search or add a player…"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setResult(null);
-            }}
+            onChange={(e) => setSearch(e.target.value)}
           />
 
           {search && (
@@ -415,143 +532,113 @@ export default function TeamSplitterPage() {
               )}
             </div>
           )}
-
-          <div className="goa-pool">
-            {pool.length === 0 && (
-              <p className="goa-pool-empty">No players assembled yet</p>
-            )}
-            {pool.map((p) => (
-              <div key={p.id} className="goa-pool-row">
-                <span className="goa-pool-name">
-                  <span className="flex gap-2">
-                    <PlayerAvatar
-                      avatarUrl={p.avatar_url}
-                      name={p.name}
-                      size={22}
-                    />
-                    {p.name}
-                  </span>
-                  <span className="goa-pool-mmr">{p.mmr} MMR</span>
-                </span>
-                <button
-                  className="goa-remove"
-                  onClick={() => removeFromPool(p.id)}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
         </div>
+
+        {/* Split shortcuts — auto-fill Atlantis/Titans from everyone summoned */}
+        <div className="goa-split-btns">
+          <button
+            className={`goa-split-btn draft ${draftOpen ? "active" : ""}`}
+            onClick={openDraft}
+            disabled={!canDraft}
+          >
+            <span className="goa-split-icon">
+              <Crown size={18} />
+            </span>
+            Captain&apos;s Draft
+          </button>
+          <button
+            className="goa-split-btn random"
+            onClick={handleRandom}
+            disabled={!canSplit}
+          >
+            <span className="goa-split-icon">
+              <Dices size={18} />
+            </span>
+            Random
+          </button>
+          <button
+            className="goa-split-btn balanced"
+            onClick={handleBalanced}
+            disabled={!canSplit}
+          >
+            <span className="goa-split-icon">
+              <Scale size={18} />
+            </span>
+            Balanced
+          </button>
+        </div>
+
+        {!canSplit && (
+          <p className="goa-splitter-hint">Add at least 2 players to split</p>
+        )}
+
+        {canBattle && (
+          <div className="goa-result-head">
+            <span className="goa-result-title">Team Balance</span>
+            <span className="goa-result-diff">
+              <span>{Math.abs(avg(columns.atlantis) - avg(columns.titans))}</span>{" "}
+              MMR difference
+            </span>
+          </div>
+        )}
+
+        {/* Pool + Teams — drag a player into either column to assign them */}
+        <DndContext
+          sensors={dndSensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="goa-result-teams">
+            <DroppableColumn
+              column="pool"
+              label="Player Pool"
+              emptyHint="No players waiting — search above to summon one"
+              members={columns.pool}
+              onRemove={removePlayer}
+            />
+            <DroppableColumn
+              column="atlantis"
+              label="Atlantis"
+              labelClass="atl"
+              avgMmr={columns.atlantis.length > 0 ? avg(columns.atlantis) : undefined}
+              emptyHint="Drag players here"
+              members={columns.atlantis}
+              onRemove={removePlayer}
+            />
+            <DroppableColumn
+              column="titans"
+              label="Titans"
+              labelClass="tit"
+              avgMmr={columns.titans.length > 0 ? avg(columns.titans) : undefined}
+              emptyHint="Drag players here"
+              members={columns.titans}
+              onRemove={removePlayer}
+            />
+          </div>
+        </DndContext>
+
+        {allAdded.length > 0 && (
+          <p className="goa-splitter-hint">
+            Drag players between Pool, Atlantis and Titans
+          </p>
+        )}
       </div>
 
-      {/* Split buttons — 2 col */}
-      <div className="goa-split-btns">
+      <div className="goa-btn-wrap">
         <button
-          className={`goa-split-btn draft ${
-            draftOpen || result?.mode === "draft" ? "active" : ""
-          }`}
-          onClick={openDraft}
-          disabled={!canDraft}
+          className="goa-btn inline-flex items-center justify-center gap-2"
+          onClick={handleGoToBattle}
+          disabled={!canBattle}
         >
-          <span className="goa-split-icon">
-            <Crown size={26} />
-          </span>
-          Captain&apos;s Draft
+          <Swords size={18} />
+          Begin the Battle
         </button>
-        <button
-          className="goa-split-btn random"
-          onClick={handleRandom}
-          disabled={!canSplit}
-        >
-          <span className="goa-split-icon">
-            <Dices size={26} />
-          </span>
-          Random
-        </button>
-        <button
-          className="goa-split-btn balanced"
-          onClick={handleBalanced}
-          disabled={!canSplit}
-        >
-          <span className="goa-split-icon">
-            <Scale size={26} />
-          </span>
-          Balanced
-        </button>
+        {!canBattle && allAdded.length > 0 && (
+          <p className="goa-splitter-hint">
+            Assign at least one player to each team to begin
+          </p>
+        )}
       </div>
-
-      {!canSplit && (
-        <p className="goa-splitter-hint">Add at least 2 players to split</p>
-      )}
-
-      {/* Result */}
-      {result && (
-        <>
-          <div className="goa-result">
-            <div className="goa-result-head">
-              <span className="goa-result-title inline-flex items-center gap-1">
-                {result.mode === "balanced" ? (
-                  <Scale size={14} />
-                ) : result.mode === "draft" ? (
-                  <Crown size={14} />
-                ) : (
-                  <Dices size={14} />
-                )}
-                {result.mode === "balanced"
-                  ? "Balanced"
-                  : result.mode === "draft"
-                    ? "Draft"
-                    : "Random"}{" "}
-                Teams
-              </span>
-              <span className="goa-result-diff">
-                <span>{result.diff}</span> MMR difference
-              </span>
-            </div>
-
-            <div className="goa-result-teams">
-              {(["atlantis", "titans"] as const).map((faction) => {
-                const members = result[faction];
-                const teamAvg = result[`${faction}Avg`];
-                return (
-                  <div key={faction} className="goa-result-team">
-                    <div
-                      className={`goa-result-team-head ${faction === "atlantis" ? "atl" : "tit"}`}
-                    >
-                      {faction === "atlantis" ? "Atlantis" : "Titans"}
-                    </div>
-                    <div className="goa-result-avg">Avg {teamAvg} MMR</div>
-                    {members.map((p) => (
-                      <div key={p.id} className="goa-result-player">
-                        <PlayerAvatar
-                          avatarUrl={p.avatar_url}
-                          name={p.name}
-                          size={20}
-                        />
-                        <span className="goa-result-player-name">{p.name}</span>
-                        <span className="goa-result-player-mmr">
-                          {p.mmr} MMR
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="goa-btn-wrap">
-            <button
-              className="goa-btn inline-flex items-center justify-center gap-2"
-              onClick={handleGoToBattle}
-            >
-              <Swords size={18} />
-              Begin the Battle
-            </button>
-          </div>
-        </>
-      )}
 
       {/* ══════════════ CAPTAIN'S DRAFT MODAL ══════════════ */}
       {draftOpen && draft && (
@@ -630,7 +717,7 @@ export default function TeamSplitterPage() {
                           </div>
                         ) : (
                           <div className="draft-player-scroll">
-                            {pool
+                            {allAdded
                               .filter((p) => p.id !== otherChosen?.id)
                               .map((p) => (
                                 <button

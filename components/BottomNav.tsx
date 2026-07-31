@@ -8,17 +8,10 @@ import {
   ScrollText,
   Trophy,
   ChartNoAxesCombined,
-  Users,
 } from "lucide-react";
 
 const TABS = [
   { href: "/", label: "Home", icon: House, match: (p: string) => p === "/" },
-  {
-    href: "/matches/new",
-    label: "Record",
-    icon: Swords,
-    match: (p: string) => p.startsWith("/matches/new"),
-  },
   {
     href: "/matches",
     label: "Archives",
@@ -26,6 +19,16 @@ const TABS = [
     match: (p: string) =>
       p === "/matches" ||
       (p.startsWith("/matches/") && !p.startsWith("/matches/new")),
+  },
+  {
+    // Main entry point for building a match: assemble teams on /teams,
+    // then continue straight into recording it on /matches/new. Raised
+    // and centered as the primary action of the bar.
+    href: "/teams",
+    label: "Battle",
+    icon: Swords,
+    match: (p: string) => p.startsWith("/teams") || p.startsWith("/matches/new"),
+    center: true,
   },
   {
     href: "/leaderboard",
@@ -39,12 +42,6 @@ const TABS = [
     icon: ChartNoAxesCombined,
     match: (p: string) => p.startsWith("/heroes"),
   },
-  {
-    href: "/teams",
-    label: "Teams",
-    icon: Users,
-    match: (p: string) => p.startsWith("/teams"),
-  },
 ];
 
 export function BottomNav() {
@@ -52,8 +49,24 @@ export function BottomNav() {
 
   return (
     <nav className="goa-bottom-nav">
-      {TABS.map(({ href, label, icon: Icon, match }) => {
+      {TABS.map(({ href, label, icon: Icon, match, center }) => {
         const active = match(pathname);
+
+        if (center) {
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`goa-bottom-nav-item goa-bottom-nav-center ${active ? "active" : ""}`}
+            >
+              <span className="goa-bottom-nav-center-circle">
+                <Icon size={24} />
+              </span>
+              <span className="goa-bottom-nav-label">{label}</span>
+            </Link>
+          );
+        }
+
         return (
           <Link
             key={href}

@@ -170,6 +170,9 @@ export default function HeroesPage() {
       </button>
 
       <header className="goa-header">
+        <div className="goa-crown">
+          <ChartNoAxesCombined size={30} />
+        </div>
         <h1 className="goa-title">Hero Compendium</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
