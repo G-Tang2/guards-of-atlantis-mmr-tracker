@@ -57,7 +57,7 @@ export const UPDATES: UpdateEntry[] = [
   {
     date: "Jul 28",
     title: "Bounty Heroes",
-    summary: "Underutilized heroes now yield additional MMR upon selection.",
+    summary: "Underutilised heroes now yield additional MMR upon selection.",
     details: [
       {
         text: "To promote hero pool diversity, selecting any hero that has remained unpicked for seven (7) or more consecutive matches awards a +5 MMR bonus.",

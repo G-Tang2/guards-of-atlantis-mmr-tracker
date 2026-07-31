@@ -1,4 +1,4 @@
-import { HEROES, DIFFICULTY_COLORS, Hero, HeroComplexity } from "@/lib/heroes";
+import { HEROES, Hero } from "@/lib/heroes";
 import { useState } from "react";
 import Image from "next/image";
 import { renderStars } from "@/lib/match";
@@ -11,16 +11,19 @@ export function HeroPicker({
   onSelect: (h: Hero | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [complexityFilter, setComplexityFilter] = useState<
-    HeroComplexity | "All"
-  >("All");
+  const [search, setSearch] = useState("");
 
   const sortedHeroes = [...HEROES].sort((a, b) => a.name.localeCompare(b.name));
+  const filtered = search
+    ? sortedHeroes.filter((h) =>
+        h.name.toLowerCase().includes(search.toLowerCase()),
+      )
+    : sortedHeroes;
 
-  const filtered =
-    complexityFilter === "All"
-      ? sortedHeroes
-      : sortedHeroes.filter((h) => h.complexity === complexityFilter);
+  const closeAndReset = () => {
+    setOpen(false);
+    setSearch("");
+  };
 
   if (!open) {
     return (
@@ -29,6 +32,13 @@ export function HeroPicker({
         {selected ? (
           <div className="goa-hero-picker-selected-row">
             <span className="goa-selected-hero">
+              <Image
+                src={selected.icon}
+                alt={selected.name}
+                width={14}
+                height={14}
+                className="goa-selected-hero-icon"
+              />
               {selected.name}
               <span className="goa-hero-chip-role">
                 {renderStars(selected.complexity)}
@@ -56,46 +66,46 @@ export function HeroPicker({
         Select hero
         <button
           className="goa-hero-picker-cancel"
-          onClick={() => setOpen(false)}
+          onClick={closeAndReset}
         >
           Cancel
         </button>
       </div>
 
-      {/* Role filter */}
-      <div className="goa-role-bar">
-        {["All", ...Object.keys(DIFFICULTY_COLORS)].map((r) => (
-          <button
-            key={r}
-            className={`goa-role-chip ${complexityFilter === r ? "active" : ""}`}
-            onClick={() => setComplexityFilter(r as HeroComplexity | "All")}
-          >
-            {renderStars(r) || "All"}
-          </button>
-        ))}
-      </div>
+      <input
+        className="goa-search goa-hero-search"
+        placeholder="Search heroes…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        autoFocus
+      />
 
-      {/* Hero chips */}
-      <div className="goa-hero-grid">
+      <div className="goa-hero-search-results">
         {filtered.map((h) => (
           <button
             key={h.id}
-            className={`goa-hero-chip ${selected?.id === h.id ? "selected" : ""}`}
+            className={`goa-hero-result ${selected?.id === h.id ? "selected" : ""}`}
             onClick={() => {
               onSelect(h);
-              setOpen(false);
+              closeAndReset();
             }}
           >
             <Image
               src={h.icon}
               alt={h.name}
-              width={18}
-              height={18}
+              width={22}
+              height={22}
               className="goa-hero-chip-icon"
             />
-            <span>{h.name}</span>
+            <span className="goa-hero-result-name">{h.name}</span>
+            <span className="goa-hero-result-stars">
+              {renderStars(h.complexity)}
+            </span>
           </button>
         ))}
+        {filtered.length === 0 && (
+          <p className="goa-pool-empty">No heroes found</p>
+        )}
       </div>
     </div>
   );

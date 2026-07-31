@@ -683,25 +683,25 @@
     margin: 1rem;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 0.75rem;
+    gap: 0.45rem;
   }
 
   .goa-win-condition-section {
     margin: 1rem;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 0.75rem;
+    gap: 0.45rem;
   }
 
   .goa-win-condition-btn {
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 1rem 0.5rem;
+    padding: 0.55rem 0.35rem;
     cursor: pointer;
     font-family: "Cinzel", serif;
-    font-size: 0.85rem; /* Increased from 0.8rem */
+    font-size: 0.75rem;
     font-weight: 600;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     text-align: center;
     transition: all 0.2s;
@@ -747,12 +747,12 @@
   .goa-faction-btn {
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 1rem 0.5rem;
+    padding: 0.55rem 0.35rem;
     cursor: pointer;
     font-family: "Cinzel", serif;
-    font-size: 0.85rem; /* Increased from 0.8rem */
+    font-size: 0.75rem;
     font-weight: 600;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     text-align: center;
     transition: all 0.2s;
@@ -2196,11 +2196,6 @@
     color: var(--text-muted);
     margin-bottom: 0.35rem;
   }
-  .goa-hero-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
   .goa-hero-chip {
     background: rgba(28, 26, 20, 0.8);
     border: 1px solid rgba(201, 151, 58, 0.2);
@@ -2288,35 +2283,73 @@
     width: 18px;
     height: 18px;
   }
+  .goa-selected-hero-icon {
+    object-fit: contain;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+  }
 
-  /* Role filter bar */
-  .goa-role-bar {
-    display: flex;
-    gap: 0.3rem;
-    flex-wrap: wrap;
+  /* Hero search box + results (replaces the old browse-by-role grid) */
+  .goa-hero-search {
+    padding: 0.5rem 0.65rem;
+    font-size: 0.9rem;
     margin-bottom: 0.4rem;
   }
-  .goa-role-chip {
-    background: rgba(28, 26, 20, 0.8);
-    border: 1px solid rgba(201, 151, 58, 0.18);
+  .goa-hero-search-results {
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .goa-hero-search-results::-webkit-scrollbar {
+    width: 4px;
+  }
+  .goa-hero-search-results::-webkit-scrollbar-track {
+    background: var(--stone-mid);
+  }
+  .goa-hero-search-results::-webkit-scrollbar-thumb {
+    background: var(--gold-dark);
     border-radius: 2px;
-    padding: 0.18rem 0.4rem;
+  }
+  .goa-hero-result {
+    width: 100%;
+    background: rgba(28, 26, 20, 0.85);
+    border: none;
+    border-bottom: 1px solid rgba(201, 151, 58, 0.1);
+    padding: 0.4rem 0.55rem;
     cursor: pointer;
-    font-family: "Cinzel", serif;
-    font-size: 0.56rem; /* Increased from 0.52rem */
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    transition: all 0.12s;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: background 0.15s;
   }
-  .goa-role-chip:hover {
-    border-color: var(--border-bright);
+  .goa-hero-result:last-child {
+    border-bottom: none;
+  }
+  .goa-hero-result:hover {
+    background: rgba(42, 39, 32, 0.9);
+  }
+  .goa-hero-result.selected {
+    background: rgba(201, 151, 58, 0.15);
+  }
+  .goa-hero-result-name {
+    flex: 1;
+    min-width: 0;
+    font-family: "Crimson Pro", serif;
+    font-size: 0.85rem;
     color: var(--text-primary);
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .goa-role-chip.active {
-    background: rgba(201, 151, 58, 0.12);
-    border-color: var(--gold);
-    color: var(--gold-light);
+  .goa-hero-result-stars {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: var(--gold);
   }
 
   /* System Engine Animations */

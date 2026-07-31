@@ -616,12 +616,6 @@ export default function TeamSplitterPage() {
             />
           </div>
         </DndContext>
-
-        {allAdded.length > 0 && (
-          <p className="goa-splitter-hint">
-            Drag players between Pool, Atlantis and Titans
-          </p>
-        )}
       </div>
 
       <div className="goa-btn-wrap">
