@@ -116,7 +116,7 @@ export default function Home() {
   };
 
   return (
-    <main className="goa-root">
+    <main className="goa-root goa-home-root">
       {/* Hero */}
       <div className="goa-hero">
         <div className="goa-emblem">
@@ -133,7 +133,7 @@ export default function Home() {
       </div>
 
       {/* What's New */}
-      <div className="goa-card">
+      <div className="goa-card goa-updates-card">
         <div className="goa-card-head">
           <Sparkles size={14} />
           What&apos;s New

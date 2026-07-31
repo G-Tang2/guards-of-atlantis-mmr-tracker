@@ -1414,7 +1414,7 @@
 
   /* Hero Screen Elements */
   .goa-hero {
-    flex: 1;
+    flex: none;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1422,6 +1422,21 @@
     padding: 3rem 1.5rem 2rem;
     text-align: center;
     position: relative;
+  }
+
+  /* Home page only: gives .goa-root a definite, self-computed height
+     (matching what .app-root reserves) so its flex children — the
+     fixed-size hero plus the fill-the-rest update card — can size
+     correctly. Scoped here instead of on the shared .app-root/.goa-root
+     classes so other pages keep their normal grow-and-scroll behavior. */
+  .goa-home-root {
+    /* .goa-root's own `flex: 1` shorthand sets flex-basis:0, which would
+       otherwise make the flex algorithm ignore this height entirely. */
+    flex: none;
+    height: calc(
+      100dvh - env(safe-area-inset-top) - 56px - env(safe-area-inset-bottom)
+    );
+    min-height: 0;
   }
 
   .goa-hero::after {
@@ -2833,13 +2848,29 @@
   }
 
   /* ── "What's New" update feed (home page) ── */
+  /* Fills whatever vertical space remains under the hero section, so the
+     page never needs to scroll just to reveal the toggle/nav — only the
+     feed itself scrolls internally, capped at 50dvh. */
+  .goa-updates-card {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
   .goa-updates-scroll {
-    max-height: 50vh;
+    flex: 1;
+    min-height: 0;
+    max-height: 50dvh;
     overflow-y: auto;
   }
   .goa-updates-scroll.expanded {
+    /* Still flex:1/min-height:0/overflow-y:auto from above — just lifts
+       the 50dvh ceiling so it can use the rest of the card's space.
+       Kept as an internal scroll area (not visible/outer-page scroll):
+       .app-root has a definite height for this layout to work, so
+       anything relying on the page itself growing would get clipped
+       instead of scrolling. */
     max-height: none;
-    overflow-y: visible;
   }
   .goa-updates-scroll::-webkit-scrollbar {
     width: 4px;
@@ -3528,7 +3559,7 @@
     border: 1px solid rgba(201, 151, 58, 0.5);
     border-bottom: none;
     border-radius: 14px 14px 0 0;
-    max-height: 90vh;
+    max-height: 90dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
