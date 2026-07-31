@@ -2303,8 +2303,10 @@
 
   /* Hero search box + results (replaces the old browse-by-role grid) */
   .goa-hero-search {
+    /* iOS Safari auto-zooms on focus for inputs under 16px — keep this
+       at 1rem (the browser default root size) to avoid that. */
     padding: 0.5rem 0.65rem;
-    font-size: 0.9rem;
+    font-size: 1rem;
     margin-bottom: 0.4rem;
   }
   .goa-hero-search-results {
