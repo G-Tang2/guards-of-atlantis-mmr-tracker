@@ -420,7 +420,7 @@
     padding: 0.6rem 0.75rem;
     color: var(--text-primary);
     font-family: "Crimson Pro", serif;
-    font-size: 1.05rem; /* Increased from 1rem */
+    font-size: 1rem;
     outline: none;
     box-sizing: border-box;
     transition: border-color 0.2s;
@@ -528,7 +528,7 @@
   }
 
   .goa-player-name {
-    font-size: 1.2rem; /* Increased from 0.88rem */
+    font-size: 1rem;
     color: var(--text-primary);
     display: flex;
     align-items: center;
@@ -1147,7 +1147,7 @@
   }
   .goa-heroes-stat-cell {
     font-family: "Cinzel", serif;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     text-align: center;
   }
   .goa-heroes-stat-cell.gold {
@@ -1269,7 +1269,7 @@
 
   .goa-cell-rank {
     font-family: "Cinzel", serif;
-    font-size: 0.76rem; /* Increased from 0.72rem */
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-muted);
     text-align: center;
@@ -1579,7 +1579,7 @@
   }
 
   .goa-nav-desc {
-    font-size: 0.82rem; /* Increased from 0.78rem */
+    font-size: 0.85rem;
     color: var(--text-muted);
     font-style: italic;
     display: block;
@@ -1655,7 +1655,7 @@
   .goa-hero-player-name {
     flex: 1;
     font-family: "Crimson Pro", serif;
-    font-size: 0.95rem;
+    font-size: 1rem;
     color: var(--text-primary);
   }
   .goa-hero-player-pr {
@@ -2158,7 +2158,7 @@
   .empty-state {
     color: var(--text-muted);
     font-style: italic;
-    font-size: 0.9rem; /* Increased from 0.85rem */
+    font-size: 0.85rem;
     text-align: center;
     padding: 0.5rem 0.75rem;
   }
@@ -2478,7 +2478,7 @@
   }
   .goa-hero-stat-name {
     font-family: "Cinzel", serif;
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     font-weight: 600;
     letter-spacing: 0.05em;
     color: var(--text-primary);
@@ -2947,7 +2947,7 @@
     padding: 0.55rem 0.75rem;
     color: var(--txt);
     font-family: "Crimson Pro", serif;
-    font-size: 0.95rem;
+    font-size: 1rem;
     text-align: left;
     cursor: pointer;
     display: flex;
@@ -2999,7 +2999,7 @@
     }
   }
   .goa-pool-name {
-    font-size: 0.9rem;
+    font-size: 1rem;
     color: var(--txt);
     display: flex;
     align-items: center;
@@ -3037,7 +3037,7 @@
   .goa-pool-empty {
     color: var(--muted);
     font-style: italic;
-    font-size: 0.82rem;
+    font-size: 0.85rem;
     text-align: center;
     padding: 0.4rem;
   }
@@ -3238,7 +3238,7 @@
     gap: 0.3rem;
     padding: 0.22rem 0;
     border-bottom: 1px solid rgba(201, 151, 58, 0.06);
-    font-size: 0.85rem;
+    font-size: 1rem;
     color: var(--txt);
   }
   .goa-result-player:last-child {
@@ -3261,7 +3261,7 @@
   .goa-h2h-no-data {
     text-align: center;
     font-style: italic;
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     color: var(--text-muted);
     padding: 1.5rem;
   }
@@ -3599,7 +3599,7 @@
   }
   .draft-captain-name {
     font-family: "Crimson Pro", serif;
-    font-size: 0.88rem;
+    font-size: 1rem;
     color: var(--txt);
     flex: 1;
     white-space: nowrap;
@@ -3635,7 +3635,7 @@
     padding: 0.38rem 0.5rem;
     cursor: pointer;
     font-family: "Crimson Pro", serif;
-    font-size: 0.88rem;
+    font-size: 1rem;
     color: var(--txt);
     transition: all 0.12s;
     width: 100%;
@@ -3757,7 +3757,7 @@
   .draft-pick-btn-name {
     flex: 1;
     font-family: "Crimson Pro", serif;
-    font-size: 0.95rem;
+    font-size: 1rem;
     color: var(--txt);
     text-align: left;
   }
@@ -3802,7 +3802,7 @@
   }
   .draft-live-name {
     font-family: "Crimson Pro", serif;
-    font-size: 0.88rem;
+    font-size: 1rem;
     color: var(--txt);
     flex: 1;
     white-space: nowrap;
