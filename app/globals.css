@@ -2458,6 +2458,9 @@
   .goa-hero-stat-row:hover {
     background: rgba(42, 39, 32, 0.5);
   }
+  .goa-hero-stat-row.clickable {
+    cursor: pointer;
+  }
 
   .goa-hero-stat-icon {
     width: 36px;

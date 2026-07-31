@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
@@ -188,6 +188,7 @@ function MmrChart({ points }: { points: TrendPoint[] }) {
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PlayerProfilePage() {
+  const router = useRouter();
   const params = useParams();
   const playerId = params?.id as string;
 
@@ -659,7 +660,11 @@ export default function PlayerProfilePage() {
             const wrClass =
               hs.winRate >= 60 ? "good" : hs.winRate >= 45 ? "mid" : "bad";
             return (
-              <div key={hs.hero.id} className="goa-hero-stat-row">
+              <div
+                key={hs.hero.id}
+                className="goa-hero-stat-row clickable"
+                onClick={() => router.push(`/heroes/${hs.hero.id}`)}
+              >
                 <div className="goa-hero-stat-info">
                   <div className="goa-hero-stat-hero-info">
                     <div className="goa-hero-stat-name">{hs.hero.name}</div>
