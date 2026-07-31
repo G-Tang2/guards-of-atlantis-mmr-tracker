@@ -124,8 +124,56 @@
   }
 
   .app-root {
+    display: flex;
+    flex-direction: column;
     min-height: 100dvh;
     padding-top: env(safe-area-inset-top);
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+
+  /* Persistent Bottom Tab Bar
+     Renders outside .goa-root, so it can't rely on that class's scoped
+     theme variables (--text-muted, --gold-light, --border) — redeclared
+     here with the same values instead. */
+  .goa-bottom-nav {
+    --nav-border: rgba(201, 151, 58, 0.3);
+    --nav-muted: #a09070;
+    --nav-gold-light: #f0c96a;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    background: rgba(20, 18, 14, 0.97);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--nav-border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .goa-bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    padding: 0.5rem 0.15rem 0.4rem;
+    color: var(--nav-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .goa-bottom-nav-item.active {
+    color: var(--nav-gold-light);
+  }
+  .goa-bottom-nav-item:active {
+    color: var(--nav-gold-light);
+  }
+  .goa-bottom-nav-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.55rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
 
   /* Master Core Root Settings */
@@ -154,7 +202,7 @@
     font-family: "Crimson Pro", Georgia, serif;
     font-size: 1.05rem; /* Increased slightly from base */
     color: var(--text-primary);
-    min-height: 100vh;
+    flex: 1;
     padding: 0;
     margin: 0;
     display: flex;
@@ -211,7 +259,7 @@
         rgba(201, 151, 58, 0.03) 40px
       ),
       var(--stone);
-    min-height: 100vh;
+    flex: 1;
   }
 
   /* Player Avatar (size/border color are per-instance via CSS vars) */
@@ -1451,162 +1499,6 @@
     font-size: 1.05rem; /* Increased from 1rem */
   }
 
-  /* Navigation Hub UI */
-  .goa-nav {
-    padding: 2rem 1rem 2.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .goa-nav-link {
-    display: block;
-    text-decoration: none;
-  }
-
-  .goa-nav-btn {
-    width: 100%;
-    background: rgba(28, 26, 20, 0.85);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0;
-    cursor: pointer;
-    text-align: left;
-    overflow: hidden;
-    position: relative;
-    transition:
-      border-color 0.2s,
-      background 0.2s;
-    display: flex;
-    align-items: stretch;
-  }
-
-  .goa-nav-btn::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      var(--border-bright),
-      transparent
-    );
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-
-  .goa-nav-btn:hover {
-    border-color: var(--border-bright);
-    background: rgba(42, 39, 32, 0.9);
-  }
-  .goa-nav-btn:hover::before {
-    opacity: 1;
-  }
-
-  .goa-nav-btn.primary {
-    border-color: rgba(201, 151, 58, 0.5);
-    background: linear-gradient(
-      135deg,
-      rgba(201, 151, 58, 0.12),
-      rgba(28, 26, 20, 0.9)
-    );
-  }
-  .goa-nav-btn.primary:hover {
-    border-color: var(--gold);
-    background: linear-gradient(
-      135deg,
-      rgba(201, 151, 58, 0.22),
-      rgba(42, 39, 32, 0.95)
-    );
-    box-shadow: 0 0 20px rgba(201, 151, 58, 0.15);
-  }
-
-  .goa-nav-accent {
-    width: 4px;
-    flex-shrink: 0;
-    background: var(--border);
-    transition: background 0.2s;
-  }
-  .goa-nav-btn.primary .goa-nav-accent {
-    background: linear-gradient(180deg, var(--gold-light), var(--gold-dark));
-  }
-  .goa-nav-btn.atl .goa-nav-accent {
-    background: linear-gradient(
-      180deg,
-      var(--titans-light),
-      rgba(26, 107, 122, 0.3)
-    );
-  }
-  .goa-nav-btn.lb .goa-nav-accent {
-    background: linear-gradient(180deg, #f0c96a, #cd7f32);
-  }
-
-  .goa-nav-btn.tm .goa-nav-accent {
-    background: linear-gradient(180deg, #8b5cf6, rgba(139, 92, 246, 0.25));
-  }
-
-  .goa-nav-btn.hero {
-    border-color: rgba(201, 151, 58, 0.3);
-  }
-  .goa-nav-btn.hero .goa-nav-accent {
-    background: linear-gradient(180deg, #c9973a, #7a5a1a);
-  }
-
-  .goa-nav-inner {
-    padding: 0.9rem 1rem;
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
-  .goa-nav-left {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .goa-nav-icon {
-    font-size: 1.5rem; /* Increased from 1.4rem */
-    flex-shrink: 0;
-  }
-
-  .goa-nav-label {
-    font-family: "Cinzel", serif;
-    font-size: 0.85rem; /* Increased from 0.8rem */
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-primary);
-    display: block;
-    margin-bottom: 0.15rem;
-  }
-  .goa-nav-btn.primary .goa-nav-label {
-    color: var(--gold-light);
-  }
-
-  .goa-nav-desc {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    font-style: italic;
-    display: block;
-  }
-
-  .goa-nav-arrow {
-    font-family: "Cinzel", serif;
-    font-size: 0.75rem; /* Increased from 0.7rem */
-    color: var(--border-bright);
-    flex-shrink: 0;
-    transition: transform 0.2s;
-  }
-  .goa-nav-btn:hover .goa-nav-arrow {
-    transform: translateX(3px);
-  }
-
   /* Player Profile Statistics Cards */
   .goa-hero-banner {
     padding: 1rem 1rem 0;
@@ -2202,7 +2094,7 @@
 
   .goa-toast {
     position: fixed;
-    bottom: 2rem;
+    bottom: calc(56px + env(safe-area-inset-bottom) + 1rem);
     left: 50%;
     transform: translateX(-50%);
     background: var(--stone-mid);
@@ -2940,6 +2832,173 @@
     padding: 0.75rem;
   }
 
+  /* ── "What's New" update feed (home page) ── */
+  .goa-updates-scroll {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  .goa-updates-scroll.expanded {
+    max-height: none;
+    overflow-y: visible;
+  }
+  .goa-updates-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+  .goa-updates-scroll::-webkit-scrollbar-track {
+    background: var(--stone-mid);
+  }
+  .goa-updates-scroll::-webkit-scrollbar-thumb {
+    background: var(--gold-dark);
+    border-radius: 2px;
+  }
+  .goa-update-item {
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid rgba(201, 151, 58, 0.08);
+  }
+  .goa-update-item:last-child {
+    border-bottom: none;
+  }
+  .goa-update-date {
+    font-family: "Cinzel", serif;
+    font-size: 0.58rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.2rem;
+  }
+  .goa-update-title {
+    font-family: "Crimson Pro", serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gold-light);
+  }
+  .goa-update-desc {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    margin-top: 0.15rem;
+    line-height: 1.4;
+  }
+  .goa-update-details {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 0.3rem;
+    line-height: 1.45;
+    font-style: italic;
+  }
+  .goa-update-details-list {
+    margin-top: 0.35rem;
+    padding-left: 1.1rem;
+    list-style: disc;
+  }
+  .goa-update-details-list li {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    font-style: italic;
+    margin-bottom: 0.25rem;
+  }
+  .goa-update-details-list li:last-child {
+    margin-bottom: 0;
+  }
+  .goa-update-details-label {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .goa-update-icon-legend {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .goa-update-icon-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+  }
+  .goa-update-icon-badge {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(201, 151, 58, 0.12);
+    border: 1px solid rgba(201, 151, 58, 0.35);
+    color: var(--gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .goa-update-icon-row .goa-update-details-label {
+    display: block;
+    font-size: 0.85rem;
+    margin-bottom: 0.1rem;
+  }
+  .goa-update-icon-row .goa-update-details {
+    margin-top: 0;
+  }
+  .goa-update-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0.85rem;
+    border-top: 1px solid rgba(201, 151, 58, 0.15);
+  }
+  .goa-update-page-btn {
+    background: none;
+    border: 1px solid rgba(201, 151, 58, 0.3);
+    border-radius: 3px;
+    color: var(--gold);
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+  }
+  .goa-update-page-btn:hover:not(:disabled) {
+    border-color: var(--gold);
+    color: var(--gold-light);
+  }
+  .goa-update-page-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .goa-update-page-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .goa-update-toggle {
+    width: 100%;
+    background: none;
+    border: none;
+    border-top: 1px solid rgba(201, 151, 58, 0.15);
+    color: var(--gold);
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.6rem 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    transition: color 0.15s;
+  }
+  .goa-update-toggle:hover {
+    color: var(--gold-light);
+  }
+  .goa-update-toggle svg {
+    transition: transform 0.2s;
+  }
+
   .goa-splitter-dropdown {
     margin: 0 0.75rem 0.75rem;
     border: 1px solid var(--border);
@@ -3290,7 +3349,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
+    flex: 1;
     flex-direction: column;
     gap: 0.5rem;
   }
@@ -3312,7 +3371,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
+    flex: 1;
   }
   .goa-loading-inner {
     text-align: center;

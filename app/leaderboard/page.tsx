@@ -66,7 +66,7 @@ export default function LeaderboardPage() {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
 
   const MINIMUM_MATCHES_FOR_DISPLAY = 5;
-  const INACTIVE_GAME_THRESHOLD = 5;
+  const INACTIVE_GAME_THRESHOLD = 4;
 
   useEffect(() => {
     const load = async () => {
