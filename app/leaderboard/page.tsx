@@ -64,6 +64,9 @@ export default function LeaderboardPage() {
   const [sortAsc, setSortAsc] = useState(true);
   const [showAllPlayers, setShowAllPlayers] = useState(false);
 
+  const MINIMUM_MATCHES_FOR_DISPLAY = 5;
+  const INACTIVE_GAME_THRESHOLD = 5;
+
   useEffect(() => {
     const load = async () => {
       const [
@@ -134,23 +137,20 @@ export default function LeaderboardPage() {
         wins: stats.wins,
         losses: stats.losses,
         matches: stats.matches,
-        winRate:
-          stats.matches === 0 ? 0 : (stats.wins / stats.matches) * 100,
+        winRate: stats.matches === 0 ? 0 : (stats.wins / stats.matches) * 100,
       };
     });
   }, [players, matches]);
 
   const playersToDisplay = useMemo(() => {
     if (showAllPlayers) return leaderboard;
-    return leaderboard.filter((p) => p.matches >= 1);
+    return leaderboard.filter((p) => p.matches >= MINIMUM_MATCHES_FOR_DISPLAY);
   }, [leaderboard, showAllPlayers]);
 
   const sortedByRank = useMemo(
-    () => [...playersToDisplay].sort((a, b) => a.rank-b.rank),
-    [playersToDisplay]
+    () => [...playersToDisplay].sort((a, b) => a.rank - b.rank),
+    [playersToDisplay],
   );
-
-  const INACTIVE_GAME_THRESHOLD = 5;
 
   const protectedRankMap = useMemo(() => {
     const latestMatch = matches.find((m) => m.match_number === maxMatchNumber);
@@ -178,7 +178,10 @@ export default function LeaderboardPage() {
     if (latestMatch && latestMatch.winner !== "none") {
       latestMatchLosers.forEach((id) => {
         const rank = rankById.get(id);
-        if (rank !== undefined && (losingTeamBestRank === undefined || rank < losingTeamBestRank)) {
+        if (
+          rank !== undefined &&
+          (losingTeamBestRank === undefined || rank < losingTeamBestRank)
+        ) {
           losingTeamBestRank = rank;
         }
       });
