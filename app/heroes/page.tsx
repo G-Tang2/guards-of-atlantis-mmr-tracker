@@ -7,6 +7,7 @@ import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES, Hero } from "@/lib/heroes";
 import { didWin, renderStars } from "@/lib/match";
+import { BOUNTY_THRESHOLD, BOUNTY_MMR_BONUS } from "@/lib/bounty";
 import { Coins, ChartNoAxesCombined } from "lucide-react";
 
 type RawMatch = {
@@ -38,7 +39,7 @@ export default function HeroesPage() {
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("played");
   const [sortAsc, setSortAsc] = useState(false);
-  const threshold = 7;
+  const threshold = BOUNTY_THRESHOLD;
 
   useEffect(() => {
     const load = async () => {
@@ -183,7 +184,8 @@ export default function HeroesPage() {
             </div>
             <div className="goa-bounty-header-sub">
               <span>
-                Not picked in {threshold}+ games · Bonus 5 MMR awarded on play
+                Not picked in {threshold}+ games · Bonus {BOUNTY_MMR_BONUS} MMR
+                awarded on play
               </span>
             </div>
           </div>

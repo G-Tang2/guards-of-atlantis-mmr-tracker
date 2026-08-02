@@ -66,6 +66,7 @@ Three tables in Supabase:
 | `mmr_before` | `integer` | Player MMR before the match |
 | `mmr_after` | `integer` | Player MMR after the match |
 | `hero_id` | `text` | Hero ID from `lib/heroes.ts`, nullable |
+| `is_bounty` | `boolean` | Whether `hero_id` was a bounty hero when this match was recorded |
 
 ---
 
@@ -191,7 +192,8 @@ create table match_players (
   team text not null check (team in ('atlantis', 'titans')),
   mmr_before integer,
   mmr_after integer,
-  hero_id text
+  hero_id text,
+  is_bounty boolean not null default false
 );
 
 -- Index for faster hero lookups

@@ -3,9 +3,10 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import { calculateMMR } from "@/lib/mmr";
+import { calculateMMR, PlayerResult } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
-import { Hero } from "@/lib/heroes";
+import { Hero, HEROES } from "@/lib/heroes";
+import { computeBountyHeroIds, BOUNTY_MMR_BONUS } from "@/lib/bounty";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Swords } from "lucide-react";
 
@@ -158,6 +159,37 @@ function NewMatchPageInner() {
       const titPlayers = titans.map((e) => e.player);
       const result = calculateMMR(atlPlayers, titPlayers, winner);
 
+      const heroIdFor = (playerId: string, team: Team) =>
+        (team === "atlantis" ? atlantis : titans).find(
+          (e) => e.player.id === playerId,
+        )?.hero?.id ?? null;
+
+      // A bounty hero is one nobody has played in the last several matches —
+      // picking one awards a flat bonus on top of the normal Elo delta,
+      // regardless of whether the match was won or lost.
+      const { data: priorMatches } = await supabaseClient
+        .from("matches")
+        .select("id, match_players ( hero_id )")
+        .order("created_at", { ascending: false });
+      const bountyHeroIds = computeBountyHeroIds(
+        priorMatches ?? [],
+        HEROES.map((h) => h.id),
+      );
+
+      const applyBounty = (list: PlayerResult[], team: Team): PlayerResult[] =>
+        list.map((p) => {
+          const heroId = heroIdFor(p.id, team);
+          if (!heroId || !bountyHeroIds.has(heroId)) return p;
+          return {
+            ...p,
+            mmrChange: p.mmrChange + BOUNTY_MMR_BONUS,
+            newMmr: p.newMmr + BOUNTY_MMR_BONUS,
+          };
+        });
+
+      const atlantisResults = applyBounty(result.atlantis, "atlantis");
+      const titansResults = applyBounty(result.titans, "titans");
+
       const { data: match, error } = await supabaseClient
         .from("matches")
         .insert({
@@ -176,8 +208,8 @@ function NewMatchPageInner() {
 
       const newMatchNumber = match.match_number;
       const matchParticipantIds = new Set([
-        ...result.atlantis.map((p) => p.id),
-        ...result.titans.map((p) => p.id),
+        ...atlantisResults.map((p) => p.id),
+        ...titansResults.map((p) => p.id),
       ]);
       const teamByPlayerId = new Map<string, Team>([
         ...atlantis.map((e): [string, Team] => [e.player.id, "atlantis"]),
@@ -186,24 +218,32 @@ function NewMatchPageInner() {
 
       // Denormalize match_number onto every match_player row
       const matchPlayers = [
-        ...result.atlantis.map((p) => ({
-          match_id: match.id,
-          match_number: newMatchNumber,
-          player_id: p.id,
-          team: "atlantis",
-          mmr_before: atlPlayers.find((x) => x.id === p.id)?.mmr,
-          mmr_after: p.newMmr,
-          hero_id: atlantis.find((e) => e.player.id === p.id)?.hero?.id ?? null,
-        })),
-        ...result.titans.map((p) => ({
-          match_id: match.id,
-          match_number: newMatchNumber,
-          player_id: p.id,
-          team: "titans",
-          mmr_before: titPlayers.find((x) => x.id === p.id)?.mmr,
-          mmr_after: p.newMmr,
-          hero_id: titans.find((e) => e.player.id === p.id)?.hero?.id ?? null,
-        })),
+        ...atlantisResults.map((p) => {
+          const heroId = heroIdFor(p.id, "atlantis");
+          return {
+            match_id: match.id,
+            match_number: newMatchNumber,
+            player_id: p.id,
+            team: "atlantis",
+            mmr_before: atlPlayers.find((x) => x.id === p.id)?.mmr,
+            mmr_after: p.newMmr,
+            hero_id: heroId,
+            is_bounty: heroId ? bountyHeroIds.has(heroId) : false,
+          };
+        }),
+        ...titansResults.map((p) => {
+          const heroId = heroIdFor(p.id, "titans");
+          return {
+            match_id: match.id,
+            match_number: newMatchNumber,
+            player_id: p.id,
+            team: "titans",
+            mmr_before: titPlayers.find((x) => x.id === p.id)?.mmr,
+            mmr_after: p.newMmr,
+            hero_id: heroId,
+            is_bounty: heroId ? bountyHeroIds.has(heroId) : false,
+          };
+        }),
       ];
 
       const { error: mpError } = await supabaseClient
@@ -213,7 +253,7 @@ function NewMatchPageInner() {
 
 // Combine updated match participants with non-participating players
       const updatedParticipantsMap = new Map(
-        [...result.atlantis, ...result.titans].map((p) => [
+        [...atlantisResults, ...titansResults].map((p) => [
           p.id,
           Math.round(p.newMmr),
         ]),

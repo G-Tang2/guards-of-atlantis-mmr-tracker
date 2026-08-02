@@ -6,7 +6,7 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { ScrollText, Swords } from "lucide-react";
+import { ScrollText, Swords, Coins } from "lucide-react";
 
 type Player = {
   id: string;
@@ -36,6 +36,7 @@ type MatchPlayer = {
   mmr_before: number;
   mmr_after: number;
   hero_id?: string;
+  is_bounty?: boolean;
 };
 
 type Match = {
@@ -74,6 +75,7 @@ const MATCH_SELECT = `
     mmr_before,
     mmr_after,
     hero_id,
+    is_bounty,
     players (
       id,
       name,
@@ -92,6 +94,7 @@ type RawMatchPlayer = {
   mmr_before: number;
   mmr_after: number;
   hero_id?: string;
+  is_bounty?: boolean;
   players: Player | Player[] | null;
 };
 
@@ -118,6 +121,7 @@ const normalizeMatch = (match: RawMatch): Match => {
         mmr_before: mp.mmr_before,
         mmr_after: mp.mmr_after,
         hero_id: mp.hero_id,
+        is_bounty: mp.is_bounty ?? false,
         players: {
           id: player.id,
           name: player.name,
@@ -208,6 +212,12 @@ function TeamPanel({
                 />
               )}
               {hero?.name} {renderStars(Number(hero?.complexity ?? 0))}
+              {p.is_bounty && (
+                <span className="goa-bounty-badge">
+                  <Coins size={10} />
+                  +5
+                </span>
+              )}
             </span>
           </div>
         );

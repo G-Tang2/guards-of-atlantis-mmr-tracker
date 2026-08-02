@@ -8,7 +8,7 @@ import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import Image from "next/image";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { Swords, Shield, ScrollText, ChartNoAxesCombined } from "lucide-react";
+import { Swords, ScrollText, ChartNoAxesCombined } from "lucide-react";
 
 type Player = {
   id: string;

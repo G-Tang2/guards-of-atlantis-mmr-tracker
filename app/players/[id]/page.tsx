@@ -15,7 +15,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { Swords, Loader2, X, Camera } from "lucide-react";
+import { Swords, Loader2, X, Camera, Coins } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +32,7 @@ type MatchPlayer = {
   mmr_before: number;
   mmr_after: number;
   hero_id?: string | null;
+  is_bounty?: boolean;
   players: Player;
 };
 
@@ -53,6 +54,7 @@ type RawMatchPlayer = {
   mmr_before: number;
   mmr_after: number;
   hero_id?: string | null;
+  is_bounty?: boolean;
   players: Player | Player[] | null;
 };
 
@@ -443,7 +445,7 @@ export default function PlayerProfilePage() {
             `
             id, winner, created_at, atlantis_avg_mmr, titans_avg_mmr,
             match_players (
-              player_id, team, mmr_before, mmr_after, hero_id,
+              player_id, team, mmr_before, mmr_after, hero_id, is_bounty,
               players ( id, name, mmr, avatar_url )
             )
           `,
@@ -904,11 +906,19 @@ export default function PlayerProfilePage() {
                   </div>
                 </div>
 
-                <div
-                  className={`goa-match-delta ${delta >= 0 ? "pos" : "neg"}`}
-                >
-                  {delta >= 0 ? "▲" : "▼"}
-                  {Math.abs(delta)}
+                <div className="goa-match-delta-col">
+                  <div
+                    className={`goa-match-delta ${delta >= 0 ? "pos" : "neg"}`}
+                  >
+                    {delta >= 0 ? "▲" : "▼"}
+                    {Math.abs(delta)}
+                  </div>
+                  {me.is_bounty && (
+                    <span className="goa-bounty-badge">
+                      <Coins size={10} />
+                      +5
+                    </span>
+                  )}
                 </div>
               </div>
             );
