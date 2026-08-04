@@ -2776,26 +2776,23 @@
     font-size: 0.85rem;
   }
   .goa-hero-stat-bar-wrap {
+    display: flex;
     height: 5px;
     background: rgba(42, 39, 32, 0.8);
     border-radius: 3px;
     overflow: hidden;
     margin-bottom: 0.15rem;
   }
-  .goa-hero-stat-bar-fill {
+  .goa-hero-stat-bar-seg {
     height: 100%;
     width: var(--bar-width, 0%);
-    border-radius: 3px;
     transition: width 0.6s ease;
   }
-  .goa-hero-stat-bar-fill.good {
-    background: linear-gradient(90deg, var(--gain), rgba(93, 187, 138, 0.6));
+  .goa-hero-stat-bar-seg.win {
+    background: var(--gain);
   }
-  .goa-hero-stat-bar-fill.mid {
-    background: linear-gradient(90deg, var(--gold), rgba(201, 151, 58, 0.6));
-  }
-  .goa-hero-stat-bar-fill.bad {
-    background: linear-gradient(90deg, var(--loss), rgba(196, 74, 74, 0.6));
+  .goa-hero-stat-bar-seg.loss {
+    background: var(--loss);
   }
   .goa-hero-stat-games {
     font-family: "Cinzel", serif;
@@ -2825,6 +2822,55 @@
     font-family: "Cinzel", serif;
     font-size: 0.65rem;
     color: var(--text-muted);
+  }
+  .goa-hero-stat-chevron {
+    color: var(--text-muted);
+    margin-top: 0.3rem;
+    transition: transform 0.2s;
+  }
+  .goa-hero-stat-chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .goa-hero-stat-expanded {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border);
+  }
+  .goa-hero-expanded-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 3px;
+    cursor: pointer;
+    background: rgba(42, 39, 32, 0.4);
+    transition: background 0.12s;
+  }
+  .goa-hero-expanded-row:hover {
+    background: rgba(42, 39, 32, 0.75);
+  }
+  .goa-hero-expanded-date {
+    flex: 1;
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+  .goa-hero-expanded-delta {
+    font-family: "Cinzel", serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .goa-hero-expanded-delta.pos {
+    color: var(--gain);
+  }
+  .goa-hero-expanded-delta.neg {
+    color: var(--loss);
   }
 
   /* ── Profile match history: vs team ── */

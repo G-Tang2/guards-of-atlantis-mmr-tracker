@@ -15,7 +15,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { Swords, Loader2, X, Camera, Coins } from "lucide-react";
+import { Swords, Loader2, X, Camera, Coins, ChevronDown } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -404,6 +404,7 @@ export default function PlayerProfilePage() {
     | "complexity";
   const [heroSortKey, setHeroSortKey] = useState<HeroSortKey>("played");
   const [heroSortAsc, setHeroSortAsc] = useState(false);
+  const [expandedHeroId, setExpandedHeroId] = useState<string | null>(null);
 
   const handleHeroSort = (key: HeroSortKey) => {
     if (heroSortKey === key) setHeroSortAsc((v) => !v);
@@ -1068,11 +1069,23 @@ export default function PlayerProfilePage() {
           {sortedHeroStats.map((hs) => {
             const wrClass =
               hs.winRate >= 60 ? "good" : hs.winRate >= 45 ? "mid" : "bad";
+            const isExpanded = expandedHeroId === hs.hero.id;
+            const heroMatches = isExpanded
+              ? myMatches.filter(
+                  (m) =>
+                    m.match_players.find((mp) => mp.player_id === playerId)
+                      ?.hero_id === hs.hero.id,
+                )
+              : [];
             return (
               <div
                 key={hs.hero.id}
                 className="goa-hero-stat-row clickable"
-                onClick={() => router.push(`/heroes/${hs.hero.id}`)}
+                onClick={() =>
+                  setExpandedHeroId((prev) =>
+                    prev === hs.hero.id ? null : hs.hero.id,
+                  )
+                }
               >
                 <div className="goa-hero-stat-icon">
                   <Image
@@ -1092,9 +1105,17 @@ export default function PlayerProfilePage() {
 
                   <div className="goa-hero-stat-bar-wrap">
                     <div
-                      className={`goa-hero-stat-bar-fill ${wrClass}`}
+                      className="goa-hero-stat-bar-seg win"
                       style={
                         { "--bar-width": `${hs.winRate}%` } as CSSProperties
+                      }
+                    />
+                    <div
+                      className="goa-hero-stat-bar-seg loss"
+                      style={
+                        {
+                          "--bar-width": `${100 - hs.winRate}%`,
+                        } as CSSProperties
                       }
                     />
                   </div>
@@ -1111,7 +1132,53 @@ export default function PlayerProfilePage() {
                     <span>/</span>
                     <span className="goa-text-loss">{hs.losses}L</span>
                   </div>
+                  <ChevronDown
+                    size={13}
+                    className={`goa-hero-stat-chevron${isExpanded ? " open" : ""}`}
+                  />
                 </div>
+
+                {isExpanded && (
+                  <div className="goa-hero-stat-expanded">
+                    {heroMatches.map((m) => {
+                      const me = m.match_players.find(
+                        (mp) => mp.player_id === playerId,
+                      );
+                      if (!me) return null;
+                      const won = didWin(me.team, m.winner);
+                      const delta = me.mmr_after - me.mmr_before;
+                      return (
+                        <div
+                          key={m.id}
+                          className="goa-hero-expanded-row"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/matches/${m.id}`);
+                          }}
+                        >
+                          <span
+                            className={`goa-match-badge ${m.winner === "none" ? "draw" : won ? "win" : "loss"}`}
+                          >
+                            {m.winner === "none"
+                              ? "Draw"
+                              : won
+                                ? "Victory"
+                                : "Defeat"}
+                          </span>
+                          <span className="goa-hero-expanded-date">
+                            #{m.match_number} · {formatDate(m.created_at)}
+                          </span>
+                          <span
+                            className={`goa-hero-expanded-delta ${delta >= 0 ? "pos" : "neg"}`}
+                          >
+                            {delta >= 0 ? "▲" : "▼"}
+                            {Math.abs(delta)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
