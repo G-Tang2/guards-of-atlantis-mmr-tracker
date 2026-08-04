@@ -3703,14 +3703,9 @@
     font-size: 0.5rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+    color: var(--muted);
     width: 32px;
     flex-shrink: 0;
-  }
-  .goa-h2h-bar-lbl.atl {
-    color: var(--atlantis-light);
-  }
-  .goa-h2h-bar-lbl.tit {
-    color: var(--titans-light);
   }
   .goa-h2h-name-row {
     display: flex;
@@ -3720,28 +3715,28 @@
   .goa-h2h-bar-track {
     flex: 1;
     height: 5px;
+    display: flex;
     background: rgba(42, 39, 32, 0.8);
     border-radius: 3px;
     overflow: hidden;
   }
-  .goa-h2h-bar-fill {
+  .goa-h2h-bar-seg {
     height: 100%;
     width: var(--bar-width, 0%);
-    border-radius: 3px;
     transition: width 0.5s ease;
   }
-  .goa-h2h-bar-fill.with {
-    background: linear-gradient(90deg, var(--gain), rgba(93, 187, 138, 0.6));
+  .goa-h2h-bar-seg.win {
+    background: var(--gain);
   }
-  .goa-h2h-bar-fill.against {
-    background: linear-gradient(90deg, var(--gain), rgba(93, 187, 138, 0.6));
+  .goa-h2h-bar-seg.loss {
+    background: var(--loss);
   }
   .goa-h2h-bar-stat {
     font-family: "Cinzel", serif;
     font-size: 0.56rem;
     color: var(--muted);
-    width: 32px;
     text-align: right;
+    white-space: nowrap;
     flex-shrink: 0;
   }
 

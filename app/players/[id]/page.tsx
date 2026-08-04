@@ -408,6 +408,19 @@ export default function PlayerProfilePage() {
     }
   };
 
+  // H2H tab: sort control
+  type H2HSortKey = "name" | "total" | "with" | "against" | "mmr";
+  const [h2hSortKey, setH2hSortKey] = useState<H2HSortKey>("total");
+  const [h2hSortAsc, setH2hSortAsc] = useState(false);
+
+  const handleH2HSort = (key: H2HSortKey) => {
+    if (h2hSortKey === key) setH2hSortAsc((v) => !v);
+    else {
+      setH2hSortKey(key);
+      setH2hSortAsc(key === "name");
+    }
+  };
+
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !player) return;
@@ -600,6 +613,31 @@ export default function PlayerProfilePage() {
           b.withMatches + b.againstMatches - (a.withMatches + a.againstMatches),
       );
   }, [myMatches, playerId]);
+
+  const sortedH2HStats = useMemo(() => {
+    const list = [...h2hStats];
+    list.sort((a, b) => {
+      let diff = 0;
+      if (h2hSortKey === "name")
+        diff = a.opponent.name.localeCompare(b.opponent.name);
+      else if (h2hSortKey === "total")
+        diff =
+          a.withMatches + a.againstMatches - (b.withMatches + b.againstMatches);
+      else if (h2hSortKey === "with") {
+        const ar = a.withMatches === 0 ? -1 : a.withWins / a.withMatches;
+        const br = b.withMatches === 0 ? -1 : b.withWins / b.withMatches;
+        diff = ar - br;
+      } else if (h2hSortKey === "against") {
+        const ar =
+          a.againstMatches === 0 ? -1 : a.againstWins / a.againstMatches;
+        const br =
+          b.againstMatches === 0 ? -1 : b.againstWins / b.againstMatches;
+        diff = ar - br;
+      } else diff = a.opponent.mmr - b.opponent.mmr;
+      return h2hSortAsc ? diff : -diff;
+    });
+    return list;
+  }, [h2hStats, h2hSortKey, h2hSortAsc]);
 
   // ── Hero stats ──────────────────────────────────────────────────────────────
   const heroStats = useMemo(() => {
@@ -1078,7 +1116,34 @@ export default function PlayerProfilePage() {
             <p className="goa-h2h-no-data">No head-to-head data yet</p>
           )}
 
-          {h2hStats.map((entry) => {
+          {h2hStats.length > 0 && (
+            <div className="goa-sort-bar">
+              {(
+                [
+                  ["name", "Name"],
+                  ["total", "GP"],
+                  ["with", "With %"],
+                  ["against", "Against %"],
+                  ["mmr", "MMR"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  className={`goa-sort-btn ${h2hSortKey === key ? "active" : ""}`}
+                  onClick={() => handleH2HSort(key)}
+                >
+                  {label}
+                  {h2hSortKey === key && (
+                    <span className="goa-sort-arrow">
+                      {h2hSortAsc ? "▲" : "▼"}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {sortedH2HStats.map((entry) => {
             const withRate =
               entry.withMatches === 0
                 ? 0
@@ -1109,36 +1174,53 @@ export default function PlayerProfilePage() {
                 <div className="goa-h2h-bars">
                   {entry.withMatches > 0 && (
                     <div className="goa-h2h-bar-row">
-                      <span className="goa-h2h-bar-lbl atl">With</span>
+                      <span className="goa-h2h-bar-lbl">With</span>
                       <div className="goa-h2h-bar-track">
                         <div
-                          className="goa-h2h-bar-fill with"
+                          className="goa-h2h-bar-seg win"
                           style={
                             { "--bar-width": `${withRate}%` } as CSSProperties
                           }
                         />
+                        <div
+                          className="goa-h2h-bar-seg loss"
+                          style={
+                            {
+                              "--bar-width": `${100 - withRate}%`,
+                            } as CSSProperties
+                          }
+                        />
                       </div>
                       <span className="goa-h2h-bar-stat">
-                        {entry.withWins}W/{entry.withLosses}L
+                        {entry.withWins}W/{entry.withLosses}L · {withRate}%
                       </span>
                     </div>
                   )}
 
                   {entry.againstMatches > 0 && (
                     <div className="goa-h2h-bar-row">
-                      <span className="goa-h2h-bar-lbl tit">Vs</span>
+                      <span className="goa-h2h-bar-lbl">Vs</span>
                       <div className="goa-h2h-bar-track">
                         <div
-                          className="goa-h2h-bar-fill against"
+                          className="goa-h2h-bar-seg win"
                           style={
                             {
                               "--bar-width": `${againstRate}%`,
                             } as CSSProperties
                           }
                         />
+                        <div
+                          className="goa-h2h-bar-seg loss"
+                          style={
+                            {
+                              "--bar-width": `${100 - againstRate}%`,
+                            } as CSSProperties
+                          }
+                        />
                       </div>
                       <span className="goa-h2h-bar-stat">
-                        {entry.againstWins}W/{entry.againstLosses}L
+                        {entry.againstWins}W/{entry.againstLosses}L ·{" "}
+                        {againstRate}%
                       </span>
                     </div>
                   )}
