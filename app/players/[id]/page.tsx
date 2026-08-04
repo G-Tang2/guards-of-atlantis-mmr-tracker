@@ -415,7 +415,7 @@ export default function PlayerProfilePage() {
   };
 
   // H2H tab: sort control
-  type H2HSortKey = "name" | "total" | "with" | "against" | "mmr";
+  type H2HSortKey = "name" | "total" | "with_wins" | "with_losses" | "against_wins" | "against_losses" | "mmr";
   const [h2hSortKey, setH2hSortKey] = useState<H2HSortKey>("total");
   const [h2hSortAsc, setH2hSortAsc] = useState(false);
 
@@ -629,15 +629,25 @@ export default function PlayerProfilePage() {
       else if (h2hSortKey === "total")
         diff =
           a.withMatches + a.againstMatches - (b.withMatches + b.againstMatches);
-      else if (h2hSortKey === "with") {
-        const ar = a.withMatches === 0 ? -1 : a.withWins / a.withMatches;
-        const br = b.withMatches === 0 ? -1 : b.withWins / b.withMatches;
+      else if (h2hSortKey === "with_wins") {
+        const ar = a.withMatches === 0 ? -1 : a.withWins;
+        const br = b.withMatches === 0 ? -1 : b.withWins;
         diff = ar - br;
-      } else if (h2hSortKey === "against") {
+      } else if (h2hSortKey === "with_losses") {
+        const ar = a.withMatches === 0 ? -1 : a.withLosses;
+        const br = b.withMatches === 0 ? -1 : b.withLosses;
+        diff = ar - br;
+      }else if (h2hSortKey === "against_wins") {
         const ar =
-          a.againstMatches === 0 ? -1 : a.againstWins / a.againstMatches;
+          a.againstMatches === 0 ? -1 : a.againstWins;
         const br =
-          b.againstMatches === 0 ? -1 : b.againstWins / b.againstMatches;
+          b.againstMatches === 0 ? -1 : b.againstWins;
+        diff = ar - br;
+      }else if (h2hSortKey === "against_losses") {
+        const ar =
+          a.againstMatches === 0 ? -1 : a.againstLosses;
+        const br =
+          b.againstMatches === 0 ? -1 : b.againstLosses;
         diff = ar - br;
       } else diff = a.opponent.mmr - b.opponent.mmr;
       return h2hSortAsc ? diff : -diff;
@@ -1199,8 +1209,10 @@ export default function PlayerProfilePage() {
                 [
                   ["name", "Name"],
                   ["total", "GP"],
-                  ["with", "With %"],
-                  ["against", "Against %"],
+                  ["with_wins", "With Wins"],
+                  ["with_losses", "With Losses"],
+                  ["against_wins", "Against Wins"],
+                  ["against_losses", "Against Losses"],
                   ["mmr", "MMR"],
                 ] as const
               ).map(([key, label]) => (
