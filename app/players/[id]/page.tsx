@@ -389,6 +389,25 @@ export default function PlayerProfilePage() {
     setHistoryLimit(HISTORY_PAGE_SIZE);
   };
 
+  // Heroes tab: sort control
+  type HeroSortKey =
+    | "name"
+    | "played"
+    | "winRate"
+    | "wins"
+    | "losses"
+    | "complexity";
+  const [heroSortKey, setHeroSortKey] = useState<HeroSortKey>("played");
+  const [heroSortAsc, setHeroSortAsc] = useState(false);
+
+  const handleHeroSort = (key: HeroSortKey) => {
+    if (heroSortKey === key) setHeroSortAsc((v) => !v);
+    else {
+      setHeroSortKey(key);
+      setHeroSortAsc(key === "name");
+    }
+  };
+
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !player) return;
@@ -611,6 +630,22 @@ export default function PlayerProfilePage() {
       .filter((x): x is HeroStat => x !== null)
       .sort((a, b) => b.played - a.played);
   }, [myMatches, playerId]);
+
+  const sortedHeroStats = useMemo(() => {
+    const list = [...heroStats];
+    list.sort((a, b) => {
+      let diff = 0;
+      if (heroSortKey === "played") diff = a.played - b.played;
+      else if (heroSortKey === "winRate") diff = a.winRate - b.winRate;
+      else if (heroSortKey === "wins") diff = a.wins - b.wins;
+      else if (heroSortKey === "losses") diff = a.losses - b.losses;
+      else if (heroSortKey === "name")
+        diff = a.hero.name.localeCompare(b.hero.name);
+      else diff = Number(a.hero.complexity) - Number(b.hero.complexity);
+      return heroSortAsc ? diff : -diff;
+    });
+    return list;
+  }, [heroStats, heroSortKey, heroSortAsc]);
 
   // ── History filters ──────────────────────────────────────────────────────────
 
@@ -954,7 +989,35 @@ export default function PlayerProfilePage() {
             <p className="goa-empty-note">No hero data recorded yet</p>
           )}
 
-          {heroStats.map((hs) => {
+          {heroStats.length > 0 && (
+            <div className="goa-sort-bar">
+              {(
+                [
+                  ["name", "Hero"],
+                  ["played", "GP"],
+                  ["winRate", "Win %"],
+                  ["wins", "Wins"],
+                  ["losses", "Losses"],
+                  ["complexity", "★"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  className={`goa-sort-btn ${heroSortKey === key ? "active" : ""}`}
+                  onClick={() => handleHeroSort(key)}
+                >
+                  {label}
+                  {heroSortKey === key && (
+                    <span className="goa-sort-arrow">
+                      {heroSortAsc ? "▲" : "▼"}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {sortedHeroStats.map((hs) => {
             const wrClass =
               hs.winRate >= 60 ? "good" : hs.winRate >= 45 ? "mid" : "bad";
             return (
