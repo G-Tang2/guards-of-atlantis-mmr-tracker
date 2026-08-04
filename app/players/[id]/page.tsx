@@ -38,6 +38,7 @@ type MatchPlayer = {
 
 type Match = {
   id: string;
+  match_number: number;
   winner: "atlantis" | "titans" | "none";
   created_at: string;
   atlantis_avg_mmr: number;
@@ -60,6 +61,7 @@ type RawMatchPlayer = {
 
 type RawMatch = {
   id: string;
+  match_number: number;
   winner: "atlantis" | "titans" | "none";
   created_at: string;
   atlantis_avg_mmr: number;
@@ -478,7 +480,7 @@ export default function PlayerProfilePage() {
           .from("matches")
           .select(
             `
-            id, winner, created_at, atlantis_avg_mmr, titans_avg_mmr,
+            id, match_number, winner, created_at, atlantis_avg_mmr, titans_avg_mmr,
             match_players (
               player_id, team, mmr_before, mmr_after, hero_id, is_bounty,
               players ( id, name, mmr, avatar_url )
@@ -933,14 +935,19 @@ export default function PlayerProfilePage() {
               .map((mp) => mp.players);
 
             return (
-              <div key={m.id} className="goa-profile-match-row">
+              <div
+                key={m.id}
+                className="goa-profile-match-row clickable"
+                onClick={() => router.push(`/matches/${m.id}`)}
+              >
                 <div className={`goa-match-badge ${m.winner==="none" ? "draw" : won ? "win" : "loss"}`}>
                   {m.winner==="none"? "Draw" : won ? "Victory" : "Defeat"}
                 </div>
 
                 <div className="goa-match-info">
                   <div className="goa-match-date">
-                    {formatDate(m.created_at)}
+                    <span className="goa-match-number">#{m.match_number}</span>
+                    · {formatDate(m.created_at)}
                   </div>
                   {/* Hero played */}
                   {hero && (

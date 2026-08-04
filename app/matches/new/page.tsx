@@ -7,6 +7,7 @@ import { calculateMMR, PlayerResult } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
 import { Hero, HEROES } from "@/lib/heroes";
 import { computeBountyHeroIds, BOUNTY_MMR_BONUS } from "@/lib/bounty";
+import { DraftMethod } from "@/lib/match";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Swords } from "lucide-react";
 
@@ -190,6 +191,19 @@ function NewMatchPageInner() {
       const atlantisResults = applyBounty(result.atlantis, "atlantis");
       const titansResults = applyBounty(result.titans, "titans");
 
+      const validDraftMethods: DraftMethod[] = [
+        "captains_draft",
+        "random",
+        "balanced",
+        "custom",
+      ];
+      const methodParam = searchParams.get("method");
+      const draftMethod: DraftMethod = validDraftMethods.includes(
+        methodParam as DraftMethod,
+      )
+        ? (methodParam as DraftMethod)
+        : "custom";
+
       const { data: match, error } = await supabaseClient
         .from("matches")
         .insert({
@@ -200,6 +214,7 @@ function NewMatchPageInner() {
           atlantis_mmr_change: result.meta.atlantisDelta,
           titans_mmr_change: result.meta.titansDelta,
           expected_atlantis_win: result.meta.expectedA,
+          draft_method: draftMethod,
         })
         .select("id, match_number")
         .single();

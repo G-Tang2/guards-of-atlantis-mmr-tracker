@@ -1,5 +1,53 @@
 import { HEROES } from "@/lib/heroes";
 
+export type Team = "atlantis" | "titans" | "none";
+
+export type Player = {
+  id: string;
+  name: string;
+  mmr: number;
+  avatar_url?: string | null;
+};
+
+export type MatchPlayer = {
+  player_id: string;
+  team: Team;
+  players: Player;
+  mmr_before: number;
+  mmr_after: number;
+  hero_id?: string | null;
+  is_bounty?: boolean;
+};
+
+export enum WinCondition {
+  LAST_PUSH = "LAST_PUSH",
+  THRONE = "THRONE",
+  LIFE_COUNTER = "LIFE_COUNTER",
+}
+
+const winConditionLabel: Record<string, string> = {
+  LAST_PUSH: "LAST PUSH",
+  THRONE: "THRONE",
+  LIFE_COUNTER: "LIFE COUNTER",
+};
+
+export const formatWinCondition = (wc?: WinCondition | string | null) => {
+  if (!wc) return "";
+  return `BY ${winConditionLabel[wc]}`;
+};
+
+// How a match's two teams were assembled. "custom" covers both a fresh
+// manual build (search/add only, no split tool used) and any split-tool
+// result that was subsequently hand-edited via drag-and-drop.
+export type DraftMethod = "captains_draft" | "random" | "balanced" | "custom";
+
+export const draftMethodLabel: Record<string, string> = {
+  captains_draft: "Captain's Draft",
+  random: "Random Split",
+  balanced: "Balanced Split",
+  custom: "Custom Draft",
+};
+
 export const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   const day = String(date.getDate()).padStart(2, "0");

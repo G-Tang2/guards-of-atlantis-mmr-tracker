@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { DraftMethod } from "@/lib/match";
 import { Swords, Crown, Dices, Scale, GripVertical } from "lucide-react";
 import {
   DndContext,
@@ -220,6 +221,12 @@ export default function TeamSplitterPage() {
     titans: [],
   });
 
+  // How the current team split was produced. Defaults to "custom" since,
+  // absent a split tool, teams are only ever built by manually adding
+  // players — and any drag-and-drop tweak after a split tool runs also
+  // marks it "custom", since the tool's output no longer stands alone.
+  const [assemblyMethod, setAssemblyMethod] = useState<DraftMethod>("custom");
+
   // Draft modal
   const [draftOpen, setDraftOpen] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
@@ -240,6 +247,7 @@ export default function TeamSplitterPage() {
     if (!from || from === to) return;
 
     const playerId = active.id as string;
+    setAssemblyMethod("custom");
     setColumns((prev) => {
       const player = prev[from].find((p) => p.id === playerId);
       if (!player) return prev;
@@ -310,10 +318,12 @@ export default function TeamSplitterPage() {
   const handleRandom = () => {
     const { atlantis, titans } = randomSplit(allAdded);
     setColumns({ pool: [], atlantis, titans });
+    setAssemblyMethod("random");
   };
   const handleBalanced = () => {
     const { atlantis, titans } = balancedSplit(allAdded);
     setColumns({ pool: [], atlantis, titans });
+    setAssemblyMethod("balanced");
   };
 
   const canBattle = columns.atlantis.length > 0 && columns.titans.length > 0;
@@ -322,7 +332,9 @@ export default function TeamSplitterPage() {
     if (!canBattle) return;
     const atlantisIds = columns.atlantis.map((p) => p.id).join(",");
     const titansIds = columns.titans.map((p) => p.id).join(",");
-    router.push(`/matches/new?atlantis=${atlantisIds}&titans=${titansIds}`);
+    router.push(
+      `/matches/new?atlantis=${atlantisIds}&titans=${titansIds}&method=${assemblyMethod}`,
+    );
   };
 
   // ── Draft handlers ──────────────────────────────────────────────────────────
@@ -454,6 +466,7 @@ export default function TeamSplitterPage() {
   const confirmDraft = () => {
     if (!draft || draft.phase !== "complete") return;
     setColumns({ pool: [], atlantis: draft.atlantis, titans: draft.titans });
+    setAssemblyMethod("captains_draft");
     closeDraft();
   };
 

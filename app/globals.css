@@ -1927,6 +1927,13 @@
     position: relative;
     animation: fadeSlide 0.2s ease;
   }
+  .goa-match-card.clickable {
+    cursor: pointer;
+    transition: border-color 0.12s;
+  }
+  .goa-match-card.clickable:hover {
+    border-color: var(--border-bright);
+  }
 
   .goa-match-card::before {
     content: "";
@@ -2089,6 +2096,133 @@
     background: rgba(122, 88, 26, 0.3);
     color: rgba(201, 135, 36);
     border: 1px solid rgba(187, 135, 40, 0.4);
+  }
+
+  /* Match detail page — result banner */
+  .goa-match-banner {
+    margin: 0 0.75rem 0.85rem;
+    padding: 1.1rem 1rem;
+    border-radius: 6px;
+    text-align: center;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .goa-match-banner.atlantis {
+    background: linear-gradient(
+      135deg,
+      rgba(196, 42, 58, 0.2),
+      rgba(122, 26, 42, 0.3)
+    );
+    border-color: rgba(196, 42, 58, 0.45);
+  }
+  .goa-match-banner.titans {
+    background: linear-gradient(
+      135deg,
+      rgba(42, 171, 184, 0.2),
+      rgba(26, 107, 122, 0.3)
+    );
+    border-color: rgba(42, 171, 184, 0.45);
+  }
+  .goa-match-banner.none {
+    background: linear-gradient(
+      135deg,
+      rgba(201, 151, 58, 0.2),
+      rgba(122, 88, 26, 0.3)
+    );
+    border-color: rgba(201, 151, 58, 0.45);
+  }
+  .goa-match-banner-title {
+    font-family: "Cinzel", serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .goa-match-banner.atlantis .goa-match-banner-title {
+    color: var(--atlantis-light);
+  }
+  .goa-match-banner.titans .goa-match-banner-title {
+    color: var(--titans-light);
+  }
+  .goa-match-banner.none .goa-match-banner-title {
+    color: var(--gold-light);
+  }
+  .goa-match-banner-sub {
+    font-family: "Cinzel", serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 0.35rem;
+  }
+
+  .goa-draft-method-wrap {
+    display: flex;
+    justify-content: center;
+    margin: -0.4rem 0.75rem 0.85rem;
+  }
+  .goa-draft-method-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(42, 39, 32, 0.6);
+  }
+  .goa-draft-method-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .goa-draft-method-value {
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--gold-light);
+  }
+
+  /* Match detail page — pre-match odds bar */
+  .goa-odds-wrap {
+    padding: 0.75rem 0.85rem;
+  }
+  .goa-odds-labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: "Cinzel", serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 0.35rem;
+  }
+  .goa-odds-labels .atl {
+    color: var(--atlantis-light);
+  }
+  .goa-odds-labels .tit {
+    color: var(--titans-light);
+  }
+  .goa-odds-track {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(42, 39, 32, 0.8);
+  }
+  .goa-odds-seg {
+    height: 100%;
+    width: var(--bar-width, 0%);
+    transition: width 0.5s ease;
+  }
+  .goa-odds-seg.atl {
+    background: var(--atlantis-light);
+  }
+  .goa-odds-seg.tit {
+    background: var(--titans-light);
   }
 
   .goa-teams {
@@ -2759,6 +2893,9 @@
   }
   .goa-profile-match-row:hover {
     background: rgba(42, 39, 32, 0.5);
+  }
+  .goa-profile-match-row.clickable {
+    cursor: pointer;
   }
   .goa-empty-note {
     text-align: center;

@@ -3,44 +3,22 @@
 import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { TeamPanel } from "@/components/TeamPanel";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { ScrollText, Swords, Coins } from "lucide-react";
-
-type Player = {
-  id: string;
-  name: string;
-  mmr: number;
-  avatar_url?: string | null;
-};
-
-enum WinCondition {
-  LAST_PUSH = "LAST_PUSH",
-  THRONE = "THRONE",
-  LIFE_COUNTER = "LIFE_COUNTER",
-}
-
-const winConditionLabel: Record<string, string> = {
-  LAST_PUSH: "LAST PUSH",
-  THRONE: "THRONE",
-  LIFE_COUNTER: "LIFE COUNTER",
-};
-
-type Team = "atlantis" | "titans" | "none";
-
-type MatchPlayer = {
-  player_id: string;
-  team: Team;
-  players: Player;
-  mmr_before: number;
-  mmr_after: number;
-  hero_id?: string;
-  is_bounty?: boolean;
-};
+import {
+  didWin,
+  formatDate,
+  formatWinCondition,
+  Player,
+  MatchPlayer,
+  Team,
+  WinCondition,
+} from "@/lib/match";
+import { ScrollText, Swords } from "lucide-react";
 
 type Match = {
   id: string;
+  match_number: number;
   winner: Team;
   win_condition: WinCondition | null;
   created_at: string;
@@ -53,15 +31,11 @@ type Match = {
 
 const sortByName = (a: Player, b: Player) => a.name.localeCompare(b.name);
 
-const formatWinCondition = (wc?: WinCondition | null) => {
-  if (!wc) return "";
-  return `BY ${winConditionLabel[wc]}`;
-};
-
 const MATCHES_PER_PAGE = 5;
 
 const MATCH_SELECT = `
   id,
+  match_number,
   winner,
   win_condition,
   created_at,
@@ -100,6 +74,7 @@ type RawMatchPlayer = {
 
 type RawMatch = {
   id: string;
+  match_number: number;
   winner: string;
   win_condition: string | null;
   created_at: string;
@@ -134,6 +109,7 @@ const normalizeMatch = (match: RawMatch): Match => {
 
   return {
     id: match.id,
+    match_number: match.match_number,
     winner: match.winner as Team,
     win_condition: match.win_condition as WinCondition,
     created_at: match.created_at,
@@ -152,79 +128,6 @@ type PlayerStats = {
   mmr: number;
   name: string;
 };
-
-type TeamPanelProps = {
-  label: string;
-  labelClass: "atl" | "tit";
-  players: MatchPlayer[];
-  avgMmr: number;
-  mmrChange: number;
-  onSelectPlayer: (id: string) => void;
-};
-
-function TeamPanel({
-  label,
-  labelClass,
-  players,
-  avgMmr,
-  mmrChange,
-  onSelectPlayer,
-}: TeamPanelProps) {
-  return (
-    <div className="goa-team">
-      <div className="flex justify-between">
-        <span className={`goa-team-head ${labelClass}`}>{label}</span>
-        <span className={`goa-delta ${mmrChange >= 0 ? "pos" : "neg"}`}>
-          {mmrChange >= 0 ? "▲" : "▼"}
-          {Math.abs(mmrChange)}
-        </span>
-      </div>
-      <div className="goa-avg-mmr">Avg {Math.round(avgMmr)} MMR</div>
-      {players.map((p) => {
-        const hero = getHero(p.hero_id);
-        return (
-          <div
-            key={p.player_id}
-            className="goa-player-entry"
-            onClick={() => onSelectPlayer(p.player_id)}
-          >
-            <div className="goa-player-info">
-              <span className="goa-player-name">
-                <PlayerAvatar
-                  avatarUrl={p.players.avatar_url}
-                  name={p.players.name}
-                  size={32}
-                />
-                {p.players.name}
-              </span>
-              <span className="goa-mmr-change">
-                {p.mmr_before} → {p.mmr_after}
-              </span>
-            </div>
-            <span className="goa-display-hero">
-              {hero && (
-                <Image
-                  src={hero.icon}
-                  alt={hero.name}
-                  width={24}
-                  height={24}
-                  className="goa-display-hero-icon"
-                />
-              )}
-              {hero?.name} {renderStars(Number(hero?.complexity ?? 0))}
-              {p.is_bounty && (
-                <span className="goa-bounty-badge">
-                  <Coins size={10} />
-                  +5
-                </span>
-              )}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function MatchHistoryPage() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -465,8 +368,7 @@ export default function MatchHistoryPage() {
           </div>
         )}
 
-        {matches.map((match, index) => {
-          const matchNumber = totalCount - index;
+        {matches.map((match) => {
           const atlantis = match.match_players.filter(
             (p) => p.team === "atlantis",
           );
@@ -486,11 +388,14 @@ export default function MatchHistoryPage() {
           return (
             <div
               key={match.id}
-              className={`goa-match-card ${matchBorderClass}`}
+              className={`goa-match-card clickable ${matchBorderClass}`}
+              onClick={() => router.push(`/matches/${match.id}`)}
             >
               <div className="goa-match-header">
                 <span className="goa-match-date">
-                  <span className="goa-match-number">#{matchNumber}</span>
+                  <span className="goa-match-number">
+                    #{match.match_number}
+                  </span>
                   · {formatDate(match.created_at)}
                 </span>
                 <span className="goa-match-winner">

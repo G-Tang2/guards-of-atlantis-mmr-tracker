@@ -55,6 +55,7 @@ Three tables in Supabase:
 | `atlantis_mmr_change` | `integer` | MMR delta for Atlantis |
 | `titans_mmr_change` | `integer` | MMR delta for Titans |
 | `expected_atlantis_win` | `float` | Elo expected win probability for Atlantis |
+| `draft_method` | `draft_method` | `"captains_draft"`, `"random"`, `"balanced"`, or `"custom"`; nullable (unset on older matches) |
 
 ### `match_players`
 | Column | Type | Notes |
@@ -163,6 +164,13 @@ create type win_condition as enum (
   'TIMEOUT'
 );
 
+create type draft_method as enum (
+  'captains_draft',
+  'random',
+  'balanced',
+  'custom'
+);
+
 -- Players
 create table players (
   id uuid primary key default gen_random_uuid(),
@@ -181,7 +189,8 @@ create table matches (
   titans_avg_mmr float,
   atlantis_mmr_change integer,
   titans_mmr_change integer,
-  expected_atlantis_win float
+  expected_atlantis_win float,
+  draft_method draft_method
 );
 
 -- Match players
