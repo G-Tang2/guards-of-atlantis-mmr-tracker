@@ -237,6 +237,7 @@ function PlayerTagFilter({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onFocus={() => setFocused(true)}
+          onClick={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
       </div>
@@ -251,6 +252,7 @@ function PlayerTagFilter({
               onClick={() => {
                 onToggle(p.id);
                 setSearch("");
+                setFocused(false);
               }}
             >
               {p.name}
@@ -332,6 +334,7 @@ function HeroTagFilter({
               onClick={() => {
                 onSelect(h.id);
                 setSearch("");
+                setFocused(false);
               }}
             >
               {h.name}
@@ -1010,7 +1013,7 @@ export default function PlayerProfilePage() {
                     setHistoryLimit((n) => n + HISTORY_PAGE_SIZE)
                   }
                 >
-                  Load 10 More
+                  Load More
                 </button>
               )}
             </div>
