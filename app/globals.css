@@ -604,6 +604,47 @@
     color: var(--text-primary);
   }
 
+  .goa-history-filters-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.85rem;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    font-family: "Cinzel", serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.12s;
+  }
+  .goa-history-filters-toggle:hover {
+    color: var(--gold-light);
+  }
+  .goa-history-filters-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.3rem;
+    margin-left: 0.4rem;
+    border-radius: 999px;
+    background: rgba(201, 151, 58, 0.25);
+    color: var(--gold-light);
+    font-size: 0.62rem;
+    font-weight: 700;
+  }
+  .goa-history-filters-chevron {
+    transition: transform 0.2s;
+  }
+  .goa-history-filters-chevron.open {
+    transform: rotate(180deg);
+  }
+
   .goa-history-filters {
     display: flex;
     flex-direction: column;
@@ -2824,6 +2865,8 @@
     color: var(--text-muted);
   }
   .goa-hero-stat-chevron {
+    grid-column: 1 / -1;
+    justify-self: center;
     color: var(--text-muted);
     margin-top: 0.3rem;
     transition: transform 0.2s;

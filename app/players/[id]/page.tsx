@@ -376,6 +376,7 @@ export default function PlayerProfilePage() {
   const [heroFilter, setHeroFilter] = useState("");
   const [withFilter, setWithFilter] = useState<string[]>([]);
   const [againstFilter, setAgainstFilter] = useState<string[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const updateHeroFilter = (v: string) => {
     setHeroFilter(v);
@@ -751,6 +752,8 @@ export default function PlayerProfilePage() {
   }, [myMatches, playerId, heroFilter, withFilter, againstFilter]);
 
   const visibleMatches = filteredMatches.slice(0, historyLimit);
+  const activeFilterCount =
+    (heroFilter ? 1 : 0) + withFilter.length + againstFilter.length;
 
   if (loading || !player) {
     return (
@@ -895,6 +898,27 @@ export default function PlayerProfilePage() {
           <div className="goa-profile-sec-head">Recent Battles</div>
 
           {myMatches.length > 0 && (
+            <button
+              type="button"
+              className="goa-history-filters-toggle"
+              onClick={() => setFiltersOpen((v) => !v)}
+            >
+              <span>
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="goa-history-filters-badge">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </span>
+              <ChevronDown
+                size={14}
+                className={`goa-history-filters-chevron${filtersOpen ? " open" : ""}`}
+              />
+            </button>
+          )}
+
+          {myMatches.length > 0 && filtersOpen && (
             <div className="goa-history-filters">
               <HeroTagFilter
                 placeholder="Hero played…"
@@ -1142,11 +1166,12 @@ export default function PlayerProfilePage() {
                     <span>/</span>
                     <span className="goa-text-loss">{hs.losses}L</span>
                   </div>
-                  <ChevronDown
-                    size={13}
-                    className={`goa-hero-stat-chevron${isExpanded ? " open" : ""}`}
-                  />
                 </div>
+
+                <ChevronDown
+                  size={13}
+                  className={`goa-hero-stat-chevron${isExpanded ? " open" : ""}`}
+                />
 
                 {isExpanded && (
                   <div className="goa-hero-stat-expanded">
