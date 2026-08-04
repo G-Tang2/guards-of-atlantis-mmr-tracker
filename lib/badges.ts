@@ -4,6 +4,7 @@
 export type Badge = {
   id: string;
   name: string;
+  icon: string;
   heroIds: string[];
 };
 
@@ -11,6 +12,7 @@ export const BADGES: Badge[] = [
   {
     id: "base",
     name: "Base",
+    icon: "/badges/base.png",
     heroIds: [
       "arien",
       "brogan",
@@ -24,26 +26,31 @@ export const BADGES: Badge[] = [
   {
     id: "arcane",
     name: "Arcane",
+    icon: "/badges/arcane.png",
     heroIds: ["rowenna", "mrak", "snorri", "razzle", "gydion"],
   },
   {
     id: "wayward",
     name: "Wayward",
+    icon: "/badges/wayward.png",
     heroIds: ["brynn", "mortimer", "takahide", "widget", "emmitt"],
   },
   {
     id: "devoted",
     name: "Devoted",
+    icon: "/badges/devoted.png",
     heroIds: ["whisper", "misa", "ursafar", "silverarrow", "tali"],
   },
   {
     id: "defiant",
     name: "Defiant",
+    icon: "/badges/defiant.png",
     heroIds: ["garrus", "bain", "cutter", "nebkher", "trinkets"],
   },
   {
     id: "renowned",
     name: "Renowned",
+    icon: "/badges/renowned.png",
     heroIds: ["min", "swift", "wuk", "hanu", "ignatia"],
   },
 ];

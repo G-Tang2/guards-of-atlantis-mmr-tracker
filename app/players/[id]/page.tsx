@@ -846,8 +846,14 @@ export default function PlayerProfilePage() {
                 <span
                   key={badge.id}
                   className={`goa-badge-pill${complete ? " complete" : ""}`}
+                  title={badge.name}
                 >
-                  {badge.name}
+                  <Image
+                    src={badge.icon}
+                    alt={badge.name}
+                    width={28}
+                    height={28}
+                  />
                 </span>
               );
             })}
@@ -867,7 +873,16 @@ export default function PlayerProfilePage() {
                   className={`goa-badge-row${complete ? " complete" : ""}`}
                 >
                   <div className="goa-badge-row-head">
-                    <span className="goa-badge-name">{badge.name}</span>
+                    <span className="goa-badge-name">
+                      <Image
+                        src={badge.icon}
+                        alt={badge.name}
+                        width={24}
+                        height={24}
+                        className="goa-badge-name-icon"
+                      />
+                      {badge.name}
+                    </span>
                     <span className="goa-badge-progress">
                       {earnedCount}/{badge.heroIds.length}
                     </span>
