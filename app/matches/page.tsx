@@ -178,30 +178,38 @@ export default function MatchHistoryPage() {
         setTotalCount(count ?? 0);
       }
     } else {
-      // Find which matches this player was in first (paginated + ordered by
-      // match date), then fetch the full match data for just those matches.
-      const {
-        data: mpData,
-        error: mpError,
-        count,
-      } = await supabaseClient
+      // Find which matches this player was in. PostgREST's order-by via a
+      // foreign table (`.order("created_at", { foreignTable: "matches" })`)
+      // does not reliably sort these parent (match_players) rows, so the
+      // full set is fetched unpaginated (small dataset) and sorted by date
+      // ourselves, then paginated in JS.
+      const { data: mpData, error: mpError } = await supabaseClient
         .from("match_players")
-        .select("match_id, matches!inner(created_at)", { count: "exact" })
-        .eq("player_id", playerId)
-        .order("created_at", { foreignTable: "matches", ascending: false })
-        .range(offset, offset + MATCHES_PER_PAGE - 1);
+        .select("match_id, matches!inner(created_at)")
+        .eq("player_id", playerId);
 
       if (mpError) {
         console.error(mpError);
       } else {
-        const matchIds = (mpData ?? []).map((row) => row.match_id);
-        if (matchIds.length === 0) {
+        const sortedMatchIds = (mpData ?? [])
+          .map((row) => {
+            const matchInfo = Array.isArray(row.matches)
+              ? row.matches[0]
+              : row.matches;
+            return { match_id: row.match_id, created_at: matchInfo?.created_at ?? "" };
+          })
+          .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+          .map((row) => row.match_id);
+
+        const pageIds = sortedMatchIds.slice(offset, offset + MATCHES_PER_PAGE);
+
+        if (pageIds.length === 0) {
           if (!append) setMatches([]);
         } else {
           const { data, error } = await supabaseClient
             .from("matches")
             .select(MATCH_SELECT)
-            .in("id", matchIds)
+            .in("id", pageIds)
             .order("created_at", { ascending: false });
 
           if (error) {
@@ -213,7 +221,7 @@ export default function MatchHistoryPage() {
             );
           }
         }
-        setTotalCount(count ?? 0);
+        setTotalCount(sortedMatchIds.length);
       }
     }
 
