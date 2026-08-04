@@ -453,6 +453,10 @@
     text-transform: uppercase;
     color: var(--gold);
   }
+  .goa-sec-head.clickable {
+    justify-content: space-between;
+    cursor: pointer;
+  }
 
   .goa-section-title {
     font-family: "Cinzel", serif;
@@ -2375,6 +2379,107 @@
   .goa-mmr-display b {
     color: var(--gold);
     font-size: 1rem;
+  }
+
+  /* ── Badges (profile page) ── */
+  .goa-badges-chevron {
+    flex-shrink: 0;
+    transition: transform 0.2s;
+  }
+  .goa-badges-chevron.open {
+    transform: rotate(180deg);
+  }
+  .goa-badges-summary {
+    padding: 0.75rem 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .goa-badge-pill {
+    padding: 0.3rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(28, 26, 20, 0.5);
+    font-family: "Cinzel", serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .goa-badge-pill.complete {
+    border-color: var(--gold);
+    background: rgba(201, 151, 58, 0.12);
+    color: var(--gold-light);
+  }
+  .goa-badges-wrap {
+    padding: 0.75rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+  .goa-badge-row {
+    padding: 0.55rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: rgba(28, 26, 20, 0.5);
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .goa-badge-row.complete {
+    border-color: var(--gold);
+    background: rgba(201, 151, 58, 0.08);
+  }
+  .goa-badge-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .goa-badge-name {
+    font-family: "Cinzel", serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+  }
+  .goa-badge-row.complete .goa-badge-name {
+    color: var(--gold-light);
+  }
+  .goa-badge-progress {
+    font-family: "Cinzel", serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+  .goa-badge-row.complete .goa-badge-progress {
+    color: var(--gold-light);
+  }
+  .goa-badge-icons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .goa-badge-icon-wrap {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    filter: grayscale(100%) brightness(0.45);
+    opacity: 0.55;
+    transition: filter 0.25s ease, opacity 0.25s ease, border-color 0.25s ease;
+  }
+  .goa-badge-icon-wrap.earned {
+    filter: none;
+    opacity: 1;
+    border-color: var(--gold);
+  }
+  .goa-badge-icon-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .goa-delta {

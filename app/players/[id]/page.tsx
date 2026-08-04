@@ -13,6 +13,7 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { Hero } from "@/lib/heroes";
+import { BADGES } from "@/lib/badges";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
 import { Swords, Loader2, X, Camera, Coins, ChevronDown } from "lucide-react";
@@ -406,6 +407,7 @@ export default function PlayerProfilePage() {
   const [heroSortKey, setHeroSortKey] = useState<HeroSortKey>("played");
   const [heroSortAsc, setHeroSortAsc] = useState(false);
   const [expandedHeroId, setExpandedHeroId] = useState<string | null>(null);
+  const [badgesOpen, setBadgesOpen] = useState(false);
 
   const handleHeroSort = (key: HeroSortKey) => {
     if (heroSortKey === key) setHeroSortAsc((v) => !v);
@@ -686,6 +688,11 @@ export default function PlayerProfilePage() {
       .sort((a, b) => b.played - a.played);
   }, [myMatches, playerId]);
 
+  const wonHeroIds = useMemo(
+    () => new Set(heroStats.filter((hs) => hs.wins > 0).map((hs) => hs.hero.id)),
+    [heroStats],
+  );
+
   const sortedHeroStats = useMemo(() => {
     const list = [...heroStats];
     list.sort((a, b) => {
@@ -813,6 +820,84 @@ export default function PlayerProfilePage() {
         <p className="goa-mmr-display">
           <b>{player.mmr}</b> MMR
         </p>
+      </div>
+
+      {/* Badges */}
+      <div className="goa-section">
+        <div
+          className="goa-sec-head clickable"
+          onClick={() => setBadgesOpen((v) => !v)}
+        >
+          <span>Badges</span>
+          <ChevronDown
+            size={14}
+            className={`goa-badges-chevron${badgesOpen ? " open" : ""}`}
+          />
+        </div>
+
+        {!badgesOpen && (
+          <div className="goa-badges-summary">
+            {BADGES.map((badge) => {
+              const earnedCount = badge.heroIds.filter((id) =>
+                wonHeroIds.has(id),
+              ).length;
+              const complete = earnedCount === badge.heroIds.length;
+              return (
+                <span
+                  key={badge.id}
+                  className={`goa-badge-pill${complete ? " complete" : ""}`}
+                >
+                  {badge.name}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {badgesOpen && (
+          <div className="goa-badges-wrap">
+            {BADGES.map((badge) => {
+              const earnedCount = badge.heroIds.filter((id) =>
+                wonHeroIds.has(id),
+              ).length;
+              const complete = earnedCount === badge.heroIds.length;
+              return (
+                <div
+                  key={badge.id}
+                  className={`goa-badge-row${complete ? " complete" : ""}`}
+                >
+                  <div className="goa-badge-row-head">
+                    <span className="goa-badge-name">{badge.name}</span>
+                    <span className="goa-badge-progress">
+                      {earnedCount}/{badge.heroIds.length}
+                    </span>
+                  </div>
+                  <div className="goa-badge-icons">
+                    {badge.heroIds.map((heroId) => {
+                      const hero = getHero(heroId);
+                      if (!hero) return null;
+                      const earned = wonHeroIds.has(heroId);
+                      return (
+                        <div
+                          key={heroId}
+                          className={`goa-badge-icon-wrap${earned ? " earned" : ""}`}
+                          title={hero.name}
+                        >
+                          <Image
+                            src={hero.icon}
+                            alt={hero.name}
+                            width={32}
+                            height={32}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Stat tiles */}
