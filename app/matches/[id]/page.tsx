@@ -28,6 +28,12 @@ type Match = {
   titans_mmr_change: number;
   expected_atlantis_win: number | null;
   draft_method: DraftMethod | null;
+  starting_wave_counter: number | null;
+  starting_life_counter: number | null;
+  wave_counter_remaining_1: number | null;
+  wave_counter_remaining_2: number | null;
+  atlantis_life_counter: number | null;
+  titans_life_counter: number | null;
   match_players: MatchPlayer[];
 };
 
@@ -53,6 +59,12 @@ type RawMatch = {
   titans_mmr_change: number;
   expected_atlantis_win: number | null;
   draft_method: string | null;
+  starting_wave_counter: number | null;
+  starting_life_counter: number | null;
+  wave_counter_remaining_1: number | null;
+  wave_counter_remaining_2: number | null;
+  atlantis_life_counter: number | null;
+  titans_life_counter: number | null;
   match_players: RawMatchPlayer[] | null;
 };
 
@@ -68,6 +80,12 @@ const MATCH_SELECT = `
   titans_mmr_change,
   expected_atlantis_win,
   draft_method,
+  starting_wave_counter,
+  starting_life_counter,
+  wave_counter_remaining_1,
+  wave_counter_remaining_2,
+  atlantis_life_counter,
+  titans_life_counter,
   match_players (
     player_id,
     team,
@@ -118,9 +136,39 @@ const normalizeMatch = (match: RawMatch): Match => {
     titans_mmr_change: match.titans_mmr_change,
     expected_atlantis_win: match.expected_atlantis_win,
     draft_method: match.draft_method as DraftMethod | null,
+    starting_wave_counter: match.starting_wave_counter,
+    starting_life_counter: match.starting_life_counter,
+    wave_counter_remaining_1: match.wave_counter_remaining_1,
+    wave_counter_remaining_2: match.wave_counter_remaining_2,
+    atlantis_life_counter: match.atlantis_life_counter,
+    titans_life_counter: match.titans_life_counter,
     match_players: normalizedMatchPlayers,
   };
 };
+
+type DetailRow = {
+  label: string;
+  value: string | number;
+  labelClass?: "atl" | "tit";
+};
+
+function DetailTable({ rows }: { rows: DetailRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <table className="goa-detail-table">
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.label}>
+            <th scope="row" className={row.labelClass}>
+              {row.label}
+            </th>
+            <td>{row.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 export default function MatchDetailPage() {
   const params = useParams();
@@ -184,6 +232,59 @@ export default function MatchDetailPage() {
       ? null
       : Math.round(match.expected_atlantis_win * 100);
 
+  // Wave counter remaining is shown with lane numbering only when a second
+  // lane was actually recorded — otherwise it's just one neutral value,
+  // not owned by either team.
+  const hasSecondWaveLane = match.wave_counter_remaining_2 !== null;
+
+  const preMatchRows: DetailRow[] = [];
+  if (match.draft_method) {
+    preMatchRows.push({
+      label: "Draft Method",
+      value: draftMethodLabel[match.draft_method],
+    });
+  }
+  if (match.starting_wave_counter !== null) {
+    preMatchRows.push({
+      label: "Starting Wave",
+      value: match.starting_wave_counter,
+    });
+  }
+  if (match.starting_life_counter !== null) {
+    preMatchRows.push({
+      label: "Starting Life",
+      value: match.starting_life_counter,
+    });
+  }
+
+  const postMatchRows: DetailRow[] = [];
+  if (match.wave_counter_remaining_1 !== null) {
+    postMatchRows.push({
+      label: hasSecondWaveLane ? "Wave Lane 1 Remaining" : "Wave Remaining",
+      value: match.wave_counter_remaining_1,
+    });
+  }
+  if (match.wave_counter_remaining_2 !== null) {
+    postMatchRows.push({
+      label: "Wave Lane 2 Remaining",
+      value: match.wave_counter_remaining_2,
+    });
+  }
+  if (match.atlantis_life_counter !== null) {
+    postMatchRows.push({
+      label: "Atlantis Life Remaining",
+      value: match.atlantis_life_counter,
+      labelClass: "atl",
+    });
+  }
+  if (match.titans_life_counter !== null) {
+    postMatchRows.push({
+      label: "Titans Life Remaining",
+      value: match.titans_life_counter,
+      labelClass: "tit",
+    });
+  }
+
   return (
     <main className="goa-root">
       <header className="goa-header">
@@ -207,65 +308,69 @@ export default function MatchDetailPage() {
         )}
       </div>
 
-      {match.draft_method && (
-        <div className="goa-draft-method-wrap">
-          <span className="goa-draft-method-tag">
-            <span className="goa-draft-method-label">Draft Method</span>
-            <span className="goa-draft-method-value">
-              {draftMethodLabel[match.draft_method]}
-            </span>
-          </span>
-        </div>
-      )}
-
-      {atlantisOdds !== null && (
+      {/* Pre-Match — everything known/decided before the battle started:
+          how teams were built, the starting counters, and the Elo odds. */}
+      {(match.draft_method ||
+        match.starting_wave_counter !== null ||
+        match.starting_life_counter !== null ||
+        atlantisOdds !== null) && (
         <div className="goa-section">
-          <div className="goa-sec-head">Pre-Match Odds</div>
-          <div className="goa-odds-wrap">
-            <div className="goa-odds-labels">
-              <span className="atl">Atlantis {atlantisOdds}%</span>
-              <span className="tit">Titans {100 - atlantisOdds}%</span>
+          <div className="goa-sec-head">Pre-Match</div>
+
+          <DetailTable rows={preMatchRows} />
+
+          {atlantisOdds !== null && (
+            <div className="goa-odds-wrap">
+              <div className="goa-odds-labels">
+                <span className="atl">Atlantis {atlantisOdds}%</span>
+                <span className="tit">Titans {100 - atlantisOdds}%</span>
+              </div>
+              <div className="goa-odds-track">
+                <div
+                  className="goa-odds-seg atl"
+                  style={
+                    { "--bar-width": `${atlantisOdds}%` } as CSSProperties
+                  }
+                />
+                <div
+                  className="goa-odds-seg tit"
+                  style={
+                    {
+                      "--bar-width": `${100 - atlantisOdds}%`,
+                    } as CSSProperties
+                  }
+                />
+              </div>
             </div>
-            <div className="goa-odds-track">
-              <div
-                className="goa-odds-seg atl"
-                style={
-                  { "--bar-width": `${atlantisOdds}%` } as CSSProperties
-                }
-              />
-              <div
-                className="goa-odds-seg tit"
-                style={
-                  {
-                    "--bar-width": `${100 - atlantisOdds}%`,
-                  } as CSSProperties
-                }
-              />
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      <div className="goa-matches">
-        <div className="goa-match-card">
-          <div className="goa-teams">
-            <TeamPanel
-              label="Atlantis"
-              labelClass="atl"
-              players={atlantis}
-              avgMmr={match.atlantis_avg_mmr}
-              mmrChange={match.atlantis_mmr_change}
-              onSelectPlayer={goToProfile}
-            />
-            <TeamPanel
-              label="Titans"
-              labelClass="tit"
-              players={titans}
-              avgMmr={match.titans_avg_mmr}
-              mmrChange={match.titans_mmr_change}
-              onSelectPlayer={goToProfile}
-            />
-          </div>
+      {/* Post-Match — the result: what was left of the shared wave counter
+          and each team's life counter, then each team's roster and MMR
+          change. */}
+      <div className="goa-section">
+        <div className="goa-sec-head">Post-Match</div>
+
+        <DetailTable rows={postMatchRows} />
+
+        <div className="goa-teams">
+          <TeamPanel
+            label="Atlantis"
+            labelClass="atl"
+            players={atlantis}
+            avgMmr={match.atlantis_avg_mmr}
+            mmrChange={match.atlantis_mmr_change}
+            onSelectPlayer={goToProfile}
+          />
+          <TeamPanel
+            label="Titans"
+            labelClass="tit"
+            players={titans}
+            avgMmr={match.titans_avg_mmr}
+            mmrChange={match.titans_mmr_change}
+            onSelectPlayer={goToProfile}
+          />
         </div>
       </div>
     </main>

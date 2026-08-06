@@ -229,11 +229,15 @@ export default function TeamSplitterPage() {
   // marks it "custom", since the tool's output no longer stands alone.
   const [assemblyMethod, setAssemblyMethod] = useState<DraftMethod>("custom");
 
-  // Wave/life counter settings for this match — shared by both teams
-  // (same wave count, same starting life total), independent of the
-  // remaining-at-match-end counters recorded on Record of Battle.
+  // Wave/life counter settings for this match, independent of the
+  // remaining-at-match-end counters recorded on Record of Battle. Both are
+  // one shared starting total — Atlantis and Titans aren't tracked
+  // separately. Wave counter can additionally run as two lanes instead of
+  // one, but both lanes always start at this same value; the choice only
+  // determines how many "remaining" inputs Record of Battle shows later.
   const [waveCounter, setWaveCounter] = useState("");
   const [lifeCounter, setLifeCounter] = useState("");
+  const [twoWaveLanes, setTwoWaveLanes] = useState(false);
 
   // Draft modal
   const [draftOpen, setDraftOpen] = useState(false);
@@ -288,6 +292,7 @@ export default function TeamSplitterPage() {
               method: DraftMethod;
               waveCounter?: string;
               lifeCounter?: string;
+              twoWaveLanes?: boolean;
             };
             const byId = new Map<string, Player>(
               players.map((p) => [p.id, p]),
@@ -302,6 +307,7 @@ export default function TeamSplitterPage() {
             setAssemblyMethod(saved.method);
             setWaveCounter(saved.waveCounter ?? "");
             setLifeCounter(saved.lifeCounter ?? "");
+            setTwoWaveLanes(saved.twoWaveLanes ?? false);
           }
         } catch {
           // Corrupt/stale entry — ignore and start fresh.
@@ -312,11 +318,12 @@ export default function TeamSplitterPage() {
   }, []);
 
   // Single source of truth for the team draft — read by /matches/new on
-  // handoff (team roster + assembly method only; the wave/life counters
-  // below are separate, independent fields it doesn't read), and by this
-  // page itself to restore state after the user hits Back. Also called
-  // directly (not just via the effect below) right before navigating to
-  // /matches/new, so the handoff never depends on effect timing.
+  // handoff (it reads the wave/life counter fields too, to bound the
+  // remaining-counter ranges and to record the starting values on the
+  // match), and by this page itself to restore state after the user hits
+  // Back. Also called directly (not just via the effect below) right
+  // before navigating to /matches/new, so the handoff never depends on
+  // effect timing.
   const persistDraft = () => {
     const draft = {
       pool: columns.pool.map((p) => p.id),
@@ -325,6 +332,7 @@ export default function TeamSplitterPage() {
       method: assemblyMethod,
       waveCounter,
       lifeCounter,
+      twoWaveLanes,
     };
     const isEmpty =
       draft.pool.length === 0 &&
@@ -344,7 +352,14 @@ export default function TeamSplitterPage() {
   useEffect(() => {
     if (loading) return;
     persistDraft();
-  }, [columns, assemblyMethod, waveCounter, lifeCounter, loading]);
+  }, [
+    columns,
+    assemblyMethod,
+    waveCounter,
+    lifeCounter,
+    twoWaveLanes,
+    loading,
+  ]);
 
   const allAdded = [...columns.pool, ...columns.atlantis, ...columns.titans];
 
@@ -402,7 +417,8 @@ export default function TeamSplitterPage() {
     setAssemblyMethod("balanced");
   };
 
-  const canBattle = columns.atlantis.length > 0 && columns.titans.length > 0;
+  const teamsReady = columns.atlantis.length > 0 && columns.titans.length > 0;
+  const canBattle = teamsReady && waveCounter !== "" && lifeCounter !== "";
 
   const handleGoToBattle = () => {
     if (!canBattle) return;
@@ -657,7 +673,7 @@ export default function TeamSplitterPage() {
           <p className="goa-splitter-hint">Add at least 2 players to split</p>
         )}
 
-        {canBattle && (
+        {teamsReady && (
           <div className="goa-result-head">
             <span className="goa-result-title">Team Balance</span>
             <span className="goa-result-diff">
@@ -701,45 +717,69 @@ export default function TeamSplitterPage() {
             />
           </div>
         </DndContext>
+      </div>
 
-        {/* Game settings — shared by both teams, independent of Record of
-            Battle's own wave/life counters (which record what remained
-            per team at match end). */}
-        {canBattle && (
+      {/* Game settings — its own card, outside Assemble Teams, so it
+          doesn't read as attached to the Titans column above it.
+          Independent of Record of Battle's own remaining counters. Both
+          are one shared starting total (never per team). Wave counter can
+          additionally run as two lanes instead of one, but both always
+          start at the same value here — the checkbox only decides how
+          many "remaining" inputs show up later. */}
+      {teamsReady && (
+        <div className="goa-card">
+          <div className="goa-card-head">Game Settings</div>
           <div className="goa-game-settings">
-            <div className="goa-team-counters plain">
-              <div className="goa-counter-field">
+            <div className="goa-counter-field">
+              <div className="goa-counter-field-head">
                 <label className="goa-counter-label">Wave Counter</label>
-                <select
-                  className="goa-select"
-                  value={waveCounter}
-                  onChange={(e) => setWaveCounter(e.target.value)}
-                >
-                  <option value="">—</option>
-                  <option value="3">3</option>
-                  <option value="5">5</option>
-                  <option value="7">7</option>
-                </select>
+                <label className="goa-counter-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={twoWaveLanes}
+                    onChange={(e) => setTwoWaveLanes(e.target.checked)}
+                  />
+                  <span className="goa-toggle-track">
+                    <span className="goa-toggle-thumb" />
+                  </span>
+                  <span className="goa-toggle-text">Two lanes</span>
+                </label>
               </div>
-              <div className="goa-counter-field">
-                <label className="goa-counter-label">Life Counter</label>
-                <select
-                  className="goa-select"
-                  value={lifeCounter}
-                  onChange={(e) => setLifeCounter(e.target.value)}
-                >
-                  <option value="">—</option>
-                  <option value="4">4</option>
-                  <option value="5">5</option>
-                  <option value="6">6</option>
-                  <option value="7">7</option>
-                  <option value="8">8</option>
-                </select>
-              </div>
+              <select
+                className="goa-select"
+                value={waveCounter}
+                onChange={(e) => setWaveCounter(e.target.value)}
+              >
+                <option value="">—</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="7">7</option>
+              </select>
+            </div>
+            <div className="goa-counter-field">
+              <label className="goa-counter-label">Life Counter</label>
+              <select
+                className="goa-select"
+                value={lifeCounter}
+                onChange={(e) => setLifeCounter(e.target.value)}
+              >
+                <option value="">—</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+              </select>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {teamsReady && (waveCounter === "" || lifeCounter === "") && (
+        <p className="goa-splitter-hint">
+          Select a wave counter and life counter to begin
+        </p>
+      )}
 
       <div className="goa-btn-wrap">
         <button

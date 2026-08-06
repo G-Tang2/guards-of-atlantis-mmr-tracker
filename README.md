@@ -56,8 +56,10 @@ Three tables in Supabase:
 | `titans_mmr_change` | `integer` | MMR delta for Titans |
 | `expected_atlantis_win` | `float` | Elo expected win probability for Atlantis |
 | `draft_method` | `draft_method` | `"captains_draft"`, `"random"`, `"balanced"`, or `"custom"`; nullable (unset on older matches) |
-| `atlantis_wave_counter` | `smallint` | Wave counter remaining for Atlantis at match end; `0`–`7`; nullable, independent of win condition |
-| `titans_wave_counter` | `smallint` | Wave counter remaining for Titans at match end; `0`–`7`; nullable, independent of win condition |
+| `starting_wave_counter` | `smallint` | Wave counter's starting count (always one shared value, whether the match ran it as one lane or two); `3`, `5`, or `7`; nullable |
+| `starting_life_counter` | `smallint` | Life counter the match started with (always one shared value); `4`–`8`; nullable |
+| `wave_counter_remaining_1` | `smallint` | Wave counter remaining at match end — not team-owned, both teams share the same lane(s); `0`–`7`; nullable |
+| `wave_counter_remaining_2` | `smallint` | Second wave counter lane's remaining count, only used if Divide the Host ran the match with two lanes; `0`–`7`; nullable |
 | `atlantis_life_counter` | `smallint` | Life counter remaining for Atlantis at match end; `0`–`8`; nullable, independent of win condition |
 | `titans_life_counter` | `smallint` | Life counter remaining for Titans at match end; `0`–`8`; nullable, independent of win condition |
 
@@ -198,8 +200,10 @@ create table matches (
   titans_mmr_change integer,
   expected_atlantis_win float,
   draft_method draft_method,
-  atlantis_wave_counter smallint check (atlantis_wave_counter between 0 and 7),
-  titans_wave_counter smallint check (titans_wave_counter between 0 and 7),
+  starting_wave_counter smallint check (starting_wave_counter in (3, 5, 7)),
+  starting_life_counter smallint check (starting_life_counter between 4 and 8),
+  wave_counter_remaining_1 smallint check (wave_counter_remaining_1 between 0 and 7),
+  wave_counter_remaining_2 smallint check (wave_counter_remaining_2 between 0 and 7),
   atlantis_life_counter smallint check (atlantis_life_counter between 0 and 8),
   titans_life_counter smallint check (titans_life_counter between 0 and 8)
 );

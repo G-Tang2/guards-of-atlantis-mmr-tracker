@@ -52,19 +52,37 @@ function NewMatchPageInner() {
   const [winner, setWinner] = useState<Winner>("");
   const [winCondition, setWinCondition] = useState<WinCondition | null>(null);
   const [draftMethod, setDraftMethod] = useState<DraftMethod>("custom");
-  // Wave/life counter remaining for each team at match end — independent of
-  // win condition, and left unset (empty string) unless the user picks one.
-  const [atlantisWaveCounter, setAtlantisWaveCounter] = useState("");
-  const [titansWaveCounter, setTitansWaveCounter] = useState("");
+  // Life counter remaining for each team at match end — per team, since
+  // each team's life total is its own. Independent of win condition, and
+  // left unset (empty string) unless the user picks one.
   const [atlantisLifeCounter, setAtlantisLifeCounter] = useState("");
   const [titansLifeCounter, setTitansLifeCounter] = useState("");
-  // Upper bound for the "remaining" dropdowns above — the starting wave/life
-  // counter chosen on Divide the Host, so remaining can only be 0..starting.
-  // Falls back to the largest possible starting value if that step was
-  // skipped, so the field still offers a sensible full range.
-  const [maxWaveCounter, setMaxWaveCounter] = useState(7);
-  const [maxLifeCounter, setMaxLifeCounter] = useState(8);
+  // Wave counter remaining is NOT per team — both teams share the same
+  // lane(s). One remaining input if the match used one lane, two if it
+  // used two (set on Divide the Host); neither is "Atlantis's" or
+  // "Titans's".
+  const [waveCounterRemaining1, setWaveCounterRemaining1] = useState("");
+  const [waveCounterRemaining2, setWaveCounterRemaining2] = useState("");
+  // The starting wave/life counter chosen on Divide the Host — handed off
+  // (not re-entered here), and recorded alongside the remaining counters
+  // above so the match record shows both ends. Empty if that step was
+  // skipped. Both are one shared starting value; twoWaveLanes just decides
+  // whether one or two remaining-wave inputs render above.
+  const [startingWaveCounter, setStartingWaveCounter] = useState("");
+  const [startingLifeCounter, setStartingLifeCounter] = useState("");
+  const [twoWaveLanes, setTwoWaveLanes] = useState(false);
+  // Upper bound for the remaining-wave dropdown(s) above — remaining can
+  // only be 0..starting. Falls back to the largest possible starting value
+  // if that step was skipped, so the field still offers a sensible range.
+  const maxWaveCounter = [3, 5, 7].includes(Number(startingWaveCounter))
+    ? Number(startingWaveCounter)
+    : 7;
+  const maxLifeCounter =
+    Number(startingLifeCounter) >= 4 && Number(startingLifeCounter) <= 8
+      ? Number(startingLifeCounter)
+      : 8;
   const [toast, setToast] = useState<string | null>(null);
+  const [toastError, setToastError] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -89,6 +107,7 @@ function NewMatchPageInner() {
               method: DraftMethod;
               waveCounter?: string;
               lifeCounter?: string;
+              twoWaveLanes?: boolean;
             };
             const byId = new Map<string, Player>(data.map((p) => [p.id, p]));
             const resolve = (ids: string[]): PoolEntry[] =>
@@ -112,13 +131,13 @@ function NewMatchPageInner() {
               setDraftMethod(saved.method);
             }
 
-            const startingWave = Number(saved.waveCounter);
-            if ([3, 5, 7].includes(startingWave)) {
-              setMaxWaveCounter(startingWave);
+            if ([3, 5, 7].includes(Number(saved.waveCounter))) {
+              setStartingWaveCounter(saved.waveCounter!);
             }
+            setTwoWaveLanes(saved.twoWaveLanes ?? false);
             const startingLife = Number(saved.lifeCounter);
             if (startingLife >= 4 && startingLife <= 8) {
-              setMaxLifeCounter(startingLife);
+              setStartingLifeCounter(saved.lifeCounter!);
             }
           }
         } catch {
@@ -131,8 +150,9 @@ function NewMatchPageInner() {
     loadPlayers();
   }, []);
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, isError = false) => {
     setToast(msg);
+    setToastError(isError);
     setTimeout(() => setToast(null), 3000);
   };
 
@@ -196,6 +216,34 @@ function NewMatchPageInner() {
     }
   };
 
+  // A team's life counter hitting 0 means the other team just won by life
+  // counter — fill in the victor and win condition as a convenience, since
+  // that's always the correct call the moment this is entered. Both teams
+  // can never be at 0 simultaneously, so block the second one.
+  const handleAtlantisLifeChange = (value: string) => {
+    if (value === "0" && titansLifeCounter === "0") {
+      showToast("Both teams can't be at 0 life remaining", true);
+      return;
+    }
+    setAtlantisLifeCounter(value);
+    if (value === "0") {
+      setWinner("titans");
+      setWinCondition(WinCondition.LIFE_COUNTER);
+    }
+  };
+
+  const handleTitansLifeChange = (value: string) => {
+    if (value === "0" && atlantisLifeCounter === "0") {
+      showToast("Both teams can't be at 0 life remaining", true);
+      return;
+    }
+    setTitansLifeCounter(value);
+    if (value === "0") {
+      setWinner("atlantis");
+      setWinCondition(WinCondition.LIFE_COUNTER);
+    }
+  };
+
   const handleSave = async () => {
     if (!winner || atlantis.length === 0 || titans.length === 0 || saving)
       return;
@@ -248,12 +296,19 @@ function NewMatchPageInner() {
           titans_mmr_change: result.meta.titansDelta,
           expected_atlantis_win: result.meta.expectedA,
           draft_method: draftMethod,
-          atlantis_wave_counter: atlantisWaveCounter
-            ? Number(atlantisWaveCounter)
+          starting_wave_counter: startingWaveCounter
+            ? Number(startingWaveCounter)
             : null,
-          titans_wave_counter: titansWaveCounter
-            ? Number(titansWaveCounter)
+          starting_life_counter: startingLifeCounter
+            ? Number(startingLifeCounter)
             : null,
+          wave_counter_remaining_1: waveCounterRemaining1
+            ? Number(waveCounterRemaining1)
+            : null,
+          wave_counter_remaining_2:
+            twoWaveLanes && waveCounterRemaining2
+              ? Number(waveCounterRemaining2)
+              : null,
           atlantis_life_counter: atlantisLifeCounter
             ? Number(atlantisLifeCounter)
             : null,
@@ -423,10 +478,12 @@ function NewMatchPageInner() {
       setAtlantis([]);
       setTitans([]);
       setWinner("");
-      setAtlantisWaveCounter("");
-      setTitansWaveCounter("");
       setAtlantisLifeCounter("");
       setTitansLifeCounter("");
+      setWaveCounterRemaining1("");
+      setWaveCounterRemaining2("");
+      setStartingWaveCounter("");
+      setStartingLifeCounter("");
       sessionStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
 
       setTimeout(() => {
@@ -434,7 +491,7 @@ function NewMatchPageInner() {
       }, 1000);
     } catch (err) {
       console.error("Failed to save match", err);
-      showToast("✦ Record cannot be saved. Try again.");
+      showToast("✦ Record cannot be saved. Try again.", true);
     } finally {
       setSaving(false);
     }
@@ -531,38 +588,6 @@ function NewMatchPageInner() {
             </div>
           ))}
         </div>
-        <div className="goa-team-counters">
-          <div className="goa-counter-field">
-            <label className="goa-counter-label">Wave Counter</label>
-            <select
-              className="goa-select"
-              value={atlantisWaveCounter}
-              onChange={(e) => setAtlantisWaveCounter(e.target.value)}
-            >
-              <option value="">—</option>
-              {zeroToMax(maxWaveCounter).map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="goa-counter-field">
-            <label className="goa-counter-label">Life Counter</label>
-            <select
-              className="goa-select"
-              value={atlantisLifeCounter}
-              onChange={(e) => setAtlantisLifeCounter(e.target.value)}
-            >
-              <option value="">—</option>
-              {zeroToMax(maxLifeCounter).map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
       </div>
 
       {/* Titans */}
@@ -635,13 +660,23 @@ function NewMatchPageInner() {
             </div>
           ))}
         </div>
-        <div className="goa-team-counters">
-          <div className="goa-counter-field">
-            <label className="goa-counter-label">Wave Counter</label>
+      </div>
+
+      {/* Remaining counters — wave counter is shared by both teams (not
+          per-team), life counter is per-team, so they're grouped together
+          in one place instead of wave living alone and life being buried
+          inside each team's roster. No heading — each field's own label
+          carries the context. */}
+      <div className="goa-card">
+        <div className="goa-game-settings">
+          <div className={`goa-counter-field${twoWaveLanes ? "" : " full"}`}>
+            <label className="goa-counter-label">
+              {twoWaveLanes ? "Wave Lane 1 Remaining" : "Wave Counter Remaining"}
+            </label>
             <select
               className="goa-select"
-              value={titansWaveCounter}
-              onChange={(e) => setTitansWaveCounter(e.target.value)}
+              value={waveCounterRemaining1}
+              onChange={(e) => setWaveCounterRemaining1(e.target.value)}
             >
               <option value="">—</option>
               {zeroToMax(maxWaveCounter).map((n) => (
@@ -651,12 +686,48 @@ function NewMatchPageInner() {
               ))}
             </select>
           </div>
+          {twoWaveLanes && (
+            <div className="goa-counter-field">
+              <label className="goa-counter-label">Wave Lane 2 Remaining</label>
+              <select
+                className="goa-select"
+                value={waveCounterRemaining2}
+                onChange={(e) => setWaveCounterRemaining2(e.target.value)}
+              >
+                <option value="">—</option>
+                {zeroToMax(maxWaveCounter).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="goa-counter-field">
-            <label className="goa-counter-label">Life Counter</label>
+            <label className="goa-counter-label atl">
+              Atlantis Life Remaining
+            </label>
+            <select
+              className="goa-select"
+              value={atlantisLifeCounter}
+              onChange={(e) => handleAtlantisLifeChange(e.target.value)}
+            >
+              <option value="">—</option>
+              {zeroToMax(maxLifeCounter).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="goa-counter-field">
+            <label className="goa-counter-label tit">
+              Titans Life Remaining
+            </label>
             <select
               className="goa-select"
               value={titansLifeCounter}
-              onChange={(e) => setTitansLifeCounter(e.target.value)}
+              onChange={(e) => handleTitansLifeChange(e.target.value)}
             >
               <option value="">—</option>
               {zeroToMax(maxLifeCounter).map((n) => (
@@ -761,7 +832,9 @@ function NewMatchPageInner() {
         </button>
       </div>
 
-      {toast && <div className="goa-toast">{toast}</div>}
+      {toast && (
+        <div className={`goa-toast${toastError ? " error" : ""}`}>{toast}</div>
+      )}
     </div>
   );
 }
