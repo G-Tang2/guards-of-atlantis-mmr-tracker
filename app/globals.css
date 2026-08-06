@@ -360,22 +360,43 @@
     min-height: 250px;
     justify-content: flex-end;
   }
+  /* Masks the whole banner (art + dark overlay together) to transparent
+     over its last third, so instead of handing off to an opaque fill at
+     a hard box edge, the composite genuinely dissolves and lets the real
+     .goa-root background (grid texture + glows included) take over —
+     pixel-identical by the time the box actually ends. */
   .goa-hero-header-bg {
     position: absolute;
     inset: 0;
     z-index: 0;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 65%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(to bottom, #000 0%, #000 65%, transparent 100%);
   }
+  /* Darkens the art for text contrast and softens the left/right/top edges
+     via the radial vignette; the outer mask above handles the true
+     bottom-edge dissolve, so this doesn't need to reach full opacity. */
   .goa-hero-header-bg-fade {
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-      to bottom,
-      rgba(28, 26, 20, 0) 0%,
-      rgba(28, 26, 20, 0.33) 25%,
-      rgba(28, 26, 20, 0.65) 70%,
-      rgba(28, 26, 20, 0.94) 88%,
-      var(--stone) 100%
-    );
+    background:
+      linear-gradient(
+        to bottom,
+        rgba(28, 26, 20, 0) 0%,
+        rgba(28, 26, 20, 0.3) 20%,
+        rgba(28, 26, 20, 0.6) 50%,
+        rgba(28, 26, 20, 0.85) 75%,
+        rgba(28, 26, 20, 0.97) 100%
+      ),
+      radial-gradient(
+        ellipse 85% 75% at 50% 38%,
+        transparent 50%,
+        rgba(28, 26, 20, 0.55) 100%
+      );
   }
   .goa-hero-header-content {
     position: relative;
