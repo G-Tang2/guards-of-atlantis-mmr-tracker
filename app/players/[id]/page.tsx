@@ -822,7 +822,7 @@ export default function PlayerProfilePage() {
         </p>
       </div>
 
-      {/* Badges */}
+      {/* Badges
       <div className="goa-section">
         <div
           className="goa-sec-head clickable"
@@ -913,7 +913,7 @@ export default function PlayerProfilePage() {
             })}
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* Stat tiles */}
       <div className="goa-stats-grid">
