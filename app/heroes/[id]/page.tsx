@@ -57,6 +57,27 @@ type TeamPanelProps = {
   onSelectPlayer: (id: string) => void;
 };
 
+function HeroStarRating({
+  complexity,
+}: {
+  complexity: number | string | undefined | null;
+}) {
+  const count = Number(complexity) || 0;
+  return (
+    <div className="goa-hero-star-row">
+      {Array.from({ length: count }).map((_, i) => (
+        <Image
+          key={i}
+          src="/icons/star.png"
+          alt="★"
+          width={16}
+          height={16}
+        />
+      ))}
+    </div>
+  );
+}
+
 function TeamPanel({
   label,
   labelClass,
@@ -275,16 +296,29 @@ export default function HeroDetailPage() {
   return (
     <main className="goa-root">
       {/* Hero header */}
-      <header className="goa-header">
-        <Image
-          src={hero.icon}
-          alt={hero.name}
-          width={100}
-          height={100}
-          className="object-contain shrink-0 flex justify-self-center size-25"
-        />
-        <h1 className="goa-title">{hero.name}</h1>
-        <p className="goa-subtitle">{renderStars(hero.complexity ?? 1)}</p>
+      <header className="goa-header hero-header">
+        <div className="goa-hero-header-bg">
+          <Image
+            src={`/hero_avatars/${hero.id}.webp`}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
+          <div className="goa-hero-header-bg-fade" />
+        </div>
+        <div className="goa-hero-header-content">
+          <h1 className="goa-title">{hero.name}</h1>
+          <Image
+            src={hero.icon}
+            alt={hero.name}
+            width={64}
+            height={64}
+            className="object-contain shrink-0 flex justify-self-center size-16"
+          />
+          <HeroStarRating complexity={hero.complexity} />
+        </div>
       </header>
 
       {/* Stat tiles */}
