@@ -826,6 +826,17 @@
     color: var(--titans-light);
   }
 
+  /* Small icon prefixed to a label wherever a life/wave counter is
+     mentioned — generic, or colour-matched to Atlantis/Titans. */
+  .goa-label-icon {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 0.3rem;
+    vertical-align: -2px;
+    object-fit: contain;
+  }
+
   .goa-player-row {
     display: flex;
     align-items: center;
@@ -2361,9 +2372,40 @@
     color: var(--gold-light);
   }
 
+  /* Life counter remaining, shown as one icon per starting life — "front"
+     for however many are left, "back" for the rest — laid horizontally.
+     Atlantis and Titans each get their own row, separated by a divider. */
+  .goa-life-icon-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+    justify-content: center;
+  }
+  .goa-life-icon-strip {
+    padding: 0.65rem 0.85rem;
+    border-top: 1px solid var(--border);
+  }
+  .goa-life-icon-strip + .goa-life-icon-strip {
+    border-top: none;
+  }
+  .goa-life-icon-strip:not(:last-child) {
+    border-bottom: 1px solid var(--border);
+  }
+
   /* Match detail page — pre-match odds bar */
   .goa-odds-wrap {
     padding: 0.75rem 0.85rem;
+    border-top: 1px solid var(--border);
+  }
+  .goa-odds-title {
+    font-family: "Cinzel", serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
   }
   .goa-odds-labels {
     display: flex;

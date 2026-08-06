@@ -1,7 +1,8 @@
 "use client";
 
-import { CSSProperties, useEffect, useState } from "react";
+import { CSSProperties, ReactNode, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { TeamPanel } from "@/components/TeamPanel";
 import {
@@ -148,9 +149,50 @@ const normalizeMatch = (match: RawMatch): Match => {
 
 type DetailRow = {
   label: string;
-  value: string | number;
+  value: ReactNode;
   labelClass?: "atl" | "tit";
+  icon?: string;
 };
+
+// One icon per starting life counter — "front" (still up) for however many
+// remain, "back" (flipped/spent) for the rest. Falls back to just the
+// remaining count in front icons if the starting total wasn't recorded.
+function LifeCounterIcons({
+  starting,
+  remaining,
+  team,
+}: {
+  starting: number | null;
+  remaining: number;
+  team: "atl" | "tit";
+}) {
+  const color = team === "atl" ? "orange" : "blue";
+  const total = starting ?? remaining;
+  const frontCount = Math.min(remaining, total);
+  const backCount = Math.max(0, total - remaining);
+  return (
+    <div className="goa-life-icon-row">
+      {Array.from({ length: frontCount }).map((_, i) => (
+        <Image
+          key={`front-${i}`}
+          src={`/icons/life_counter_${color}_front.png`}
+          alt=""
+          width={30}
+          height={30}
+        />
+      ))}
+      {Array.from({ length: backCount }).map((_, i) => (
+        <Image
+          key={`back-${i}`}
+          src={`/icons/life_counter_${color}_back.png`}
+          alt=""
+          width={30}
+          height={30}
+        />
+      ))}
+    </div>
+  );
+}
 
 function DetailTable({ rows }: { rows: DetailRow[] }) {
   if (rows.length === 0) return null;
@@ -160,6 +202,15 @@ function DetailTable({ rows }: { rows: DetailRow[] }) {
         {rows.map((row) => (
           <tr key={row.label}>
             <th scope="row" className={row.labelClass}>
+              {row.icon && (
+                <Image
+                  src={row.icon}
+                  alt=""
+                  width={14}
+                  height={14}
+                  className="goa-label-icon"
+                />
+              )}
               {row.label}
             </th>
             <td>{row.value}</td>
@@ -246,45 +297,34 @@ export default function MatchDetailPage() {
   }
   if (match.starting_wave_counter !== null) {
     preMatchRows.push({
-      label: "Starting Wave",
+      label: "Wave Counters",
       value: match.starting_wave_counter,
+      icon: "/icons/wave_counters.png",
     });
   }
   if (match.starting_life_counter !== null) {
     preMatchRows.push({
-      label: "Starting Life",
+      label: "Life Counters",
       value: match.starting_life_counter,
+      icon: "/icons/life_counters.png",
     });
   }
 
   const postMatchRows: DetailRow[] = [];
   if (match.wave_counter_remaining_1 !== null) {
     postMatchRows.push({
-      label: hasSecondWaveLane ? "Wave Lane 1 Remaining" : "Wave Remaining",
+      label: hasSecondWaveLane ? "Wave Counter(s) Lane 1 Remaining" : "Wave Counter(s) Remaining",
       value: match.wave_counter_remaining_1,
+      icon: "/icons/wave_counters.png",
     });
   }
   if (match.wave_counter_remaining_2 !== null) {
     postMatchRows.push({
-      label: "Wave Lane 2 Remaining",
+      label: "Wave Counter(s) Lane 2 Remaining",
       value: match.wave_counter_remaining_2,
+      icon: "/icons/wave_counters.png",
     });
   }
-  if (match.atlantis_life_counter !== null) {
-    postMatchRows.push({
-      label: "Atlantis Life Remaining",
-      value: match.atlantis_life_counter,
-      labelClass: "atl",
-    });
-  }
-  if (match.titans_life_counter !== null) {
-    postMatchRows.push({
-      label: "Titans Life Remaining",
-      value: match.titans_life_counter,
-      labelClass: "tit",
-    });
-  }
-
   return (
     <main className="goa-root">
       <header className="goa-header">
@@ -321,6 +361,7 @@ export default function MatchDetailPage() {
 
           {atlantisOdds !== null && (
             <div className="goa-odds-wrap">
+              <div className="goa-odds-title">Win Probability</div>
               <div className="goa-odds-labels">
                 <span className="atl">Atlantis {atlantisOdds}%</span>
                 <span className="tit">Titans {100 - atlantisOdds}%</span>
@@ -346,13 +387,43 @@ export default function MatchDetailPage() {
         </div>
       )}
 
-      {/* Post-Match — the result: what was left of the shared wave counter
-          and each team's life counter, then each team's roster and MMR
-          change. */}
-      <div className="goa-section">
-        <div className="goa-sec-head">Post-Match</div>
+      {/* Post-Match — what was left of the shared wave counter and each
+          team's life counter. The life counters aren't a label/value pair
+          like the rest of this table — no heading of their own, just the
+          icon strip laid horizontally, since the icon colour alone
+          already says which team it's showing. */}
+      {(postMatchRows.length > 0 ||
+        match.atlantis_life_counter !== null ||
+        match.titans_life_counter !== null) && (
+        <div className="goa-section">
+          <div className="goa-sec-head">Post-Match</div>
 
-        <DetailTable rows={postMatchRows} />
+          <DetailTable rows={postMatchRows} />
+
+          {match.atlantis_life_counter !== null && (
+            <div className="goa-life-icon-strip">
+              <LifeCounterIcons
+                starting={match.starting_life_counter}
+                remaining={match.atlantis_life_counter}
+                team="atl"
+              />
+            </div>
+          )}
+          {match.titans_life_counter !== null && (
+            <div className="goa-life-icon-strip">
+              <LifeCounterIcons
+                starting={match.starting_life_counter}
+                remaining={match.titans_life_counter}
+                team="tit"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Teams — each team's roster, hero picks, and MMR change. */}
+      <div className="goa-section">
+        <div className="goa-sec-head">Teams</div>
 
         <div className="goa-teams">
           <TeamPanel

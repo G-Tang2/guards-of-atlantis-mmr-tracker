@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { calculateMMR, PlayerResult } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
@@ -671,7 +672,14 @@ function NewMatchPageInner() {
         <div className="goa-game-settings">
           <div className={`goa-counter-field${twoWaveLanes ? "" : " full"}`}>
             <label className="goa-counter-label">
-              {twoWaveLanes ? "Wave Lane 1 Remaining" : "Wave Counter Remaining"}
+              <Image
+                src="/icons/wave_counters.png"
+                alt=""
+                width={14}
+                height={14}
+                className="goa-label-icon"
+              />
+              {twoWaveLanes ? "Lane 1 Wave Counter(s) Remaining" : "Wave Counter(s) Remaining"}
             </label>
             <select
               className="goa-select"
@@ -688,7 +696,16 @@ function NewMatchPageInner() {
           </div>
           {twoWaveLanes && (
             <div className="goa-counter-field">
-              <label className="goa-counter-label">Wave Lane 2 Remaining</label>
+              <label className="goa-counter-label">
+                <Image
+                  src="/icons/wave_counters.png"
+                  alt=""
+                  width={14}
+                  height={14}
+                  className="goa-label-icon"
+                />
+                Lane 2 Wave Counter(s) Remaining
+              </label>
               <select
                 className="goa-select"
                 value={waveCounterRemaining2}
@@ -705,7 +722,14 @@ function NewMatchPageInner() {
           )}
           <div className="goa-counter-field">
             <label className="goa-counter-label atl">
-              Atlantis Life Remaining
+              <Image
+                src="/icons/life_counter_orange_front.png"
+                alt=""
+                width={14}
+                height={14}
+                className="goa-label-icon"
+              />
+              Atlantis Life Counter(s) Remaining
             </label>
             <select
               className="goa-select"
@@ -722,7 +746,14 @@ function NewMatchPageInner() {
           </div>
           <div className="goa-counter-field">
             <label className="goa-counter-label tit">
-              Titans Life Remaining
+              <Image
+                src="/icons/life_counter_blue_front.png"
+                alt=""
+                width={14}
+                height={14}
+                className="goa-label-icon"
+              />
+              Titans Life Counter(s) Remaining
             </label>
             <select
               className="goa-select"

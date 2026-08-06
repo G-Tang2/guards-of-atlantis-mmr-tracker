@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { DraftMethod } from "@/lib/match";
@@ -732,7 +733,16 @@ export default function TeamSplitterPage() {
           <div className="goa-game-settings">
             <div className="goa-counter-field">
               <div className="goa-counter-field-head">
-                <label className="goa-counter-label">Wave Counter</label>
+                <label className="goa-counter-label">
+                  <Image
+                    src="/icons/wave_counters.png"
+                    alt=""
+                    width={14}
+                    height={14}
+                    className="goa-label-icon"
+                  />
+                  Wave Counter
+                </label>
                 <label className="goa-counter-checkbox">
                   <input
                     type="checkbox"
@@ -757,7 +767,16 @@ export default function TeamSplitterPage() {
               </select>
             </div>
             <div className="goa-counter-field">
-              <label className="goa-counter-label">Life Counter</label>
+              <label className="goa-counter-label">
+                <Image
+                  src="/icons/life_counters.png"
+                  alt=""
+                  width={14}
+                  height={14}
+                  className="goa-label-icon"
+                />
+                Life Counter
+              </label>
               <select
                 className="goa-select"
                 value={lifeCounter}
