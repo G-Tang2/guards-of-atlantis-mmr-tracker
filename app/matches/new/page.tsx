@@ -8,10 +8,12 @@ import { calculateMMR, PlayerResult } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
 import { Hero, HEROES } from "@/lib/heroes";
 import { computeBountyHeroIds, BOUNTY_MMR_BONUS } from "@/lib/bounty";
-import { DraftMethod } from "@/lib/match";
+import { computeHeroWinBonus, applyHeroWinBonus } from "@/lib/heroWinBonus";
+import { DraftMethod, didWin } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
+import { BadgeEarnedOverlay, EarnedBadgeInfo } from "@/components/BadgeEarnedOverlay";
 import { Swords } from "lucide-react";
 
 type Player = {
@@ -85,6 +87,7 @@ function NewMatchPageInner() {
   const [toast, setToast] = useState<string | null>(null);
   const [toastError, setToastError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [earnedBadges, setEarnedBadges] = useState<EarnedBadgeInfo[]>([]);
 
   useEffect(() => {
     const loadPlayers = async () => {
@@ -286,6 +289,78 @@ function NewMatchPageInner() {
       const atlantisResults = applyBounty(result.atlantis, "atlantis");
       const titansResults = applyBounty(result.titans, "titans");
 
+      // First win with a hero grants a 30% MMR boost (on top of any bounty
+      // bonus already folded in above); if that win also completes a badge
+      // (a win with every hero in the badge), a flat +50 replaces the 30%
+      // boost rather than stacking with it. "Won" uses the same team===winner
+      // || winner==="none" rule the rest of the app uses for hero/badge
+      // progress, so a draw counts here too.
+      const eligiblePlayers = [
+        ...atlantis.map((e) => ({ ...e, team: "atlantis" as Team })),
+        ...titans.map((e) => ({ ...e, team: "titans" as Team })),
+      ].filter((e) => e.hero && didWin(e.team, winner));
+
+      const heroWonByPlayer = new Map<string, Set<string>>();
+      if (eligiblePlayers.length > 0) {
+        const { data: heroHistory } = await supabaseClient
+          .from("match_players")
+          .select("player_id, hero_id, team, matches!inner(winner)")
+          .in(
+            "player_id",
+            eligiblePlayers.map((e) => e.player.id),
+          )
+          .not("hero_id", "is", null);
+
+        (heroHistory ?? []).forEach((row) => {
+          const matchInfo = Array.isArray(row.matches)
+            ? row.matches[0]
+            : row.matches;
+          if (!matchInfo || !row.hero_id) return;
+          if (!didWin(row.team, matchInfo.winner)) return;
+          const set = heroWonByPlayer.get(row.player_id) ?? new Set<string>();
+          set.add(row.hero_id);
+          heroWonByPlayer.set(row.player_id, set);
+        });
+      }
+
+      const newlyEarnedBadges: EarnedBadgeInfo[] = [];
+      const applyHeroBonus = (
+        list: PlayerResult[],
+        team: Team,
+      ): PlayerResult[] =>
+        list.map((p) => {
+          const entry = eligiblePlayers.find(
+            (e) => e.player.id === p.id && e.team === team,
+          );
+          const heroId = entry?.hero?.id;
+          if (!heroId) return p;
+
+          const bonus = computeHeroWinBonus(
+            heroId,
+            heroWonByPlayer.get(p.id) ?? new Set(),
+          );
+          if (!bonus) return p;
+
+          if (bonus.type === "badge") {
+            newlyEarnedBadges.push({
+              playerId: p.id,
+              playerName: p.name,
+              playerAvatar: entry?.player.avatar_url,
+              badge: bonus.badge,
+            });
+          }
+
+          const boostedChange = applyHeroWinBonus(p.mmrChange, bonus);
+          return {
+            ...p,
+            newMmr: p.newMmr + (boostedChange - p.mmrChange),
+            mmrChange: boostedChange,
+          };
+        });
+
+      const atlantisFinal = applyHeroBonus(atlantisResults, "atlantis");
+      const titansFinal = applyHeroBonus(titansResults, "titans");
+
       const { data: match, error } = await supabaseClient
         .from("matches")
         .insert({
@@ -324,8 +399,8 @@ function NewMatchPageInner() {
 
       const newMatchNumber = match.match_number;
       const matchParticipantIds = new Set([
-        ...atlantisResults.map((p) => p.id),
-        ...titansResults.map((p) => p.id),
+        ...atlantisFinal.map((p) => p.id),
+        ...titansFinal.map((p) => p.id),
       ]);
       const teamByPlayerId = new Map<string, Team>([
         ...atlantis.map((e): [string, Team] => [e.player.id, "atlantis"]),
@@ -334,7 +409,7 @@ function NewMatchPageInner() {
 
       // Denormalize match_number onto every match_player row
       const matchPlayers = [
-        ...atlantisResults.map((p) => {
+        ...atlantisFinal.map((p) => {
           const heroId = heroIdFor(p.id, "atlantis");
           return {
             match_id: match.id,
@@ -347,7 +422,7 @@ function NewMatchPageInner() {
             is_bounty: heroId ? bountyHeroIds.has(heroId) : false,
           };
         }),
-        ...titansResults.map((p) => {
+        ...titansFinal.map((p) => {
           const heroId = heroIdFor(p.id, "titans");
           return {
             match_id: match.id,
@@ -369,7 +444,7 @@ function NewMatchPageInner() {
 
 // Combine updated match participants with non-participating players
       const updatedParticipantsMap = new Map(
-        [...atlantisResults, ...titansResults].map((p) => [
+        [...atlantisFinal, ...titansFinal].map((p) => [
           p.id,
           Math.round(p.newMmr),
         ]),
@@ -487,9 +562,15 @@ function NewMatchPageInner() {
       setStartingLifeCounter("");
       sessionStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
 
-      setTimeout(() => {
-        router.push("/matches");
-      }, 1000);
+      if (newlyEarnedBadges.length > 0) {
+        // Redirect is deferred to the overlay's dismissal instead of firing
+        // on a timer, so the celebration isn't cut off mid-animation.
+        setEarnedBadges(newlyEarnedBadges);
+      } else {
+        setTimeout(() => {
+          router.push("/matches");
+        }, 1000);
+      }
     } catch (err) {
       console.error("Failed to save match", err);
       showToast("✦ Record cannot be saved. Try again.", true);
@@ -865,6 +946,16 @@ function NewMatchPageInner() {
 
       {toast && (
         <div className={`goa-toast${toastError ? " error" : ""}`}>{toast}</div>
+      )}
+
+      {earnedBadges.length > 0 && (
+        <BadgeEarnedOverlay
+          badges={earnedBadges}
+          onDone={() => {
+            setEarnedBadges([]);
+            router.push("/matches");
+          }}
+        />
       )}
     </div>
   );

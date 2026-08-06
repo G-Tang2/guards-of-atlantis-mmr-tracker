@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
-import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { TeamPanel } from "@/components/TeamPanel";
 import { useRouter } from "next/navigation";
 import {
-  didWin,
   formatDate,
   formatWinCondition,
   Player,
@@ -15,6 +13,12 @@ import {
   WinCondition,
 } from "@/lib/match";
 import { ScrollText, Swords } from "lucide-react";
+import {
+  Cell,
+  Pie,
+  PieChart as RePieChart,
+  ResponsiveContainer,
+} from "recharts";
 
 type Match = {
   id: string;
@@ -28,8 +32,6 @@ type Match = {
   titans_mmr_change: number;
   match_players: MatchPlayer[];
 };
-
-const sortByName = (a: Player, b: Player) => a.name.localeCompare(b.name);
 
 const MATCHES_PER_PAGE = 5;
 
@@ -121,108 +123,113 @@ const normalizeMatch = (match: RawMatch): Match => {
   };
 };
 
-type PlayerStats = {
-  wins: number;
-  losses: number;
-  winRate: number;
-  mmr: number;
-  name: string;
+const WIN_CONDITION_ORDER = ["THRONE", "LAST_PUSH", "LIFE_COUNTER"] as const;
+
+const WIN_CONDITION_LABELS: Record<string, string> = {
+  THRONE: "Throne",
+  LAST_PUSH: "Last Push",
+  LIFE_COUNTER: "Life Counter",
 };
+
+// Hex values, not CSS custom properties — recharts renders these as SVG
+// `fill` attributes, which don't reliably resolve var() references.
+const WIN_CONDITION_COLORS: Record<string, string> = {
+  THRONE: "#b8860b",
+  LAST_PUSH: "#2f6b73",
+  LIFE_COUNTER: "#7a1f28",
+};
+
+type PieSlice = { label: string; value: number; color: string };
+
+function VictoryPieChart({
+  slices,
+  size = 120,
+}: {
+  slices: PieSlice[];
+  size?: number;
+}) {
+  const total = slices.reduce((sum, s) => sum + s.value, 0);
+  if (total === 0) return null;
+
+  const data = slices.filter((s) => s.value > 0);
+
+  return (
+    <div className="goa-pie-ring" style={{ width: size, height: size }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <RePieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="label"
+            cx="50%"
+            cy="50%"
+            innerRadius="60%"
+            outerRadius="100%"
+            stroke="var(--stone)"
+            strokeWidth={2}
+            isAnimationActive={false}
+          >
+            {data.map((s) => (
+              <Cell key={s.label} fill={s.color} />
+            ))}
+          </Pie>
+        </RePieChart>
+      </ResponsiveContainer>
+      <div className="goa-pie-center">
+        <div className="goa-pie-center-val">{total}</div>
+        <div className="goa-pie-center-lbl">Battles</div>
+      </div>
+    </div>
+  );
+}
 
 export default function MatchHistoryPage() {
   const [matches, setMatches] = useState<Match[]>([]);
-  const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [filterPlayerId, setFilterPlayerId] = useState("");
   const [totalCount, setTotalCount] = useState(0);
-  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
+  const [winConditionCounts, setWinConditionCounts] = useState<
+    Record<string, number>
+  >({});
 
-  // Load the player list once (small table, needed for the filter dropdown).
+  // Archive-wide win condition breakdown, independent of match pagination —
+  // covers every recorded match.
   useEffect(() => {
-    const loadPlayers = async () => {
+    const loadWinConditions = async () => {
       const { data, error } = await supabaseClient
-        .from("players")
-        .select("id, name, mmr, avatar_url");
+        .from("matches")
+        .select("win_condition");
       if (error) {
         console.error(error);
         return;
       }
-      setPlayers(data ?? []);
+      const counts: Record<string, number> = {};
+      (data ?? []).forEach((row) => {
+        if (!row.win_condition) return;
+        counts[row.win_condition] = (counts[row.win_condition] ?? 0) + 1;
+      });
+      setWinConditionCounts(counts);
     };
-    loadPlayers();
+    loadWinConditions();
   }, []);
 
-  // Fetches one page of matches, either for "all players" or for a specific
-  // player (via match_players), and either replaces or appends to the list.
-  const fetchMatches = async (
-    playerId: string,
-    offset: number,
-    append: boolean,
-  ) => {
+  // Fetches one page of matches, either replacing or appending to the list.
+  const fetchMatches = async (offset: number, append: boolean) => {
     if (append) setLoadingMore(true);
     else setLoading(true);
 
-    if (!playerId) {
-      const { data, error, count } = await supabaseClient
-        .from("matches")
-        .select(MATCH_SELECT, { count: "exact" })
-        .order("created_at", { ascending: false })
-        .range(offset, offset + MATCHES_PER_PAGE - 1);
+    const { data, error, count } = await supabaseClient
+      .from("matches")
+      .select(MATCH_SELECT, { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(offset, offset + MATCHES_PER_PAGE - 1);
 
-      if (error) {
-        console.error(error);
-      } else {
-        const normalized = (data ?? []).map(normalizeMatch);
-        setMatches((prev) => (append ? [...prev, ...normalized] : normalized));
-        setTotalCount(count ?? 0);
-      }
+    if (error) {
+      console.error(error);
     } else {
-      // Find which matches this player was in. PostgREST's order-by via a
-      // foreign table (`.order("created_at", { foreignTable: "matches" })`)
-      // does not reliably sort these parent (match_players) rows, so the
-      // full set is fetched unpaginated (small dataset) and sorted by date
-      // ourselves, then paginated in JS.
-      const { data: mpData, error: mpError } = await supabaseClient
-        .from("match_players")
-        .select("match_id, matches!inner(created_at)")
-        .eq("player_id", playerId);
-
-      if (mpError) {
-        console.error(mpError);
-      } else {
-        const sortedMatchIds = (mpData ?? [])
-          .map((row) => {
-            const matchInfo = Array.isArray(row.matches)
-              ? row.matches[0]
-              : row.matches;
-            return { match_id: row.match_id, created_at: matchInfo?.created_at ?? "" };
-          })
-          .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-          .map((row) => row.match_id);
-
-        const pageIds = sortedMatchIds.slice(offset, offset + MATCHES_PER_PAGE);
-
-        if (pageIds.length === 0) {
-          if (!append) setMatches([]);
-        } else {
-          const { data, error } = await supabaseClient
-            .from("matches")
-            .select(MATCH_SELECT)
-            .in("id", pageIds)
-            .order("created_at", { ascending: false });
-
-          if (error) {
-            console.error(error);
-          } else {
-            const normalized = (data ?? []).map(normalizeMatch);
-            setMatches((prev) =>
-              append ? [...prev, ...normalized] : normalized,
-            );
-          }
-        }
-        setTotalCount(sortedMatchIds.length);
-      }
+      const normalized = (data ?? []).map(normalizeMatch);
+      setMatches((prev) => (append ? [...prev, ...normalized] : normalized));
+      setTotalCount(count ?? 0);
     }
 
     if (append) setLoadingMore(false);
@@ -231,60 +238,27 @@ export default function MatchHistoryPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchMatches(filterPlayerId, 0, false);
-  }, [filterPlayerId]);
+    fetchMatches(0, false);
+  }, []);
 
   const handleLoadMore = () => {
-    fetchMatches(filterPlayerId, matches.length, true);
+    fetchMatches(matches.length, true);
   };
-
-  // Win/loss stats need to cover ALL of a player's matches, not just the
-  // page that's currently loaded, so this is fetched independently.
-  useEffect(() => {
-    if (!filterPlayerId) return;
-
-    const loadStats = async () => {
-      const { data, error } = await supabaseClient
-        .from("match_players")
-        .select("team, matches!inner(winner)")
-        .eq("player_id", filterPlayerId);
-
-      if (error) {
-        console.error(error);
-        return;
-      }
-
-      let wins = 0;
-      let losses = 0;
-      (data ?? []).forEach((row) => {
-        const matchInfo = Array.isArray(row.matches)
-          ? row.matches[0]
-          : row.matches;
-        if (!matchInfo) return;
-        if (didWin(row.team, matchInfo.winner)) wins++;
-        else losses++;
-      });
-
-      const total = wins + losses;
-      const winRate = total === 0 ? 0 : (wins / total) * 100;
-      const player = players.find((p) => p.id === filterPlayerId);
-      setPlayerStats({
-        wins,
-        losses,
-        winRate,
-        mmr: player?.mmr ?? 1000,
-        name: player?.name ?? "Unknown",
-      });
-    };
-
-    loadStats();
-  }, [filterPlayerId, players]);
 
   const router = useRouter();
   const goToProfile = (id: string) => router.push(`/players/${id}`);
 
   const hasMore = matches.length < totalCount;
-  const displayedStats = filterPlayerId ? playerStats : null;
+
+  const winConditionSlices: PieSlice[] = WIN_CONDITION_ORDER.map((wc) => ({
+    label: WIN_CONDITION_LABELS[wc],
+    value: winConditionCounts[wc] ?? 0,
+    color: WIN_CONDITION_COLORS[wc],
+  }));
+  const winConditionTotal = winConditionSlices.reduce(
+    (sum, s) => sum + s.value,
+    0,
+  );
 
   if (loading) {
     return (
@@ -309,58 +283,29 @@ export default function MatchHistoryPage() {
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
 
-      {/* Filter */}
-      <div className="goa-filter-wrap">
-        <select
-          className="goa-select"
-          value={filterPlayerId}
-          onChange={(e) => setFilterPlayerId(e.target.value)}
-        >
-          <option value="">All Players</option>
-          {[...players].sort(sortByName).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Player stats */}
-      {displayedStats && (
+      {/* Victory conditions overview */}
+      {winConditionTotal > 0 && (
         <div className="goa-stats-card">
-          <div className="goa-stats-head">
-            <PlayerAvatar
-              avatarUrl={
-                players.find((p) => p.id === filterPlayerId)?.avatar_url
-              }
-              name={displayedStats.name}
-              size={32}
-            />
-            {displayedStats.name}
-          </div>
-          <div className="goa-stats-grid">
-            <div className="goa-stat-tile">
-              <div className="goa-stat-lbl">Rating</div>
-              <div className="goa-stat-val">{displayedStats.mmr}</div>
-              <div className="goa-stat-sub">current MMR</div>
-            </div>
-            <div className="goa-stat-tile">
-              <div className="goa-stat-lbl">Win Rate</div>
-              <div className="goa-stat-val">
-                {displayedStats.winRate.toFixed(1)}%
-              </div>
-              <div className="goa-stat-sub">
-                {displayedStats.wins + displayedStats.losses} battles
-              </div>
-            </div>
-            <div className="goa-stat-tile">
-              <div className="goa-stat-lbl">Victories</div>
-              <div className="goa-stat-val gain">{displayedStats.wins}</div>
-            </div>
-            <div className="goa-stat-tile">
-              <div className="goa-stat-lbl">Defeats</div>
-              <div className="goa-stat-val loss">{displayedStats.losses}</div>
-            </div>
+          <div className="goa-stats-head">Victory Conditions</div>
+          <div className="goa-pie-wrap">
+            <VictoryPieChart slices={winConditionSlices} />
+            <ul className="goa-pie-legend">
+              {winConditionSlices
+                .filter((s) => s.value > 0)
+                .map((s) => (
+                  <li key={s.label}>
+                    <span
+                      className="goa-pie-swatch"
+                      style={{ background: s.color }}
+                    />
+                    <span className="goa-pie-legend-label">{s.label}</span>
+                    <span className="goa-pie-legend-count">
+                      {s.value} (
+                      {((s.value / winConditionTotal) * 100).toFixed(0)}%)
+                    </span>
+                  </li>
+                ))}
+            </ul>
           </div>
         </div>
       )}
@@ -382,21 +327,10 @@ export default function MatchHistoryPage() {
           );
           const titans = match.match_players.filter((p) => p.team === "titans");
 
-          let matchBorderClass = "";
-          if (filterPlayerId) {
-            const playerEntry = match.match_players.find(
-              (mp) => mp.player_id === filterPlayerId,
-            );
-            if (playerEntry) {
-              matchBorderClass =
-                playerEntry.team === match.winner ? "match-win" : "match-loss";
-            }
-          }
-
           return (
             <div
               key={match.id}
-              className={`goa-match-card clickable ${matchBorderClass}`}
+              className="goa-match-card clickable"
               onClick={() => router.push(`/matches/${match.id}`)}
             >
               <div className="goa-match-header">

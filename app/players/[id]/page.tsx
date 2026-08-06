@@ -822,7 +822,6 @@ export default function PlayerProfilePage() {
         </p>
       </div>
 
-      {/* Badges
       <div className="goa-section">
         <div
           className="goa-sec-head clickable"
@@ -874,13 +873,9 @@ export default function PlayerProfilePage() {
                 >
                   <div className="goa-badge-row-head">
                     <span className="goa-badge-name">
-                      <Image
-                        src={badge.icon}
-                        alt={badge.name}
-                        width={24}
-                        height={24}
-                        className="goa-badge-name-icon"
-                      />
+                      <span className="goa-badge-name-icon">
+                        <Image src={badge.icon} alt={badge.name} width={24} height={24} />
+                      </span>
                       {badge.name}
                     </span>
                     <span className="goa-badge-progress">
@@ -913,7 +908,7 @@ export default function PlayerProfilePage() {
             })}
           </div>
         )}
-      </div> */}
+      </div>
 
       {/* Stat tiles */}
       <div className="goa-stats-grid">
