@@ -150,7 +150,10 @@ Create a `.env.local` file:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_MATCH_PASSWORD=choose-a-shared-password
 ```
+
+`NEXT_PUBLIC_MATCH_PASSWORD` gates the Teams and Record Match pages (see `components/PasswordGate.tsx`). It's a lightweight, client-side deterrent only — since it's a `NEXT_PUBLIC_*` variable it ships in the JS bundle, so don't reuse a sensitive password here, and treat it as "keeps casual/accidental visitors out," not real security against a determined user.
 
 ### 3. Create the database tables
 

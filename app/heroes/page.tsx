@@ -8,7 +8,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES, Hero } from "@/lib/heroes";
 import { didWin, renderStars } from "@/lib/match";
 import { BOUNTY_THRESHOLD, BOUNTY_MMR_BONUS } from "@/lib/bounty";
-import { Coins, ChartNoAxesCombined } from "lucide-react";
+import { Coins, ChartNoAxesCombined, BookUser } from "lucide-react";
 
 type RawMatch = {
   id: string;
@@ -156,7 +156,7 @@ export default function HeroesPage() {
       <div className="goa-root goa-loading-screen">
         <div className="goa-loading-inner">
           <div className="goa-loading-icon">
-            <ChartNoAxesCombined size={32} />
+            <BookUser size={32} />
           </div>
           <p className="goa-loading-text wide">Gathering hero stats…</p>
         </div>
@@ -168,7 +168,7 @@ export default function HeroesPage() {
     <main className="goa-root">
       <header className="goa-header">
         <div className="goa-crown">
-          <ChartNoAxesCombined size={30} />
+          <BookUser size={30} />
         </div>
         <h1 className="goa-title">Hero Compendium</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>

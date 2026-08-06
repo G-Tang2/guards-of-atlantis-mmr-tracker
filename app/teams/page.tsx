@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { PasswordGate } from "@/components/PasswordGate";
 import { DraftMethod } from "@/lib/match";
+import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { Swords, Crown, Dices, Scale, GripVertical } from "lucide-react";
 import {
   DndContext,
@@ -265,10 +267,71 @@ export default function TeamSplitterPage() {
       .select("id, name, mmr, avatar_url")
       .order("name")
       .then(({ data }) => {
-        setAllPlayers(data ?? []);
+        const players = data ?? [];
+        setAllPlayers(players);
+
+        // Restore an in-progress team assembly (e.g. the user hit Back
+        // from the match-record step) instead of starting over empty.
+        try {
+          const raw = sessionStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
+          if (raw) {
+            const saved = JSON.parse(raw) as {
+              pool: string[];
+              atlantis: string[];
+              titans: string[];
+              method: DraftMethod;
+            };
+            const byId = new Map<string, Player>(
+              players.map((p) => [p.id, p]),
+            );
+            const resolve = (ids: string[]) =>
+              ids.map((id) => byId.get(id)).filter((p): p is Player => !!p);
+            setColumns({
+              pool: resolve(saved.pool),
+              atlantis: resolve(saved.atlantis),
+              titans: resolve(saved.titans),
+            });
+            setAssemblyMethod(saved.method);
+          }
+        } catch {
+          // Corrupt/stale entry — ignore and start fresh.
+        }
+
         setLoading(false);
       });
   }, []);
+
+  // Single source of truth for the team draft — read by /matches/new on
+  // handoff, and by this page itself to restore state after the user hits
+  // Back. Also called directly (not just via the effect below) right
+  // before navigating to /matches/new, so the handoff never depends on
+  // effect timing.
+  const persistDraft = (cols: Columns, method: DraftMethod) => {
+    const draft = {
+      pool: cols.pool.map((p) => p.id),
+      atlantis: cols.atlantis.map((p) => p.id),
+      titans: cols.titans.map((p) => p.id),
+      method,
+    };
+    const isEmpty =
+      draft.pool.length === 0 &&
+      draft.atlantis.length === 0 &&
+      draft.titans.length === 0;
+    if (isEmpty) {
+      sessionStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
+    } else {
+      sessionStorage.setItem(TEAMS_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    }
+  };
+
+  // Keep the draft in sync so it can be restored on the way back from
+  // /matches/new. Skipped until the initial load (and any restore above)
+  // has finished, so it can't clobber a saved draft with the empty state
+  // columns starts in.
+  useEffect(() => {
+    if (loading) return;
+    persistDraft(columns, assemblyMethod);
+  }, [columns, assemblyMethod, loading]);
 
   const allAdded = [...columns.pool, ...columns.atlantis, ...columns.titans];
 
@@ -330,11 +393,8 @@ export default function TeamSplitterPage() {
 
   const handleGoToBattle = () => {
     if (!canBattle) return;
-    const atlantisIds = columns.atlantis.map((p) => p.id).join(",");
-    const titansIds = columns.titans.map((p) => p.id).join(",");
-    router.push(
-      `/matches/new?atlantis=${atlantisIds}&titans=${titansIds}&method=${assemblyMethod}`,
-    );
+    persistDraft(columns, assemblyMethod);
+    router.push("/matches/new");
   };
 
   // ── Draft handlers ──────────────────────────────────────────────────────────
@@ -475,18 +535,21 @@ export default function TeamSplitterPage() {
 
   if (loading) {
     return (
-      <div className="goa-root goa-loading-screen">
-        <div className="goa-loading-inner">
-          <div className="goa-loading-icon">
-            <Swords size={32} />
+      <PasswordGate>
+        <div className="goa-root goa-loading-screen">
+          <div className="goa-loading-inner">
+            <div className="goa-loading-icon">
+              <Swords size={32} />
+            </div>
+            <p className="goa-loading-text">Summoning players…</p>
           </div>
-          <p className="goa-loading-text">Summoning players…</p>
         </div>
-      </div>
+      </PasswordGate>
     );
   }
 
   return (
+    <PasswordGate>
     <main className="goa-root">
       <header className="goa-header">
         <div className="goa-crown">
@@ -636,11 +699,6 @@ export default function TeamSplitterPage() {
           <Swords size={18} />
           Begin the Battle
         </button>
-        {!canBattle && allAdded.length > 0 && (
-          <p className="goa-splitter-hint">
-            Assign at least one player to each team to begin
-          </p>
-        )}
       </div>
 
       {/* ══════════════ CAPTAIN'S DRAFT MODAL ══════════════ */}
@@ -981,5 +1039,6 @@ export default function TeamSplitterPage() {
 
       <div className="goa-divider mt-lg" />
     </main>
+    </PasswordGate>
   );
 }

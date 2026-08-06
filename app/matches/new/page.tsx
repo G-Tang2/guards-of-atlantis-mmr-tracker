@@ -1,14 +1,16 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { calculateMMR, PlayerResult } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
 import { Hero, HEROES } from "@/lib/heroes";
 import { computeBountyHeroIds, BOUNTY_MMR_BONUS } from "@/lib/bounty";
 import { DraftMethod } from "@/lib/match";
+import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { PasswordGate } from "@/components/PasswordGate";
 import { Swords } from "lucide-react";
 
 type Player = {
@@ -38,7 +40,6 @@ const INACTIVE_GAME_THRESHOLD = 5;
 
 function NewMatchPageInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [atlantisSearch, setAtlantisSearch] = useState("");
@@ -47,6 +48,7 @@ function NewMatchPageInner() {
   const [titans, setTitans] = useState<PoolEntry[]>([]);
   const [winner, setWinner] = useState<Winner>("");
   const [winCondition, setWinCondition] = useState<WinCondition | null>(null);
+  const [draftMethod, setDraftMethod] = useState<DraftMethod>("custom");
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -60,30 +62,48 @@ function NewMatchPageInner() {
       if (!error && data) {
         setPlayers(data);
 
-        const atlantisParam = searchParams.get("atlantis");
-        const titansParam = searchParams.get("titans");
+        // Handed off from /teams via sessionStorage rather than the URL —
+        // one source of truth, and it survives a refresh just as well.
+        try {
+          const raw = sessionStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
+          if (raw) {
+            const saved = JSON.parse(raw) as {
+              pool: string[];
+              atlantis: string[];
+              titans: string[];
+              method: DraftMethod;
+            };
+            const byId = new Map<string, Player>(data.map((p) => [p.id, p]));
+            const resolve = (ids: string[]): PoolEntry[] =>
+              ids
+                .map((id) => byId.get(id))
+                .filter((p): p is Player => !!p)
+                .map((player) => ({ player, hero: null }));
 
-        if (atlantisParam) {
-          const ids = new Set(atlantisParam.split(",").filter(Boolean));
-          const entries: PoolEntry[] = data
-            .filter((p) => ids.has(p.id))
-            .map((player) => ({ player, hero: null }));
-          if (entries.length > 0) setAtlantis(entries);
-        }
+            const atlantisEntries = resolve(saved.atlantis);
+            const titansEntries = resolve(saved.titans);
+            if (atlantisEntries.length > 0) setAtlantis(atlantisEntries);
+            if (titansEntries.length > 0) setTitans(titansEntries);
 
-        if (titansParam) {
-          const ids = new Set(titansParam.split(",").filter(Boolean));
-          const entries: PoolEntry[] = data
-            .filter((p) => ids.has(p.id))
-            .map((player) => ({ player, hero: null }));
-          if (entries.length > 0) setTitans(entries);
+            const validDraftMethods: DraftMethod[] = [
+              "captains_draft",
+              "random",
+              "balanced",
+              "custom",
+            ];
+            if (validDraftMethods.includes(saved.method)) {
+              setDraftMethod(saved.method);
+            }
+          }
+        } catch {
+          // Corrupt/stale entry — ignore and start empty.
         }
       }
 
       setLoading(false);
     };
     loadPlayers();
-  }, [searchParams]);
+  }, []);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -190,19 +210,6 @@ function NewMatchPageInner() {
 
       const atlantisResults = applyBounty(result.atlantis, "atlantis");
       const titansResults = applyBounty(result.titans, "titans");
-
-      const validDraftMethods: DraftMethod[] = [
-        "captains_draft",
-        "random",
-        "balanced",
-        "custom",
-      ];
-      const methodParam = searchParams.get("method");
-      const draftMethod: DraftMethod = validDraftMethods.includes(
-        methodParam as DraftMethod,
-      )
-        ? (methodParam as DraftMethod)
-        : "custom";
 
       const { data: match, error } = await supabaseClient
         .from("matches")
@@ -378,6 +385,7 @@ function NewMatchPageInner() {
       setAtlantis([]);
       setTitans([]);
       setWinner("");
+      sessionStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
 
       setTimeout(() => {
         router.push("/matches");
@@ -654,8 +662,8 @@ function NewMatchPageInner() {
 
 export default function NewMatchPage() {
   return (
-    <Suspense>
+    <PasswordGate>
       <NewMatchPageInner />
-    </Suspense>
+    </PasswordGate>
   );
 }

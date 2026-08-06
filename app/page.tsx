@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { forwardRef, useLayoutEffect, useRef, useState } from "react";
 import {
   Sparkles,
   ChevronDown,
@@ -44,71 +44,102 @@ function groupDetailItems(items: UpdateDetailItem[]): DetailBlock[] {
   return blocks;
 }
 
-function UpdatePost({ update }: { update: UpdateEntry }) {
-  return (
-    <div className="goa-update-item">
-      <div className="goa-update-date">{update.date}</div>
-      <div className="goa-update-title">{update.title}</div>
-      <p className="goa-update-desc">{update.summary}</p>
-      {Array.isArray(update.details) ? (
-        groupDetailItems(update.details).map((block) => {
-          if (block.type === "text") {
-            return (
-              <p key={block.key} className="goa-update-details">
-                {block.text}
-              </p>
-            );
-          }
-          if (block.type === "list") {
-            return (
-              <ul key={block.key} className="goa-update-details-list">
-                {block.items.map((item) => (
-                  <li key={item.label}>
-                    <span className="goa-update-details-label">
-                      {item.label}:
-                    </span>{" "}
-                    {item.text}
-                  </li>
-                ))}
-              </ul>
-            );
-          }
-          return (
-            <div key={block.key} className="goa-update-icon-legend">
-              {block.items.map((item) => {
-                const Icon = item.icon!;
-                return (
-                  <div key={item.label} className="goa-update-icon-row">
-                    <span className="goa-update-icon-badge">
-                      <Icon size={13} />
-                    </span>
-                    <div>
+const UpdatePost = forwardRef<HTMLDivElement, { update: UpdateEntry }>(
+  function UpdatePost({ update }, ref) {
+    return (
+      <div className="goa-update-item" ref={ref}>
+        <div className="goa-update-date">{update.date}</div>
+        <div className="goa-update-title">{update.title}</div>
+        <p className="goa-update-desc">{update.summary}</p>
+        {Array.isArray(update.details) ? (
+          groupDetailItems(update.details).map((block) => {
+            if (block.type === "text") {
+              return (
+                <p key={block.key} className="goa-update-details">
+                  {block.text}
+                </p>
+              );
+            }
+            if (block.type === "list") {
+              return (
+                <ul key={block.key} className="goa-update-details-list">
+                  {block.items.map((item) => (
+                    <li key={item.label}>
                       <span className="goa-update-details-label">
-                        {item.label}
+                        {item.label}:
+                      </span>{" "}
+                      {item.text}
+                    </li>
+                  ))}
+                </ul>
+              );
+            }
+            return (
+              <div key={block.key} className="goa-update-icon-legend">
+                {block.items.map((item) => {
+                  const Icon = item.icon!;
+                  return (
+                    <div key={item.label} className="goa-update-icon-row">
+                      <span className="goa-update-icon-badge">
+                        <Icon size={13} />
                       </span>
-                      <p className="goa-update-details">{item.text}</p>
+                      <div>
+                        <span className="goa-update-details-label">
+                          {item.label}
+                        </span>
+                        <p className="goa-update-details">{item.text}</p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })
-      ) : (
-        <p className="goa-update-details">{update.details}</p>
-      )}
-    </div>
-  );
-}
+                  );
+                })}
+              </div>
+            );
+          })
+        ) : (
+          <p className="goa-update-details">{update.details}</p>
+        )}
+      </div>
+    );
+  },
+);
 
 export default function Home() {
   const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(0);
+  const [fitCount, setFitCount] = useState(1);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const measureRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Collapsed view shows as many full update posts as the available space
+  // under the hero will hold, instead of a fixed count — measured against
+  // an invisible (height:0, overflow:hidden) copy of every post so we know
+  // each one's real height before deciding how many actually fit.
+  useLayoutEffect(() => {
+    const recalc = () => {
+      const container = scrollRef.current;
+      if (!container) return;
+      const available = container.clientHeight;
+      let total = 0;
+      let fit = 0;
+      for (let i = 0; i < UPDATES.length; i++) {
+        const el = measureRefs.current[i];
+        if (!el) break;
+        total += el.offsetHeight;
+        if (total > available) break;
+        fit = i + 1;
+      }
+      setFitCount(Math.max(1, fit));
+    };
+    recalc();
+    window.addEventListener("resize", recalc);
+    return () => window.removeEventListener("resize", recalc);
+  }, []);
 
   const pageCount = Math.max(1, Math.ceil(UPDATES.length / PAGE_SIZE));
   const visibleItems = expanded
     ? UPDATES.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
-    : UPDATES.slice(0, 1);
+    : UPDATES.slice(0, fitCount);
 
   const toggleExpanded = () => {
     setExpanded((v) => !v);
@@ -142,10 +173,25 @@ export default function Home() {
         </div>
 
         <div
+          ref={scrollRef}
           className={`goa-updates-scroll ${expanded ? "expanded" : ""}`}
         >
           {visibleItems.map((update) => (
             <UpdatePost key={update.title} update={update} />
+          ))}
+        </div>
+
+        {/* Invisible measuring copy — zero footprint, used only to read
+            each post's real rendered height before picking fitCount. */}
+        <div style={{ height: 0, overflow: "hidden" }} aria-hidden="true">
+          {UPDATES.map((update, i) => (
+            <UpdatePost
+              key={update.title}
+              update={update}
+              ref={(el) => {
+                measureRefs.current[i] = el;
+              }}
+            />
           ))}
         </div>
 
@@ -173,9 +219,11 @@ export default function Home() {
           </div>
         )}
 
-        {UPDATES.length > 1 && (
+        {(expanded || fitCount < UPDATES.length) && (
           <button className="goa-update-toggle" onClick={toggleExpanded}>
-            {expanded ? "Show Less" : `Show ${UPDATES.length - 1} More`}
+            {expanded
+              ? "Show Less"
+              : `Show ${UPDATES.length - fitCount} More`}
             <ChevronDown
               size={14}
               className={expanded ? "rotate-180" : ""}

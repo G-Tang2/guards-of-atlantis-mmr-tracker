@@ -7,7 +7,7 @@ import {
   Swords,
   ScrollText,
   Trophy,
-  ChartNoAxesCombined,
+  BookUser,
 } from "lucide-react";
 
 const TABS = [
@@ -39,7 +39,7 @@ const TABS = [
   {
     href: "/heroes",
     label: "Heroes",
-    icon: ChartNoAxesCombined,
+    icon: BookUser,
     match: (p: string) => p.startsWith("/heroes"),
   },
 ];

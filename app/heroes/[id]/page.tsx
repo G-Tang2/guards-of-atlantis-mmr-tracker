@@ -8,7 +8,7 @@ import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import Image from "next/image";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { Swords, ScrollText, ChartNoAxesCombined } from "lucide-react";
+import { Swords, ScrollText, BookUser } from "lucide-react";
 
 type Player = {
   id: string;
@@ -253,7 +253,7 @@ export default function HeroDetailPage() {
       <div className="goa-root goa-loading-screen">
         <div className="goa-loading-inner">
           <div className="goa-loading-icon">
-            <ChartNoAxesCombined size={30} />
+            <BookUser size={30} />
           </div>
           <p className="goa-loading-text wide">Consulting the chronicles…</p>
         </div>
