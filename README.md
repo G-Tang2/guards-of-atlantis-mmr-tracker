@@ -56,6 +56,10 @@ Three tables in Supabase:
 | `titans_mmr_change` | `integer` | MMR delta for Titans |
 | `expected_atlantis_win` | `float` | Elo expected win probability for Atlantis |
 | `draft_method` | `draft_method` | `"captains_draft"`, `"random"`, `"balanced"`, or `"custom"`; nullable (unset on older matches) |
+| `atlantis_wave_counter` | `smallint` | Wave counter remaining for Atlantis at match end; `0`–`7`; nullable, independent of win condition |
+| `titans_wave_counter` | `smallint` | Wave counter remaining for Titans at match end; `0`–`7`; nullable, independent of win condition |
+| `atlantis_life_counter` | `smallint` | Life counter remaining for Atlantis at match end; `0`–`8`; nullable, independent of win condition |
+| `titans_life_counter` | `smallint` | Life counter remaining for Titans at match end; `0`–`8`; nullable, independent of win condition |
 
 ### `match_players`
 | Column | Type | Notes |
@@ -193,7 +197,11 @@ create table matches (
   atlantis_mmr_change integer,
   titans_mmr_change integer,
   expected_atlantis_win float,
-  draft_method draft_method
+  draft_method draft_method,
+  atlantis_wave_counter smallint check (atlantis_wave_counter between 0 and 7),
+  titans_wave_counter smallint check (titans_wave_counter between 0 and 7),
+  atlantis_life_counter smallint check (atlantis_life_counter between 0 and 8),
+  titans_life_counter smallint check (titans_life_counter between 0 and 8)
 );
 
 -- Match players

@@ -229,6 +229,12 @@ export default function TeamSplitterPage() {
   // marks it "custom", since the tool's output no longer stands alone.
   const [assemblyMethod, setAssemblyMethod] = useState<DraftMethod>("custom");
 
+  // Wave/life counter settings for this match — shared by both teams
+  // (same wave count, same starting life total), independent of the
+  // remaining-at-match-end counters recorded on Record of Battle.
+  const [waveCounter, setWaveCounter] = useState("");
+  const [lifeCounter, setLifeCounter] = useState("");
+
   // Draft modal
   const [draftOpen, setDraftOpen] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
@@ -280,6 +286,8 @@ export default function TeamSplitterPage() {
               atlantis: string[];
               titans: string[];
               method: DraftMethod;
+              waveCounter?: string;
+              lifeCounter?: string;
             };
             const byId = new Map<string, Player>(
               players.map((p) => [p.id, p]),
@@ -292,6 +300,8 @@ export default function TeamSplitterPage() {
               titans: resolve(saved.titans),
             });
             setAssemblyMethod(saved.method);
+            setWaveCounter(saved.waveCounter ?? "");
+            setLifeCounter(saved.lifeCounter ?? "");
           }
         } catch {
           // Corrupt/stale entry — ignore and start fresh.
@@ -302,16 +312,19 @@ export default function TeamSplitterPage() {
   }, []);
 
   // Single source of truth for the team draft — read by /matches/new on
-  // handoff, and by this page itself to restore state after the user hits
-  // Back. Also called directly (not just via the effect below) right
-  // before navigating to /matches/new, so the handoff never depends on
-  // effect timing.
-  const persistDraft = (cols: Columns, method: DraftMethod) => {
+  // handoff (team roster + assembly method only; the wave/life counters
+  // below are separate, independent fields it doesn't read), and by this
+  // page itself to restore state after the user hits Back. Also called
+  // directly (not just via the effect below) right before navigating to
+  // /matches/new, so the handoff never depends on effect timing.
+  const persistDraft = () => {
     const draft = {
-      pool: cols.pool.map((p) => p.id),
-      atlantis: cols.atlantis.map((p) => p.id),
-      titans: cols.titans.map((p) => p.id),
-      method,
+      pool: columns.pool.map((p) => p.id),
+      atlantis: columns.atlantis.map((p) => p.id),
+      titans: columns.titans.map((p) => p.id),
+      method: assemblyMethod,
+      waveCounter,
+      lifeCounter,
     };
     const isEmpty =
       draft.pool.length === 0 &&
@@ -330,8 +343,8 @@ export default function TeamSplitterPage() {
   // columns starts in.
   useEffect(() => {
     if (loading) return;
-    persistDraft(columns, assemblyMethod);
-  }, [columns, assemblyMethod, loading]);
+    persistDraft();
+  }, [columns, assemblyMethod, waveCounter, lifeCounter, loading]);
 
   const allAdded = [...columns.pool, ...columns.atlantis, ...columns.titans];
 
@@ -393,7 +406,7 @@ export default function TeamSplitterPage() {
 
   const handleGoToBattle = () => {
     if (!canBattle) return;
-    persistDraft(columns, assemblyMethod);
+    persistDraft();
     router.push("/matches/new");
   };
 
@@ -688,6 +701,44 @@ export default function TeamSplitterPage() {
             />
           </div>
         </DndContext>
+
+        {/* Game settings — shared by both teams, independent of Record of
+            Battle's own wave/life counters (which record what remained
+            per team at match end). */}
+        {canBattle && (
+          <div className="goa-game-settings">
+            <div className="goa-team-counters plain">
+              <div className="goa-counter-field">
+                <label className="goa-counter-label">Wave Counter</label>
+                <select
+                  className="goa-select"
+                  value={waveCounter}
+                  onChange={(e) => setWaveCounter(e.target.value)}
+                >
+                  <option value="">—</option>
+                  <option value="3">3</option>
+                  <option value="5">5</option>
+                  <option value="7">7</option>
+                </select>
+              </div>
+              <div className="goa-counter-field">
+                <label className="goa-counter-label">Life Counter</label>
+                <select
+                  className="goa-select"
+                  value={lifeCounter}
+                  onChange={(e) => setLifeCounter(e.target.value)}
+                >
+                  <option value="">—</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="goa-btn-wrap">

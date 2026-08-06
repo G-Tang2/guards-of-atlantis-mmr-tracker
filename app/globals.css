@@ -756,6 +756,38 @@
     gap: 0.4rem;
   }
 
+  /* Per-team Wave Counter / Life Counter dropdown pair — reused for both
+     Record of Battle's remaining-at-match-end fields and Divide the
+     Host's independent game-setting fields. */
+  .goa-team-counters {
+    padding: 0 0.75rem 0.75rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    border-top: 1px solid rgba(201, 151, 58, 0.12);
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+  }
+  .goa-team-counters.plain {
+    padding: 0;
+    border-top: none;
+    margin-top: 0.4rem;
+  }
+
+  .goa-counter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .goa-counter-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
   .goa-player-row {
     display: flex;
     align-items: center;
@@ -3882,6 +3914,13 @@
   .goa-result-teams {
     display: flex;
     flex-direction: column;
+  }
+
+  /* Divide the Host — game-setting counters shared by both teams,
+     independent of Record of Battle's own per-team remaining counters */
+  .goa-game-settings {
+    padding: 0.75rem;
+    padding-top: 0;
   }
 
   .goa-result-team {

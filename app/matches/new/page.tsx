@@ -38,6 +38,9 @@ type Winner = "" | "atlantis" | "titans" | "none";
 
 const INACTIVE_GAME_THRESHOLD = 5;
 
+// 0, 1, …, max — the remaining counter can't exceed what the match started with.
+const zeroToMax = (max: number) => Array.from({ length: max + 1 }, (_, i) => i);
+
 function NewMatchPageInner() {
   const router = useRouter();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -49,6 +52,18 @@ function NewMatchPageInner() {
   const [winner, setWinner] = useState<Winner>("");
   const [winCondition, setWinCondition] = useState<WinCondition | null>(null);
   const [draftMethod, setDraftMethod] = useState<DraftMethod>("custom");
+  // Wave/life counter remaining for each team at match end — independent of
+  // win condition, and left unset (empty string) unless the user picks one.
+  const [atlantisWaveCounter, setAtlantisWaveCounter] = useState("");
+  const [titansWaveCounter, setTitansWaveCounter] = useState("");
+  const [atlantisLifeCounter, setAtlantisLifeCounter] = useState("");
+  const [titansLifeCounter, setTitansLifeCounter] = useState("");
+  // Upper bound for the "remaining" dropdowns above — the starting wave/life
+  // counter chosen on Divide the Host, so remaining can only be 0..starting.
+  // Falls back to the largest possible starting value if that step was
+  // skipped, so the field still offers a sensible full range.
+  const [maxWaveCounter, setMaxWaveCounter] = useState(7);
+  const [maxLifeCounter, setMaxLifeCounter] = useState(8);
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -72,6 +87,8 @@ function NewMatchPageInner() {
               atlantis: string[];
               titans: string[];
               method: DraftMethod;
+              waveCounter?: string;
+              lifeCounter?: string;
             };
             const byId = new Map<string, Player>(data.map((p) => [p.id, p]));
             const resolve = (ids: string[]): PoolEntry[] =>
@@ -93,6 +110,15 @@ function NewMatchPageInner() {
             ];
             if (validDraftMethods.includes(saved.method)) {
               setDraftMethod(saved.method);
+            }
+
+            const startingWave = Number(saved.waveCounter);
+            if ([3, 5, 7].includes(startingWave)) {
+              setMaxWaveCounter(startingWave);
+            }
+            const startingLife = Number(saved.lifeCounter);
+            if (startingLife >= 4 && startingLife <= 8) {
+              setMaxLifeCounter(startingLife);
             }
           }
         } catch {
@@ -222,6 +248,18 @@ function NewMatchPageInner() {
           titans_mmr_change: result.meta.titansDelta,
           expected_atlantis_win: result.meta.expectedA,
           draft_method: draftMethod,
+          atlantis_wave_counter: atlantisWaveCounter
+            ? Number(atlantisWaveCounter)
+            : null,
+          titans_wave_counter: titansWaveCounter
+            ? Number(titansWaveCounter)
+            : null,
+          atlantis_life_counter: atlantisLifeCounter
+            ? Number(atlantisLifeCounter)
+            : null,
+          titans_life_counter: titansLifeCounter
+            ? Number(titansLifeCounter)
+            : null,
         })
         .select("id, match_number")
         .single();
@@ -385,6 +423,10 @@ function NewMatchPageInner() {
       setAtlantis([]);
       setTitans([]);
       setWinner("");
+      setAtlantisWaveCounter("");
+      setTitansWaveCounter("");
+      setAtlantisLifeCounter("");
+      setTitansLifeCounter("");
       sessionStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
 
       setTimeout(() => {
@@ -489,6 +531,38 @@ function NewMatchPageInner() {
             </div>
           ))}
         </div>
+        <div className="goa-team-counters">
+          <div className="goa-counter-field">
+            <label className="goa-counter-label">Wave Counter</label>
+            <select
+              className="goa-select"
+              value={atlantisWaveCounter}
+              onChange={(e) => setAtlantisWaveCounter(e.target.value)}
+            >
+              <option value="">—</option>
+              {zeroToMax(maxWaveCounter).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="goa-counter-field">
+            <label className="goa-counter-label">Life Counter</label>
+            <select
+              className="goa-select"
+              value={atlantisLifeCounter}
+              onChange={(e) => setAtlantisLifeCounter(e.target.value)}
+            >
+              <option value="">—</option>
+              {zeroToMax(maxLifeCounter).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Titans */}
@@ -560,6 +634,38 @@ function NewMatchPageInner() {
               </div>
             </div>
           ))}
+        </div>
+        <div className="goa-team-counters">
+          <div className="goa-counter-field">
+            <label className="goa-counter-label">Wave Counter</label>
+            <select
+              className="goa-select"
+              value={titansWaveCounter}
+              onChange={(e) => setTitansWaveCounter(e.target.value)}
+            >
+              <option value="">—</option>
+              {zeroToMax(maxWaveCounter).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="goa-counter-field">
+            <label className="goa-counter-label">Life Counter</label>
+            <select
+              className="goa-select"
+              value={titansLifeCounter}
+              onChange={(e) => setTitansLifeCounter(e.target.value)}
+            >
+              <option value="">—</option>
+              {zeroToMax(maxLifeCounter).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
