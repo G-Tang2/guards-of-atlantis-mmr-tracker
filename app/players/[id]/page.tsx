@@ -25,6 +25,7 @@ type Player = {
   name: string;
   mmr: number;
   avatar_url?: string | null;
+  cover_url?: string | null;
 };
 
 type MatchPlayer = {
@@ -370,6 +371,8 @@ export default function PlayerProfilePage() {
   );
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   // History tab: pagination + filters
   const HISTORY_PAGE_SIZE = 10;
@@ -470,6 +473,44 @@ export default function PlayerProfilePage() {
     }
   };
 
+  const COVER_MAX_BYTES = 8 * 1024 * 1024;
+
+  const handleCoverChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !player) return;
+    if (file.size > COVER_MAX_BYTES) {
+      alert("Cover photo must be under 8MB");
+      if (coverInputRef.current) coverInputRef.current.value = "";
+      return;
+    }
+    setCoverUploading(true);
+    try {
+      // Uploaded as-is (no canvas re-encode) so GIF animation survives.
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${player.id}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabaseClient.storage
+        .from("player-covers")
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabaseClient.storage
+        .from("player-covers")
+        .getPublicUrl(path);
+      const url = publicUrlData.publicUrl;
+
+      await supabaseClient
+        .from("players")
+        .update({ cover_url: url })
+        .eq("id", player.id);
+      setPlayer((p) => (p ? { ...p, cover_url: url } : p));
+    } catch (err) {
+      console.error("Cover photo upload failed", err);
+    } finally {
+      setCoverUploading(false);
+      if (coverInputRef.current) coverInputRef.current.value = "";
+    }
+  };
+
   useEffect(() => {
     if (!playerId) return;
 
@@ -477,7 +518,7 @@ export default function PlayerProfilePage() {
       const [{ data: pData }, { data: mData }] = await Promise.all([
         supabaseClient
           .from("players")
-          .select("id, name, mmr, avatar_url")
+          .select("id, name, mmr, avatar_url, cover_url")
           .eq("id", playerId)
           .single(),
         supabaseClient
@@ -786,40 +827,70 @@ export default function PlayerProfilePage() {
   return (
     <main className="goa-root">
       {/* Hero */}
-      <div className="goa-hero-banner">
-        <div
-          className="goa-avatar-wrap"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <PlayerAvatar
-            avatarUrl={player.avatar_url}
-            name={player.name}
-            size={80}
-            borderColor="var(--gold)"
-          />
-          {avatarUploading && (
-            <div className="goa-avatar-uploading">
-              <Loader2 size={22} className="animate-spin" />
-            </div>
-          )}
-
-          {/* Always visible semi-opaque helper badge */}
-          <div className="goa-avatar-edit-btn">
-            <Camera size={10} className="goa-avatar-edit-icon" />
-            <span className="goa-avatar-edit-text">Edit</span>
+      <div className={`goa-hero-banner${player.cover_url ? " has-cover" : ""}`}>
+        {player.cover_url && (
+          <div className="goa-cover-bg">
+            {/* Plain <img>, not next/image — GIF animation must survive. */}
+            <img src={player.cover_url} alt="" className="goa-cover-bg-img" />
+            <div className="goa-cover-bg-fade" />
           </div>
-        </div>
+        )}
+
+        <button
+          type="button"
+          className="goa-cover-edit-btn"
+          onClick={() => coverInputRef.current?.click()}
+        >
+          {coverUploading ? (
+            <Loader2 size={11} className="animate-spin" />
+          ) : (
+            <Camera size={11} />
+          )}
+          <span>{player.cover_url ? "Cover" : "Add Cover"}</span>
+        </button>
         <input
-          ref={fileInputRef}
+          ref={coverInputRef}
           type="file"
           accept="image/*"
           className="hidden"
-          onChange={handleAvatarChange}
+          onChange={handleCoverChange}
         />
-        <h1 className="goa-profile-player-name">{player.name}</h1>
-        <p className="goa-mmr-display">
-          <b>{player.mmr}</b> MMR
-        </p>
+
+        <div className="goa-hero-banner-content">
+          <div
+            className="goa-avatar-wrap"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <PlayerAvatar
+              avatarUrl={player.avatar_url}
+              name={player.name}
+              size={80}
+              borderColor="var(--gold)"
+            />
+            {avatarUploading && (
+              <div className="goa-avatar-uploading">
+                <Loader2 size={22} className="animate-spin" />
+              </div>
+            )}
+
+            {/* Always visible semi-opaque helper badge */}
+            <div className="goa-avatar-edit-btn">
+              <Camera size={10} className="goa-avatar-edit-icon" />
+              <span className="goa-avatar-edit-text">Edit</span>
+            </div>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarChange}
+          />
+          <h1 className="goa-profile-player-name">{player.name}</h1>
+          <p className="goa-mmr-display">
+            <b>{player.mmr}</b> MMR
+          </p>
+        </div>
       </div>
 
       <div className="goa-section">
