@@ -23,6 +23,24 @@ export type UpdateEntry = {
 export const UPDATES: UpdateEntry[] = [
   {
     date: "Aug 7",
+    title: "Profile Cover Photos",
+    summary: "Personalize your profile page with a custom cover photo.",
+    details: [
+      {
+        text: "Tap the Cover button on your profile page to upload a banner image, displayed behind your avatar the same way a hero's banner art is shown on its page.",
+      },
+      {
+        label: "File Types",
+        text: "Any image format is accepted, including animated GIFs.",
+      },
+      {
+        label: "Size Limit",
+        text: "Up to 8MB per upload.",
+      },
+    ],
+  },
+  {
+    date: "Aug 7",
     title: "Collectible Badges",
     summary: "Win with every hero in a badge's set to earn it — and a bonus.",
     details: [
