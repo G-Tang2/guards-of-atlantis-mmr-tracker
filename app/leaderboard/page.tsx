@@ -448,7 +448,7 @@ export default function LeaderboardPage() {
             W/L
           </span>
           <span
-            className={`goa-col-head right ${sortKey === "matches" ? "active" : ""}`}
+            className={`goa-col-head right goa-col-head-battles ${sortKey === "matches" ? "active" : ""}`}
             onClick={() => handleSort("matches")}
           >
             Bat.
