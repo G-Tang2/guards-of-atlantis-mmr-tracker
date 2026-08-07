@@ -818,7 +818,7 @@
 
   /* Player Management Rows */
   .goa-players {
-    padding: 0 0.75rem 0.75rem;
+    padding: 0.75rem;
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
@@ -847,6 +847,211 @@
     color: var(--titans-light);
   }
 
+  /* ── Stepper (increment/decrement counter) ── */
+  .goa-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+  }
+  .goa-stepper-label {
+    font-family: "Crimson Pro", serif;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .goa-stepper-label-icon {
+    flex-shrink: 0;
+    color: var(--gold-light);
+    opacity: 0.8;
+  }
+  .goa-stepper-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .goa-stepper-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: rgba(28, 26, 20, 0.6);
+    color: var(--gold-light);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .goa-stepper-btn:hover:not(:disabled) {
+    border-color: var(--gold);
+    background: rgba(201, 151, 58, 0.15);
+  }
+  .goa-stepper-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .goa-stepper-value {
+    min-width: 1.4rem;
+    text-align: center;
+    font-family: "Cinzel", serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--gold-light);
+  }
+  .goa-stepper:not(:last-child) {
+    border-bottom: 1px solid rgba(201, 151, 58, 0.08);
+  }
+
+  /* Compact variant — label stacked above the controls, meant to sit in a
+     multi-column grid instead of a single tall list, to cut down on
+     scrolling when a lot of players/rounds are in play. */
+  .goa-stepper.compact {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.3rem;
+    padding: 0.35rem 0.15rem;
+    text-align: center;
+  }
+  .goa-stepper.compact:not(:last-child) {
+    border-bottom: none;
+  }
+  .goa-stepper.compact .goa-stepper-label {
+    font-size: 0.62rem;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+    min-height: 1.7em;
+    justify-content: center;
+    gap: 0.2rem;
+  }
+  .goa-stepper.compact .goa-stepper-label-icon {
+    margin-top: -1px;
+  }
+  .goa-stepper.compact .goa-stepper-controls {
+    gap: 0.3rem;
+  }
+  .goa-stepper.compact .goa-stepper-btn {
+    width: 22px;
+    height: 22px;
+  }
+  .goa-stepper-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.1rem 0.15rem;
+    padding: 0.4rem 0.4rem 0.5rem;
+  }
+
+  /* ── Round tabs (Battle Log) ── */
+  /* Sticky so switching rounds never requires scrolling back to the top —
+     backed by a near-opaque blurred panel so player cards don't show
+     through as they scroll underneath it. */
+  .goa-round-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.85rem 0.85rem 0.6rem;
+    overflow-x: auto;
+    background: rgba(20, 18, 14, 0.96);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  /* Read-only display contexts (e.g. the match detail page) nest this
+     mid-page inside a card — sticking it to the viewport top there would
+     pin it over unrelated sections while scrolling, so it drops the
+     sticky/blur treatment and just sits inline. */
+  .goa-round-tabs.static {
+    position: static;
+    background: none;
+    backdrop-filter: none;
+  }
+  .goa-round-tab-wrap {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+  /* Small dot marking a round that already has at least one recorded
+     stat, so it's clear at a glance which rounds still need input. */
+  .goa-round-tab-dot {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--gain);
+    pointer-events: none;
+  }
+  .goa-round-tab {
+    flex-shrink: 0;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(28, 26, 20, 0.6);
+    font-family: "Cinzel", serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .goa-round-tab.active {
+    border-color: var(--gold);
+    background: rgba(201, 151, 58, 0.15);
+    color: var(--gold-light);
+  }
+  .goa-round-tab-remove {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    width: 19px;
+    height: 19px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(10, 9, 6, 0.6);
+    background: var(--loss);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    line-height: 1;
+    transition: transform 0.1s;
+  }
+  .goa-round-tab-remove:hover {
+    transform: scale(1.15);
+  }
+  .goa-round-tab-add {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px dashed var(--border);
+    background: none;
+    color: var(--gold-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .goa-round-tab-add:hover {
+    border-color: var(--gold);
+    background: rgba(201, 151, 58, 0.1);
+  }
+
   /* Small icon prefixed to a label wherever a life/wave counter is
      mentioned — generic, or colour-matched to Atlantis/Titans. */
   .goa-label-icon {
@@ -867,6 +1072,49 @@
     border-radius: 3px;
     padding: 0.45rem 0.6rem;
     animation: fadeSlide 0.2s ease;
+  }
+  .goa-player-row.clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .goa-player-row.clickable:hover {
+    background: rgba(42, 39, 32, 0.75);
+  }
+  /* Collapsed-state summary — one line of icon+value pairs, no text labels,
+     so a player's activity for the round is scannable without expanding
+     the full stepper grid. Dim until that category has a nonzero value. */
+  .goa-player-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.3rem;
+    padding: 0.4rem 0.7rem 0.55rem;
+  }
+  .goa-player-summary-item {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-family: "Cinzel", serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+  .goa-player-summary-item svg {
+    opacity: 0.55;
+  }
+  .goa-player-summary-item.active {
+    color: var(--gold-light);
+  }
+  .goa-player-summary-item.active svg {
+    opacity: 1;
+  }
+  .goa-player-chevron {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+  }
+  .goa-player-chevron.open {
+    transform: rotate(180deg);
   }
 
   .goa-player-name {
@@ -1191,6 +1439,31 @@
     cursor: not-allowed;
     border-color: var(--border);
     color: var(--text-muted);
+  }
+
+  /* Destructive variant — same shape/shimmer as .goa-btn, recoloured red so
+     a delete/remove action never reads as the same "go ahead" gold as a
+     normal confirm. */
+  .goa-btn.danger {
+    background: linear-gradient(135deg, rgba(196, 74, 74, 0.18), rgba(122, 26, 42, 0.28));
+    border-color: var(--loss);
+    color: #ff9d9d;
+  }
+  .goa-btn.danger::before {
+    background: linear-gradient(90deg, transparent, rgba(196, 74, 74, 0.15), transparent);
+  }
+  .goa-btn.danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(196, 74, 74, 0.3), rgba(122, 26, 42, 0.4));
+    box-shadow: 0 0 20px rgba(196, 74, 74, 0.3);
+  }
+
+  /* Smaller variant for tighter contexts like confirm-dialog buttons,
+     where the default full-size CTA reads oversized next to a short
+     one-line prompt. */
+  .goa-btn.sm {
+    padding: 0.6rem 1rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
   }
 
   /* Leaderboard Podium Component */
@@ -4023,44 +4296,6 @@
   }
   .goa-update-icon-row .goa-update-details {
     margin-top: 0;
-  }
-  .goa-update-pagination {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    padding: 0.55rem 0.85rem;
-    border-top: 1px solid rgba(201, 151, 58, 0.15);
-  }
-  .goa-update-page-btn {
-    background: none;
-    border: 1px solid rgba(201, 151, 58, 0.3);
-    border-radius: 3px;
-    color: var(--gold);
-    width: 26px;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition:
-      color 0.15s,
-      border-color 0.15s;
-  }
-  .goa-update-page-btn:hover:not(:disabled) {
-    border-color: var(--gold);
-    color: var(--gold-light);
-  }
-  .goa-update-page-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-  .goa-update-page-label {
-    font-family: "Cinzel", serif;
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
   }
   .goa-update-toggle {
     width: 100%;

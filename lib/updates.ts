@@ -4,6 +4,8 @@
 
 import type { ComponentType } from "react";
 import { Shield, Swords } from "lucide-react";
+import { BADGES } from "@/lib/badges";
+import { getBadgeCompleteMmrBonus } from "@/lib/heroWinBonus";
 
 export type UpdateDetailItem = {
   label?: string;
@@ -19,6 +21,63 @@ export type UpdateEntry = {
 };
 
 export const UPDATES: UpdateEntry[] = [
+  {
+    date: "Aug 7",
+    title: "Collectible Badges",
+    summary: "Win with every hero in a badge's set to earn it — and a bonus.",
+    details: [
+      {
+        text: "Each badge covers a hero pack. Winning at least one match with every hero in a badge earns it, along with a flat MMR bonus on top of the usual result:",
+      },
+      ...BADGES.map((badge) => ({
+        label: badge.name,
+        text: `+${getBadgeCompleteMmrBonus(badge)} MMR (${badge.heroIds.length} heroes)`,
+      })),
+      {
+        text: "Winning with a hero for the first time also grants a 30% MMR boost on that match's gain.",
+      },
+    ],
+  },
+    {
+    date: "Aug 7",
+    title: "Detailed Battle Log",
+    summary: "Optionally record round-by-round combat detail for every match.",
+    details: [
+      {
+        text: "After assembling teams, choose to record the battle in detail before finishing the match record:",
+      },
+      {
+        label: "Round by Round",
+        text: "Track hero kills, deaths, attacks, defends, minion kills, heavy minion kills, farm, and heals for every player.",
+      },
+      {
+        label: "Match Detail Page",
+        text: "Recorded battles shows each player's match performance metrics on the match detail page.",
+      },
+    ],
+  },
+  {
+    date: "Aug 5",
+    title: "Redesigned Match Details",
+    summary: "A clearer breakdown of what happened before, during, and after each battle.",
+    details: [
+      {
+        text: "Each battle's detail page is now organised into distinct sections instead of one long list:",
+      },
+      {
+        label: "Pre-Match",
+        text: "Draft method, starting wave and life counters, and the win probability, shown together before the result.",
+      },
+      {
+        label: "Post-Match",
+        text: "Wave counter(s) and each team's life counter(s) remaining.",
+      },
+      {
+        label: "Teams",
+        text: "Each roster, hero picks, and MMR change.",
+      },
+    ],
+  },
   {
     date: "Jul 31",
     title: "Rank Protection",

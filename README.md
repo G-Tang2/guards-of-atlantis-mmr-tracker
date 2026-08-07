@@ -224,6 +224,28 @@ create table match_players (
 create index on match_players(hero_id);
 create index on match_players(player_id);
 create index on match_players(match_id);
+
+-- Optional per-round detail, recorded round-by-round from /matches/battle-log
+-- when the user opts into detailed recording from /teams. Absent entirely
+-- for matches recorded without it.
+create table match_round_stats (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references matches(id) on delete cascade,
+  round_number smallint not null check (round_number >= 1),
+  player_id uuid not null references players(id) on delete cascade,
+  hero_kills smallint not null default 0 check (hero_kills >= 0),
+  deaths smallint not null default 0 check (deaths >= 0),
+  hero_attacks smallint not null default 0 check (hero_attacks >= 0),
+  hero_defends smallint not null default 0 check (hero_defends >= 0),
+  minion_kills smallint not null default 0 check (minion_kills >= 0),
+  heavy_minion_kills smallint not null default 0 check (heavy_minion_kills >= 0),
+  farm smallint not null default 0 check (farm >= 0),
+  heals smallint not null default 0 check (heals >= 0),
+  unique (match_id, round_number, player_id)
+);
+
+create index on match_round_stats(match_id);
+create index on match_round_stats(player_id);
 ```
 
 ### 4. Run locally

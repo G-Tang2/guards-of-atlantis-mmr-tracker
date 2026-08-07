@@ -2,12 +2,7 @@
 
 import Image from "next/image";
 import { forwardRef, useLayoutEffect, useRef, useState } from "react";
-import {
-  Sparkles,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Sparkles, ChevronDown } from "lucide-react";
 import { UPDATES, UpdateEntry, UpdateDetailItem } from "@/lib/updates";
 
 const PAGE_SIZE = 3;
@@ -104,8 +99,10 @@ const UpdatePost = forwardRef<HTMLDivElement, { update: UpdateEntry }>(
 );
 
 export default function Home() {
-  const [expanded, setExpanded] = useState(false);
-  const [page, setPage] = useState(0);
+  // null = not yet expanded, so the visible count tracks fitCount as the
+  // viewport is measured/resized. Once the user loads more (or collapses
+  // back), it holds an explicit count instead.
+  const [loadedCount, setLoadedCount] = useState<number | null>(null);
   const [fitCount, setFitCount] = useState(1);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -136,14 +133,16 @@ export default function Home() {
     return () => window.removeEventListener("resize", recalc);
   }, []);
 
-  const pageCount = Math.max(1, Math.ceil(UPDATES.length / PAGE_SIZE));
-  const visibleItems = expanded
-    ? UPDATES.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
-    : UPDATES.slice(0, fitCount);
+  const expanded = loadedCount !== null;
+  const visibleCount = loadedCount ?? fitCount;
+  const visibleItems = UPDATES.slice(0, visibleCount);
+  const hasMore = visibleCount < UPDATES.length;
 
-  const toggleExpanded = () => {
-    setExpanded((v) => !v);
-    setPage(0);
+  const loadMore = () => {
+    setLoadedCount(Math.min(UPDATES.length, visibleCount + PAGE_SIZE));
+  };
+  const showLess = () => {
+    setLoadedCount(null);
   };
 
   return (
@@ -195,39 +194,15 @@ export default function Home() {
           ))}
         </div>
 
-        {expanded && pageCount > 1 && (
-          <div className="goa-update-pagination">
-            <button
-              className="goa-update-page-btn"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              aria-label="Previous page"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <span className="goa-update-page-label">
-              Page {page + 1} of {pageCount}
-            </span>
-            <button
-              className="goa-update-page-btn"
-              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-              disabled={page === pageCount - 1}
-              aria-label="Next page"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        )}
-
-        {(expanded || fitCount < UPDATES.length) && (
-          <button className="goa-update-toggle" onClick={toggleExpanded}>
-            {expanded
-              ? "Show Less"
-              : `Show ${UPDATES.length - fitCount} More`}
-            <ChevronDown
-              size={14}
-              className={expanded ? "rotate-180" : ""}
-            />
+        {(hasMore || expanded) && (
+          <button
+            className="goa-update-toggle"
+            onClick={hasMore ? loadMore : showLess}
+          >
+            {hasMore
+              ? `Load ${Math.min(PAGE_SIZE, UPDATES.length - visibleCount)} More`
+              : "Show Less"}
+            <ChevronDown size={14} className={!hasMore ? "rotate-180" : ""} />
           </button>
         )}
       </div>
