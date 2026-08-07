@@ -890,8 +890,12 @@ export default function PlayerProfilePage() {
                       return (
                         <div
                           key={heroId}
-                          className={`goa-badge-icon-wrap${earned ? " earned" : ""}`}
+                          className={`goa-badge-icon-wrap clickable${earned ? " earned" : ""}`}
                           title={hero.name}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/heroes/${heroId}`);
+                          }}
                         >
                           <Image
                             src={hero.icon}
