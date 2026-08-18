@@ -17,6 +17,7 @@ export type MatchPlayer = {
   mmr_after: number;
   hero_id?: string | null;
   is_bounty?: boolean;
+  is_first_hero_win?: boolean;
 };
 
 export enum WinCondition {

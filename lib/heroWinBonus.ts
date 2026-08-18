@@ -1,4 +1,5 @@
 import { Badge, BADGES } from "@/lib/badges";
+import { didWin } from "@/lib/match";
 
 // Winning with a hero for the first time boosts that match's MMR gain by
 // 30% (stacks with the bounty bonus, since it's applied on top of the
@@ -42,6 +43,45 @@ export function computeHeroWinBonus(
   }
 
   return { type: "first_win" };
+}
+
+type FirstHeroWinRow = {
+  player_id: string;
+  hero_id: string | null;
+  team: string;
+  match_number: number;
+  matches: { winner: string } | { winner: string }[] | null;
+};
+
+// Maps `${playerId}::${heroId}` to the match_number of that player's
+// earliest win with that hero, across their full match history. Used to
+// retroactively flag which single match earned the first-win MMR boost,
+// for display (e.g. the Battle Archive's hero-pick icons).
+export function buildFirstHeroWinMap(
+  rows: FirstHeroWinRow[],
+): Map<string, number> {
+  const map = new Map<string, number>();
+  rows.forEach((row) => {
+    const matchInfo = Array.isArray(row.matches) ? row.matches[0] : row.matches;
+    if (!matchInfo || !row.hero_id) return;
+    if (!didWin(row.team, matchInfo.winner)) return;
+    const key = `${row.player_id}::${row.hero_id}`;
+    const existing = map.get(key);
+    if (existing === undefined || row.match_number < existing) {
+      map.set(key, row.match_number);
+    }
+  });
+  return map;
+}
+
+export function isFirstHeroWinMatch(
+  map: Map<string, number>,
+  playerId: string,
+  heroId: string | null | undefined,
+  matchNumber: number,
+): boolean {
+  if (!heroId) return false;
+  return map.get(`${playerId}::${heroId}`) === matchNumber;
 }
 
 export function applyHeroWinBonus(

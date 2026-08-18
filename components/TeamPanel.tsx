@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { getHero, renderStars, MatchPlayer } from "@/lib/match";
-import { Coins } from "lucide-react";
+import { Coins, Sparkles } from "lucide-react";
 
 type TeamPanelProps = {
   label: string;
@@ -70,6 +70,15 @@ export function TeamPanel({
                 <span className="goa-bounty-badge">
                   <Coins size={10} />
                   +5
+                </span>
+              )}
+              {p.is_first_hero_win && (
+                <span
+                  className="goa-first-win-badge"
+                  title="First win with this hero"
+                >
+                  <Sparkles size={10} />
+                  1ST
                 </span>
               )}
             </span>

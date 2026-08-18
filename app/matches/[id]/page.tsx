@@ -24,6 +24,7 @@ import {
   emptyRoundStats,
 } from "@/lib/battleLog";
 import { ScrollText, Swords } from "lucide-react";
+import { buildFirstHeroWinMap, isFirstHeroWinMatch } from "@/lib/heroWinBonus";
 
 type MatchRound = {
   roundNumber: number;
@@ -243,6 +244,9 @@ export default function MatchDetailPage() {
   const [loading, setLoading] = useState(true);
   const [rounds, setRounds] = useState<MatchRound[]>([]);
   const [activeRoundIndex, setActiveRoundIndex] = useState(0);
+  const [firstHeroWinMap, setFirstHeroWinMap] = useState<Map<string, number>>(
+    new Map(),
+  );
 
   useEffect(() => {
     if (!matchId) return;
@@ -304,6 +308,24 @@ export default function MatchDetailPage() {
     loadRounds();
   }, [matchId]);
 
+  // Archive-wide first-hero-win lookup — a player's earliest win with a
+  // hero may have happened in a different match than this one, so the
+  // icon only needs to appear here if this match number is that match.
+  useEffect(() => {
+    const loadFirstHeroWins = async () => {
+      const { data, error } = await supabaseClient
+        .from("match_players")
+        .select("player_id, hero_id, team, match_number, matches!inner(winner)")
+        .not("hero_id", "is", null);
+      if (error) {
+        console.error(error);
+        return;
+      }
+      setFirstHeroWinMap(buildFirstHeroWinMap(data ?? []));
+    };
+    loadFirstHeroWins();
+  }, []);
+
   const goToProfile = (id: string) => router.push(`/players/${id}`);
 
   if (loading) {
@@ -332,8 +354,22 @@ export default function MatchDetailPage() {
     );
   }
 
-  const atlantis = match.match_players.filter((p) => p.team === "atlantis");
-  const titans = match.match_players.filter((p) => p.team === "titans");
+  const withFirstWinFlag = (list: MatchPlayer[]) =>
+    list.map((p) => ({
+      ...p,
+      is_first_hero_win: isFirstHeroWinMatch(
+        firstHeroWinMap,
+        p.player_id,
+        p.hero_id,
+        match.match_number,
+      ),
+    }));
+  const atlantis = withFirstWinFlag(
+    match.match_players.filter((p) => p.team === "atlantis"),
+  );
+  const titans = withFirstWinFlag(
+    match.match_players.filter((p) => p.team === "titans"),
+  );
   const atlantisOdds =
     match.expected_atlantis_win === null
       ? null
