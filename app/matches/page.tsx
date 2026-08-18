@@ -356,7 +356,6 @@ export default function MatchHistoryPage() {
                   labelClass="atl"
                   players={atlantis}
                   avgMmr={match.atlantis_avg_mmr}
-                  mmrChange={match.atlantis_mmr_change}
                   onSelectPlayer={goToProfile}
                 />
                 <TeamPanel
@@ -364,7 +363,6 @@ export default function MatchHistoryPage() {
                   labelClass="tit"
                   players={titans}
                   avgMmr={match.titans_avg_mmr}
-                  mmrChange={match.titans_mmr_change}
                   onSelectPlayer={goToProfile}
                 />
               </div>

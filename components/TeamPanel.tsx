@@ -10,7 +10,6 @@ type TeamPanelProps = {
   labelClass: "atl" | "tit";
   players: MatchPlayer[];
   avgMmr: number;
-  mmrChange: number;
   onSelectPlayer: (id: string) => void;
 };
 
@@ -19,21 +18,15 @@ export function TeamPanel({
   labelClass,
   players,
   avgMmr,
-  mmrChange,
   onSelectPlayer,
 }: TeamPanelProps) {
   return (
     <div className="goa-team">
-      <div className="flex justify-between">
-        <span className={`goa-team-head ${labelClass}`}>{label}</span>
-        <span className={`goa-delta ${mmrChange >= 0 ? "pos" : "neg"}`}>
-          {mmrChange >= 0 ? "▲" : "▼"}
-          {Math.abs(mmrChange)}
-        </span>
-      </div>
+      <span className={`goa-team-head ${labelClass}`}>{label}</span>
       <div className="goa-avg-mmr">Avg {Math.round(avgMmr)} MMR</div>
       {players.map((p) => {
         const hero = getHero(p.hero_id);
+        const delta = p.mmr_after - p.mmr_before;
         return (
           <div
             key={p.player_id}
@@ -54,6 +47,12 @@ export function TeamPanel({
               </span>
               <span className="goa-mmr-change">
                 {p.mmr_before} → {p.mmr_after}
+                <span
+                  className={`goa-player-delta ${delta >= 0 ? "pos" : "neg"}`}
+                >
+                  {delta >= 0 ? "▲" : "▼"}
+                  {Math.abs(delta)}
+                </span>
               </span>
             </div>
             <span className="goa-display-hero">

@@ -3051,6 +3051,17 @@
     align-items: center;
     gap: 0.2rem;
   }
+  .goa-player-delta {
+    font-weight: 700;
+    font-size: 0.72rem;
+    margin-left: 0.15rem;
+  }
+  .goa-player-delta.pos {
+    color: var(--gain);
+  }
+  .goa-player-delta.neg {
+    color: var(--loss);
+  }
 
   .goa-mmr-display {
     font-family: "Cinzel", serif;
