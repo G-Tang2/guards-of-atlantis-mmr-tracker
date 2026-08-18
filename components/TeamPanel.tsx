@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
-import { getHero, renderStars, MatchPlayer } from "@/lib/match";
-import { Coins, Sparkles } from "lucide-react";
+import { getHero, renderStars, formatActionTime, MatchPlayer } from "@/lib/match";
+import { Coins, Sparkles, Timer } from "lucide-react";
 
 type TeamPanelProps = {
   label: string;
@@ -79,6 +79,12 @@ export function TeamPanel({
                 >
                   <Sparkles size={10} />
                   1ST
+                </span>
+              )}
+              {p.action_time_seconds != null && (
+                <span className="goa-action-time-badge" title="Action time">
+                  <Timer size={10} />
+                  {formatActionTime(p.action_time_seconds)}
                 </span>
               )}
             </span>

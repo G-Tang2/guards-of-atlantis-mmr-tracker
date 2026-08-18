@@ -8,7 +8,7 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { DraftMethod } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
-import { Swords, Crown, Dices, Scale, GripVertical } from "lucide-react";
+import { Swords, Crown, Dices, Scale, GripVertical, Timer } from "lucide-react";
 import {
   DndContext,
   useDraggable,
@@ -420,11 +420,23 @@ export default function TeamSplitterPage() {
 
   const teamsReady = columns.atlantis.length > 0 && columns.titans.length > 0;
   const canBattle = teamsReady && waveCounter !== "" && lifeCounter !== "";
+  const [timerPromptOpen, setTimerPromptOpen] = useState(false);
 
   const handleGoToBattle = () => {
     if (!canBattle) return;
+    setTimerPromptOpen(true);
+  };
+
+  const goToBattleWithoutTimer = () => {
     persistDraft();
+    setTimerPromptOpen(false);
     router.push("/matches/new");
+  };
+
+  const goToBattleWithTimer = () => {
+    persistDraft();
+    setTimerPromptOpen(false);
+    router.push("/matches/timer");
   };
 
   // ── Draft handlers ──────────────────────────────────────────────────────────
@@ -810,6 +822,52 @@ export default function TeamSplitterPage() {
           Begin the Battle
         </button>
       </div>
+
+      {/* ══════════════ TIMER PROMPT ══════════════ */}
+      {timerPromptOpen && (
+        <div
+          className="draft-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setTimerPromptOpen(false);
+          }}
+        >
+          <div className="draft-sheet">
+            <div className="draft-head">
+              <span className="draft-head-title">Use a Battle Timer?</span>
+              <button
+                className="draft-close"
+                onClick={() => setTimerPromptOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="draft-body">
+              <p className="draft-note" style={{ textAlign: "left" }}>
+                Pace strategy, action, and end-of-round phases with a
+                shared clock and per-team reserve time.
+              </p>
+              <div className="goa-btn-wrap" style={{ margin: 0 }}>
+                <button
+                  className="goa-btn inline-flex items-center justify-center gap-2"
+                  onClick={goToBattleWithTimer}
+                >
+                  <Timer size={18} />
+                  Yes, Use a Timer
+                </button>
+              </div>
+              <div className="goa-btn-wrap" style={{ margin: 0 }}>
+                <button
+                  className="goa-battle-option"
+                  onClick={goToBattleWithoutTimer}
+                  style={{ width: "100%", textAlign: "center" }}
+                >
+                  No, Skip to Record of Battle
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════ CAPTAIN'S DRAFT MODAL ══════════════ */}
       {draftOpen && draft && (

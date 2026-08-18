@@ -11,6 +11,7 @@ import { computeBountyHeroIds, BOUNTY_MMR_BONUS } from "@/lib/bounty";
 import { computeHeroWinBonus, applyHeroWinBonus } from "@/lib/heroWinBonus";
 import { DraftMethod, didWin } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
+import { TIMER_LOG_STORAGE_KEY } from "@/lib/timerLog";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { BadgeEarnedOverlay, EarnedBadgeInfo } from "@/components/BadgeEarnedOverlay";
@@ -407,6 +408,16 @@ function NewMatchPageInner() {
         ...titans.map((e): [string, Team] => [e.player.id, "titans"]),
       ]);
 
+      // Optional — only present when the user opted into the /matches/timer
+      // clock from /teams rather than skipping straight to this page.
+      let timerLog: Record<string, number> = {};
+      try {
+        const timerLogRaw = sessionStorage.getItem(TIMER_LOG_STORAGE_KEY);
+        if (timerLogRaw) timerLog = JSON.parse(timerLogRaw) as Record<string, number>;
+      } catch {
+        // Corrupt/stale entry — ignore, action times just come back null.
+      }
+
       // Denormalize match_number onto every match_player row
       const matchPlayers = [
         ...atlantisFinal.map((p) => {
@@ -420,6 +431,7 @@ function NewMatchPageInner() {
             mmr_after: p.newMmr,
             hero_id: heroId,
             is_bounty: heroId ? bountyHeroIds.has(heroId) : false,
+            action_time_seconds: timerLog[p.id] ?? null,
           };
         }),
         ...titansFinal.map((p) => {
@@ -433,6 +445,7 @@ function NewMatchPageInner() {
             mmr_after: p.newMmr,
             hero_id: heroId,
             is_bounty: heroId ? bountyHeroIds.has(heroId) : false,
+            action_time_seconds: timerLog[p.id] ?? null,
           };
         }),
       ];
@@ -441,6 +454,7 @@ function NewMatchPageInner() {
         .from("match_players")
         .insert(matchPlayers);
       if (mpError) throw mpError;
+      sessionStorage.removeItem(TIMER_LOG_STORAGE_KEY);
 
 // Combine updated match participants with non-participating players
       const updatedParticipantsMap = new Map(

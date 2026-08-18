@@ -18,17 +18,22 @@ const TABS = [
     icon: ScrollText,
     match: (p: string) =>
       p === "/matches" ||
-      (p.startsWith("/matches/") && !p.startsWith("/matches/new")),
+      (p.startsWith("/matches/") &&
+        !p.startsWith("/matches/new") &&
+        !p.startsWith("/matches/timer")),
   },
   {
     // Main entry point for building a match: assemble teams on /teams,
+    // optionally detour through /matches/timer for a paced live clock,
     // then continue into recording it on /matches/new. Raised and
     // centered as the primary action of the bar.
     href: "/teams",
     label: "Battle",
     icon: Swords,
     match: (p: string) =>
-      p.startsWith("/teams") || p.startsWith("/matches/new"),
+      p.startsWith("/teams") ||
+      p.startsWith("/matches/new") ||
+      p.startsWith("/matches/timer"),
     center: true,
   },
   {

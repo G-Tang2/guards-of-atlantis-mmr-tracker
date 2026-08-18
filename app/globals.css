@@ -1442,6 +1442,27 @@
     margin-left: auto;
   }
 
+  /* Cumulative action-phase time, recorded when a match used the
+     /matches/timer clock — same pill treatment as bounty/first-win, in a
+     neutral slate tone since it isn't a bonus or achievement. */
+  .goa-action-time-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid #5a7a8a;
+    border-radius: 999px;
+    background: rgba(90, 122, 138, 0.15);
+    color: #9fc0cf;
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
   /* Hero Compendium — "Bounty Heroes" (unplayed/forgotten) section */
   .goa-bounty-section {
     margin: 0.6rem 0.75rem 1rem;
@@ -5492,6 +5513,188 @@
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+
+  /* ── Battle Timer (/matches/timer) ── */
+  .goa-timer-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.85rem 1rem 0.4rem;
+  }
+  .goa-timer-round {
+    font-family: "Cinzel", serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .goa-timer-phase {
+    font-family: "Cinzel", serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--gold-light);
+  }
+
+  .goa-timer-reserves {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    padding: 0 1rem 0.6rem;
+  }
+  .goa-timer-reserve {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: rgba(28, 26, 20, 0.6);
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .goa-timer-reserve.atl {
+    border-color: rgba(196, 42, 58, 0.35);
+  }
+  .goa-timer-reserve.tit {
+    border-color: rgba(42, 171, 184, 0.35);
+  }
+  .goa-timer-reserve.draining {
+    border-color: var(--loss);
+    background: rgba(196, 74, 74, 0.15);
+    animation: timerPulse 1s ease-in-out infinite;
+  }
+  .goa-timer-reserve-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .goa-timer-reserve-value {
+    font-family: "Cinzel", serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .goa-timer-main-count {
+    text-align: center;
+    font-family: "Cinzel", serif;
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: var(--gold-light);
+    text-shadow: 0 0 24px rgba(201, 151, 58, 0.35);
+    padding: 0.5rem 0 0.75rem;
+  }
+
+  .goa-timer-ready-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    padding: 0 1rem;
+  }
+  .goa-timer-ready-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.8rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: rgba(28, 26, 20, 0.6);
+    font-family: "Cinzel", serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .goa-timer-ready-btn.atl {
+    color: var(--atlantis-light);
+  }
+  .goa-timer-ready-btn.tit {
+    color: var(--titans-light);
+  }
+  .goa-timer-ready-btn.ready {
+    border-color: var(--gain);
+    background: rgba(93, 187, 138, 0.15);
+    color: var(--gain);
+    cursor: default;
+  }
+  .goa-timer-ready-btn:disabled {
+    opacity: 0.85;
+  }
+
+  .goa-timer-select-teams {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .goa-timer-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5rem 1rem 1rem;
+  }
+  .goa-timer-action-player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: "Cinzel", serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--gold-light);
+    margin-bottom: 0.25rem;
+  }
+
+  .goa-timer-controls {
+    display: flex;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 1rem;
+  }
+  .goa-timer-control-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(28, 26, 20, 0.6);
+    font-family: "Cinzel", serif;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .goa-timer-control-btn:hover {
+    border-color: var(--gold);
+    background: rgba(201, 151, 58, 0.1);
+  }
+  .goa-timer-control-btn.danger {
+    color: var(--loss);
+    border-color: rgba(196, 74, 74, 0.4);
+  }
+  .goa-timer-control-btn.danger:hover {
+    background: rgba(196, 74, 74, 0.15);
+  }
+
+  @keyframes timerPulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
     }
   }
 }

@@ -18,6 +18,7 @@ export type MatchPlayer = {
   hero_id?: string | null;
   is_bounty?: boolean;
   is_first_hero_win?: boolean;
+  action_time_seconds?: number | null;
 };
 
 export enum WinCondition {
@@ -66,3 +67,11 @@ export const getHero = (heroId?: string | null) =>
 // Draws award a win to both sides rather than a loss to either.
 export const didWin = (team: string, winner: string) =>
   team === winner || winner === "none";
+
+export const formatActionTime = (totalSeconds: number) => {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  if (m === 0) return `${s}s`;
+  if (s === 0) return `${m}m`;
+  return `${m}m ${s}s`;
+};
