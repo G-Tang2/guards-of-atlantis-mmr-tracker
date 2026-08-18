@@ -11,7 +11,6 @@ import { computeBountyHeroIds, BOUNTY_MMR_BONUS } from "@/lib/bounty";
 import { computeHeroWinBonus, applyHeroWinBonus } from "@/lib/heroWinBonus";
 import { DraftMethod, didWin } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
-import { BATTLE_LOG_STORAGE_KEY, BattleLog } from "@/lib/battleLog";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { BadgeEarnedOverlay, EarnedBadgeInfo } from "@/components/BadgeEarnedOverlay";
@@ -442,39 +441,6 @@ function NewMatchPageInner() {
         .from("match_players")
         .insert(matchPlayers);
       if (mpError) throw mpError;
-
-      // Detailed round-by-round stats are optional — only present when the
-      // user opted in from /teams via the battle-log page. A failure here
-      // (e.g. the table migration hasn't been run yet) must not abort the
-      // rest of the save — the match and its result are already committed
-      // by this point, and rank/MMR updates below still need to run.
-      const battleLogRaw = sessionStorage.getItem(BATTLE_LOG_STORAGE_KEY);
-      if (battleLogRaw) {
-        try {
-          const battleLog = JSON.parse(battleLogRaw) as BattleLog;
-          const roundStatRows = battleLog.rounds.flatMap((round) =>
-            Object.entries(round.stats).map(([playerId, stats]) => ({
-              match_id: match.id,
-              round_number: round.roundNumber,
-              player_id: playerId,
-              ...stats,
-            })),
-          );
-          if (roundStatRows.length > 0) {
-            const { error: roundStatsError } = await supabaseClient
-              .from("match_round_stats")
-              .insert(roundStatRows);
-            if (roundStatsError) {
-              console.error("Failed to save battle log", roundStatsError);
-              showToast("Match saved, but the detailed battle log failed to save", true);
-            }
-          }
-        } catch (battleLogErr) {
-          console.error("Failed to save battle log", battleLogErr);
-        } finally {
-          sessionStorage.removeItem(BATTLE_LOG_STORAGE_KEY);
-        }
-      }
 
 // Combine updated match participants with non-participating players
       const updatedParticipantsMap = new Map(

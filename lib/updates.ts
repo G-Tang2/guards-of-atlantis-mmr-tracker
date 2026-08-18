@@ -56,24 +56,6 @@ export const UPDATES: UpdateEntry[] = [
       },
     ],
   },
-    {
-    date: "Aug 7",
-    title: "Detailed Battle Log",
-    summary: "Optionally record round-by-round combat detail for every match.",
-    details: [
-      {
-        text: "After assembling teams, choose to record the battle in detail before finishing the match record:",
-      },
-      {
-        label: "Round by Round",
-        text: "Track hero kills, deaths, attacks, defends, minion kills, heavy minion kills, farm, and heals for every player.",
-      },
-      {
-        label: "Match Detail Page",
-        text: "Recorded battles shows each player's match performance metrics on the match detail page.",
-      },
-    ],
-  },
   {
     date: "Aug 5",
     title: "Redesigned Match Details",

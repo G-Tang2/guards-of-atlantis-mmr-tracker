@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { TeamPanel } from "@/components/TeamPanel";
-import { PlayerAvatar } from "@/components/PlayerAvatar";
 import {
   formatDate,
   formatWinCondition,
@@ -16,20 +15,8 @@ import {
   Team,
   WinCondition,
 } from "@/lib/match";
-import {
-  ROUND_STAT_KEYS,
-  ROUND_STAT_ICONS,
-  ROUND_STAT_LABELS,
-  PlayerRoundStats,
-  emptyRoundStats,
-} from "@/lib/battleLog";
 import { ScrollText, Swords } from "lucide-react";
 import { buildFirstHeroWinMap, isFirstHeroWinMatch } from "@/lib/heroWinBonus";
-
-type MatchRound = {
-  roundNumber: number;
-  stats: Record<string, PlayerRoundStats>;
-};
 
 type Match = {
   id: string;
@@ -242,8 +229,6 @@ export default function MatchDetailPage() {
 
   const [match, setMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
-  const [rounds, setRounds] = useState<MatchRound[]>([]);
-  const [activeRoundIndex, setActiveRoundIndex] = useState(0);
   const [firstHeroWinMap, setFirstHeroWinMap] = useState<Map<string, number>>(
     new Map(),
   );
@@ -265,47 +250,6 @@ export default function MatchDetailPage() {
     };
 
     load();
-  }, [matchId]);
-
-  // Optional — only present when the user recorded the battle in detail
-  // (via /matches/battle-log) rather than skipping straight to the result.
-  useEffect(() => {
-    if (!matchId) return;
-
-    const loadRounds = async () => {
-      const { data, error } = await supabaseClient
-        .from("match_round_stats")
-        .select(
-          "round_number, player_id, hero_kills, deaths, hero_attacks, hero_defends, minion_kills, heavy_minion_kills, farm, heals",
-        )
-        .eq("match_id", matchId)
-        .order("round_number", { ascending: true });
-
-      if (error || !data) return;
-
-      const byRound = new Map<number, Record<string, PlayerRoundStats>>();
-      data.forEach((row) => {
-        const stats = byRound.get(row.round_number) ?? {};
-        stats[row.player_id] = {
-          hero_kills: row.hero_kills,
-          deaths: row.deaths,
-          hero_attacks: row.hero_attacks,
-          hero_defends: row.hero_defends,
-          minion_kills: row.minion_kills,
-          heavy_minion_kills: row.heavy_minion_kills,
-          farm: row.farm,
-          heals: row.heals,
-        };
-        byRound.set(row.round_number, stats);
-      });
-
-      const sorted = Array.from(byRound.entries())
-        .sort(([a], [b]) => a - b)
-        .map(([roundNumber, stats]) => ({ roundNumber, stats }));
-      setRounds(sorted);
-    };
-
-    loadRounds();
   }, [matchId]);
 
   // Archive-wide first-hero-win lookup — a player's earliest win with a
@@ -401,27 +345,6 @@ export default function MatchDetailPage() {
       icon: "/icons/life_counters.png",
     });
   }
-
-  // "Overall" is the sum of every recorded round for each player — shown
-  // as its own leading tab alongside the individual rounds.
-  const overallStats: Record<string, PlayerRoundStats> = {};
-  rounds.forEach((round) => {
-    Object.entries(round.stats).forEach(([playerId, stats]) => {
-      const acc = overallStats[playerId] ?? emptyRoundStats();
-      ROUND_STAT_KEYS.forEach((key) => {
-        acc[key] += stats[key];
-      });
-      overallStats[playerId] = acc;
-    });
-  });
-
-  const battleLogTabs = [
-    { label: "Overall", stats: overallStats },
-    ...rounds.map((round) => ({
-      label: `Round ${round.roundNumber}`,
-      stats: round.stats,
-    })),
-  ];
 
   const postMatchRows: DetailRow[] = [];
   if (match.wave_counter_remaining_1 !== null) {
@@ -555,76 +478,6 @@ export default function MatchDetailPage() {
           />
         </div>
       </div>
-
-      {/* Battle Log — round-by-round detail, only present when the user
-          opted into recording it via /matches/battle-log. "Overall" leads
-          as the sum of every round, with each individual round after it. */}
-      {rounds.length > 0 && (
-        <div className="goa-section">
-          <div className="goa-sec-head">Battle Log</div>
-
-          <div className="goa-round-tabs static">
-            {battleLogTabs.map((tab, i) => (
-              <button
-                key={tab.label}
-                className={`goa-round-tab${i === activeRoundIndex ? " active" : ""}`}
-                onClick={() => setActiveRoundIndex(i)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {[
-            { label: "Atlantis", labelClass: "atl", players: atlantis },
-            { label: "Titans", labelClass: "tit", players: titans },
-          ].map(({ label, labelClass, players }) => (
-            <div key={label}>
-              <div
-                className={`goa-section-header ${labelClass === "atl" ? "atlantis-header" : "titans-header"}`}
-              >
-                <h2 className="goa-section-title">{label}</h2>
-              </div>
-              <div className="goa-players">
-                {players.map((mp) => {
-                  const stats = battleLogTabs[activeRoundIndex]?.stats[mp.player_id];
-                  if (!stats) return null;
-                  return (
-                    <div key={mp.player_id} className="goa-player-block">
-                      <div className="goa-player-row">
-                        <span className="goa-player-name">
-                          <PlayerAvatar
-                            avatarUrl={mp.players.avatar_url}
-                            name={mp.players.name}
-                            size={22}
-                          />
-                          {mp.players.name}
-                        </span>
-                      </div>
-                      <div className="goa-player-summary">
-                        {ROUND_STAT_KEYS.map((key) => {
-                          const Icon = ROUND_STAT_ICONS[key];
-                          const value = stats[key];
-                          return (
-                            <span
-                              key={key}
-                              className={`goa-player-summary-item${value > 0 ? " active" : ""}`}
-                              title={ROUND_STAT_LABELS[key]}
-                            >
-                              <Icon size={12} />
-                              {value}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </main>
   );
 }

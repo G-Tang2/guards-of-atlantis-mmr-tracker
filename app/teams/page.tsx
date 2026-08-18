@@ -8,7 +8,6 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { DraftMethod } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
-import { BATTLE_LOG_STORAGE_KEY } from "@/lib/battleLog";
 import { Swords, Crown, Dices, Scale, GripVertical } from "lucide-react";
 import {
   DndContext,
@@ -421,26 +420,11 @@ export default function TeamSplitterPage() {
 
   const teamsReady = columns.atlantis.length > 0 && columns.titans.length > 0;
   const canBattle = teamsReady && waveCounter !== "" && lifeCounter !== "";
-  const [detailPromptOpen, setDetailPromptOpen] = useState(false);
 
   const handleGoToBattle = () => {
     if (!canBattle) return;
-    setDetailPromptOpen(true);
-  };
-
-  const goToSimpleBattle = () => {
     persistDraft();
-    setDetailPromptOpen(false);
     router.push("/matches/new");
-  };
-
-  const goToDetailedBattle = () => {
-    persistDraft();
-    // Start clean — any leftover log from a previous, abandoned detailed
-    // recording shouldn't carry over into this match.
-    sessionStorage.removeItem(BATTLE_LOG_STORAGE_KEY);
-    setDetailPromptOpen(false);
-    router.push("/matches/battle-log");
   };
 
   // ── Draft handlers ──────────────────────────────────────────────────────────
@@ -826,52 +810,6 @@ export default function TeamSplitterPage() {
           Begin the Battle
         </button>
       </div>
-
-      {/* ══════════════ DETAILED BATTLE PROMPT ══════════════ */}
-      {detailPromptOpen && (
-        <div
-          className="draft-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setDetailPromptOpen(false);
-          }}
-        >
-          <div className="draft-sheet">
-            <div className="draft-head">
-              <span className="draft-head-title">Record Detailed Battle?</span>
-              <button
-                className="draft-close"
-                onClick={() => setDetailPromptOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="draft-body">
-              <p className="draft-note" style={{ textAlign: "left" }}>
-                Track hero kills, attacks, defends, minion kills, and heals
-                for every player, round by round.
-              </p>
-              <div className="goa-btn-wrap" style={{ margin: 0 }}>
-                <button
-                  className="goa-btn inline-flex items-center justify-center gap-2"
-                  onClick={goToDetailedBattle}
-                >
-                  <Swords size={18} />
-                  Yes, Record in Detail
-                </button>
-              </div>
-              <div className="goa-btn-wrap" style={{ margin: 0 }}>
-                <button
-                  className="goa-battle-option"
-                  onClick={goToSimpleBattle}
-                  style={{ width: "100%", textAlign: "center" }}
-                >
-                  No, Skip to Record of Battle
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ══════════════ CAPTAIN'S DRAFT MODAL ══════════════ */}
       {draftOpen && draft && (
