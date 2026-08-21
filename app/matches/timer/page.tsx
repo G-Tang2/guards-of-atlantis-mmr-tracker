@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
@@ -12,10 +13,10 @@ import {
   Timer as TimerIcon,
   Pause,
   Play,
-  SkipForward,
   CheckCircle2,
   Swords,
   ScrollText,
+  Undo2,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -47,6 +48,18 @@ type SessionState = {
   actionDraining: boolean;
   actionElapsed: number;
   actionSeconds: Record<string, number>;
+  // Which team currently holds the tie-break token — persists across the
+  // whole session (unlike everything else here, which resets per round or
+  // per turn), flipping only when it's actually used to break a tie.
+  tieBreakToken: Team;
+  // This turn's initiative value per not-yet-acted player, entered by the
+  // controller in the select-player screen. Cleared at the start of every
+  // new turn.
+  initiative: Record<string, number>;
+  // Whether picking the current acting player flipped the tie-break
+  // token — lets "go back" (a misclick) undo exactly that flip, since
+  // flipping a two-state token twice restores it.
+  actingPlayerTokenFlipped: boolean;
 };
 
 // ─── Config options ─────────────────────────────────────────────────────────
@@ -55,12 +68,7 @@ const STRATEGY_OPTIONS = [30, 60, 90, 120, 150];
 const ACTION_OPTIONS = [15, 30, 45, 60, 75];
 const EOR_OPTIONS = [90, 120, 150, 180, 210];
 const RESERVE_OPTIONS = [60, 120, 180, 240, 300];
-
-const formatClock = (totalSeconds: number) => {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
+const INITIATIVE_OPTIONS = Array.from({ length: 19 }, (_, i) => i); // 0–18
 
 // ─── Sound ──────────────────────────────────────────────────────────────────
 // No audio assets/infra exist elsewhere in this app — a short sine-wave
@@ -116,10 +124,42 @@ function playTick() {
   }
 }
 
+// Soft, unhurried reminder — repeated on a slow interval for as long as a
+// team is spending reserve time. Distinct in tone from the two cues above
+// (a gentle sine, not a buzzy sawtooth) since it just needs to remind
+// people reserve is running, not startle them.
+function playReservePulse() {
+  try {
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 523.25; // C5
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.6);
+    osc.onended = () => ctx.close();
+  } catch {
+    // Audio unsupported/blocked by the browser — non-fatal.
+  }
+}
+
 // ─── Session state machine (pure, so the 1s tick and every button handler
 // can share the exact same transition logic) ───────────────────────────────
 
-function freshRound(round: number, config: TimerConfig): SessionState {
+function freshRound(
+  round: number,
+  config: TimerConfig,
+  tieBreakToken: Team,
+): SessionState {
   return {
     round,
     turn: 1,
@@ -136,6 +176,9 @@ function freshRound(round: number, config: TimerConfig): SessionState {
     actionDraining: false,
     actionElapsed: 0,
     actionSeconds: {},
+    tieBreakToken,
+    initiative: {},
+    actingPlayerTokenFlipped: false,
   };
 }
 
@@ -149,7 +192,43 @@ function startNewTurnStrategy(s: SessionState, config: TimerConfig): SessionStat
     titansDraining: false,
     phaseTimeRemaining: config.strategyTime,
     actedThisTurn: [],
+    initiative: {},
   };
+}
+
+function flipToken(team: Team): Team {
+  return team === "atlantis" ? "titans" : "atlantis";
+}
+
+// Who should be highlighted to go next in the select-player screen: the
+// not-yet-acted player(s) with the highest entered initiative. If several
+// are tied for highest, only the ones on the tie-break token's team are
+// highlighted instead (the token decides who among the tied group goes) —
+// unless none of the tied players are on that team, in which case the
+// token doesn't apply and the whole tied group is highlighted.
+function computeInitiativeHighlight(
+  initiative: Record<string, number>,
+  actedThisTurn: string[],
+  tieBreakToken: Team,
+  allPlayerIds: string[],
+  teamOf: (id: string) => Team,
+): { highlighted: Set<string>; tieResolvedByToken: boolean } {
+  const candidates = allPlayerIds.filter(
+    (id) => !actedThisTurn.includes(id) && initiative[id] !== undefined,
+  );
+  if (candidates.length === 0) {
+    return { highlighted: new Set(), tieResolvedByToken: false };
+  }
+  const maxValue = Math.max(...candidates.map((id) => initiative[id]));
+  const tied = candidates.filter((id) => initiative[id] === maxValue);
+  if (tied.length === 1) {
+    return { highlighted: new Set(tied), tieResolvedByToken: false };
+  }
+  const tokenTeamTied = tied.filter((id) => teamOf(id) === tieBreakToken);
+  if (tokenTeamTied.length > 0) {
+    return { highlighted: new Set(tokenTeamTied), tieResolvedByToken: true };
+  }
+  return { highlighted: new Set(tied), tieResolvedByToken: false };
 }
 
 function startEndOfRound(s: SessionState, config: TimerConfig): SessionState {
@@ -165,7 +244,10 @@ function startEndOfRound(s: SessionState, config: TimerConfig): SessionState {
 }
 
 function startNewRound(s: SessionState, config: TimerConfig): SessionState {
-  return { ...freshRound(s.round + 1, config), actionSeconds: s.actionSeconds };
+  return {
+    ...freshRound(s.round + 1, config, s.tieBreakToken),
+    actionSeconds: s.actionSeconds,
+  };
 }
 
 // After any ready-state change, advance if both sides are now ready.
@@ -198,6 +280,7 @@ function commitAction(
     actingPlayerId: null,
     actionDraining: false,
     actionElapsed: 0,
+    actingPlayerTokenFlipped: false,
   };
 
   const allActed = allPlayerIds.every((id) => actedThisTurn.includes(id));
@@ -278,6 +361,7 @@ function MatchTimerPageInner() {
   const [actionTime, setActionTime] = useState(30);
   const [eorTime, setEorTime] = useState(120);
   const [reserveTime, setReserveTime] = useState(180);
+  const [initialTieBreakToken, setInitialTieBreakToken] = useState<Team>("atlantis");
   const [config, setConfig] = useState<TimerConfig | null>(null);
 
   const [session, setSession] = useState<SessionState | null>(null);
@@ -366,6 +450,19 @@ function MatchTimerPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, stage]);
 
+  // Who the select-player screen highlights as "up next" right now.
+  const initiativeHighlight = useMemo(() => {
+    if (!session || session.phase !== "select_player") return new Set<string>();
+    return computeInitiativeHighlight(
+      session.initiative,
+      session.actedThisTurn,
+      session.tieBreakToken,
+      allPlayerIds,
+      teamOf,
+    ).highlighted;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, allPlayerIds]);
+
   const beepFiredRef = useRef<Record<string, boolean>>({});
   const lastTickValueRef = useRef<Record<string, number>>({});
   useEffect(() => {
@@ -386,12 +483,31 @@ function MatchTimerPageInner() {
     });
   }, [activeCountdowns]);
 
+  // A gentle repeating reminder for as long as any reserve clock is
+  // actively draining — distinct from the one-shot cues above since it
+  // needs to keep signalling for the whole stretch, not just once.
+  useEffect(() => {
+    if (stage !== "running" || !session) return;
+    const draining =
+      session.atlantisDraining || session.titansDraining || session.actionDraining;
+    if (!draining) return;
+    playReservePulse();
+    const id = setInterval(playReservePulse, 5000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    stage,
+    session?.atlantisDraining,
+    session?.titansDraining,
+    session?.actionDraining,
+  ]);
+
   // ── Handlers ────────────────────────────────────────────────────────────
 
   const handleStart = () => {
     const cfg: TimerConfig = { strategyTime, actionTime, eorTime, reserveTime };
     setConfig(cfg);
-    setSession(freshRound(1, cfg));
+    setSession(freshRound(1, cfg, initialTieBreakToken));
     setStage("running");
   };
 
@@ -409,16 +525,33 @@ function MatchTimerPageInner() {
 
   const handleSelectPlayer = (playerId: string) => {
     if (!config) return;
+    setSession((prev) => {
+      if (!prev || prev.phase !== "select_player") return prev;
+      const { highlighted, tieResolvedByToken } = computeInitiativeHighlight(
+        prev.initiative,
+        prev.actedThisTurn,
+        prev.tieBreakToken,
+        allPlayerIds,
+        teamOf,
+      );
+      const shouldFlip = tieResolvedByToken && highlighted.has(playerId);
+      return {
+        ...prev,
+        phase: "action",
+        actingPlayerId: playerId,
+        phaseTimeRemaining: config.actionTime,
+        actionDraining: false,
+        actionElapsed: 0,
+        tieBreakToken: shouldFlip ? flipToken(prev.tieBreakToken) : prev.tieBreakToken,
+        actingPlayerTokenFlipped: shouldFlip,
+      };
+    });
+  };
+
+  const handleSetInitiative = (playerId: string, value: number) => {
     setSession((prev) =>
-      prev && prev.phase === "select_player"
-        ? {
-            ...prev,
-            phase: "action",
-            actingPlayerId: playerId,
-            phaseTimeRemaining: config.actionTime,
-            actionDraining: false,
-            actionElapsed: 0,
-          }
+      prev
+        ? { ...prev, initiative: { ...prev.initiative, [playerId]: value } }
         : prev,
     );
   };
@@ -428,23 +561,24 @@ function MatchTimerPageInner() {
     setSession((prev) => (prev ? commitAction(prev, config, allPlayerIds) : prev));
   };
 
-  const handleSkip = () => {
-    if (!config || !session) return;
-    if (session.phase === "action") {
-      handleCompleteAction();
-    } else if (session.phase === "strategy" || session.phase === "end_of_round") {
-      setSession((prev) => {
-        if (!prev) return prev;
-        const next = {
-          ...prev,
-          atlantisReady: true,
-          titansReady: true,
-          atlantisDraining: false,
-          titansDraining: false,
-        };
-        return resolveReadyPhase(next, config);
-      });
-    }
+  // Undoes an accidental pick — back to select-player with nothing
+  // committed (no action time recorded, not marked acted), and reverses
+  // the tie-break flip if picking this player had caused one.
+  const handleGoBackToSelect = () => {
+    setSession((prev) => {
+      if (!prev || prev.phase !== "action") return prev;
+      return {
+        ...prev,
+        phase: "select_player",
+        actingPlayerId: null,
+        actionDraining: false,
+        actionElapsed: 0,
+        tieBreakToken: prev.actingPlayerTokenFlipped
+          ? flipToken(prev.tieBreakToken)
+          : prev.tieBreakToken,
+        actingPlayerTokenFlipped: false,
+      };
+    });
   };
 
   const confirmEndTimer = () => {
@@ -481,7 +615,7 @@ function MatchTimerPageInner() {
   }
 
   return (
-    <main className="goa-root">
+    <main className={`goa-root${stage === "running" ? " goa-timer-live" : ""}`}>
       <header className="goa-header">
         <div className="goa-crown">
           <TimerIcon size={30} />
@@ -489,6 +623,84 @@ function MatchTimerPageInner() {
         <h1 className="goa-title">Battle Timer</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
+
+      {stage === "setup" && (
+        <div className="goa-card">
+          <div className="goa-card-head">How a Round Works</div>
+          <div className="goa-timer-diagram-wrap">
+            <svg
+              viewBox="0 0 960 300"
+              className="goa-timer-diagram"
+              role="img"
+              aria-label="One round begins, runs strategy phase then action phase across four turns, then end of round phase, then loops back into a fresh round with reserves refilled."
+            >
+              <defs>
+                <marker id="timerArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 Z" fill="currentColor" />
+                </marker>
+                <marker id="timerArrowGold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 Z" fill="#c9973a" />
+                </marker>
+              </defs>
+
+              <g stroke="currentColor" strokeWidth="1.5" opacity="0.55">
+                <line x1="64" y1="110" x2="108" y2="110" markerEnd="url(#timerArrow)" />
+                <line x1="282" y1="110" x2="318" y2="110" markerEnd="url(#timerArrow)" />
+                <line x1="512" y1="110" x2="558" y2="110" markerEnd="url(#timerArrow)" />
+                <line x1="732" y1="110" x2="774" y2="110" markerEnd="url(#timerArrow)" />
+              </g>
+
+              <circle cx="40" cy="110" r="24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.7" />
+              <text x="40" y="115" textAnchor="middle" fontSize="9" letterSpacing="0.02em" fill="currentColor">ROUND</text>
+              <text x="40" y="153" textAnchor="middle" fontSize="10" letterSpacing="0.06em" fill="currentColor" opacity="0.6">BEGIN</text>
+
+              <rect x="110" y="70" width="172" height="80" rx="4" fill="#211d15" stroke="#c9973a" strokeWidth="1.5" />
+              <text x="196" y="94" textAnchor="middle" fontSize="13" fontWeight="700" letterSpacing="0.04em" fill="#f0c96a">STRATEGY</text>
+              <text x="196" y="112" textAnchor="middle" fontSize="10.5" fill="#a89a7c">both teams plan,</text>
+              <text x="196" y="126" textAnchor="middle" fontSize="10.5" fill="#a89a7c">then ready up</text>
+              <circle cx="176" cy="140" r="3.5" fill="#c42a3a" />
+              <circle cx="216" cy="140" r="3.5" fill="#2aabb8" />
+
+              <rect x="320" y="70" width="192" height="80" rx="4" fill="#201c22" stroke="#9b7fd4" strokeWidth="1.5" />
+              <text x="416" y="94" textAnchor="middle" fontSize="13" fontWeight="700" letterSpacing="0.04em" fill="#c3b1ec">ACTION</text>
+              <text x="416" y="112" textAnchor="middle" fontSize="10.5" fill="#a89a7c">one player acts,</text>
+              <text x="416" y="126" textAnchor="middle" fontSize="10.5" fill="#a89a7c">picked each time</text>
+              <text x="416" y="142" textAnchor="middle" fontSize="9.5" letterSpacing="0.04em" fill="#9b7fd4">× every player</text>
+
+              <g stroke="#c9973a" strokeWidth="1.2" opacity="0.75" fill="none">
+                <path d="M110,172 L110,180 L512,180 L512,172" />
+              </g>
+              <text x="311" y="197" textAnchor="middle" fontSize="10.5" letterSpacing="0.08em" fill="#c9973a" fontWeight="600">× 4 TURNS PER ROUND</text>
+
+              <rect x="560" y="70" width="172" height="80" rx="4" fill="#1a2126" stroke="#5a7a8a" strokeWidth="1.5" />
+              <text x="646" y="94" textAnchor="middle" fontSize="13" fontWeight="700" letterSpacing="0.04em" fill="#9fc0cf">END OF ROUND</text>
+              <text x="646" y="112" textAnchor="middle" fontSize="10.5" fill="#a89a7c">both teams close</text>
+              <text x="646" y="126" textAnchor="middle" fontSize="10.5" fill="#a89a7c">out, then ready up</text>
+              <circle cx="626" cy="140" r="3.5" fill="#c42a3a" />
+              <circle cx="666" cy="140" r="3.5" fill="#2aabb8" />
+
+              <circle cx="800" cy="110" r="24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.7" />
+              <text x="800" y="115" textAnchor="middle" fontSize="9" letterSpacing="0.02em" fill="currentColor">ROUND</text>
+              <text x="800" y="153" textAnchor="middle" fontSize="10" letterSpacing="0.06em" fill="currentColor" opacity="0.6">END</text>
+
+              <path d="M800,134 C 800,235 40,235 40,134" fill="none" stroke="#c9973a" strokeWidth="1.5" strokeDasharray="2 5" markerEnd="url(#timerArrowGold)" opacity="0.85" />
+              <text x="420" y="255" textAnchor="middle" fontSize="11" letterSpacing="0.05em" fill="#c9973a" fontWeight="600">NEXT ROUND — RESERVES REFILL</text>
+
+              <g transform="translate(60,270)">
+                <circle cx="0" cy="0" r="3.5" fill="#c42a3a" />
+                <text x="10" y="4" fontSize="9.5" fill="#a89a7c" letterSpacing="0.01em">Atlantis</text>
+                <circle cx="70" cy="0" r="3.5" fill="#2aabb8" />
+                <text x="80" y="4" fontSize="9.5" fill="#a89a7c" letterSpacing="0.01em">Titans</text>
+              </g>
+            </svg>
+          </div>
+          <p className="goa-timer-diagram-caption">
+            Strategy and action repeat for each of a round&rsquo;s four
+            turns; end of round runs once, then the whole sequence loops
+            into a fresh round.
+          </p>
+        </div>
+      )}
 
       {stage === "setup" && (
         <div className="goa-card">
@@ -555,6 +767,40 @@ function MatchTimerPageInner() {
       )}
 
       {stage === "setup" && (
+        <div className="goa-card">
+          <div className="goa-card-head">Tie Breaker Coin</div>
+          <div className="goa-timer-token-row">
+            <button
+              type="button"
+              className={`goa-timer-token-btn atl${initialTieBreakToken === "atlantis" ? " active" : ""}`}
+              onClick={() => setInitialTieBreakToken("atlantis")}
+            >
+              <Image
+                src="/icons/tiebreaker_orange.png"
+                alt=""
+                width={22}
+                height={22}
+              />
+              Orange (Atlantis)
+            </button>
+            <button
+              type="button"
+              className={`goa-timer-token-btn tit${initialTieBreakToken === "titans" ? " active" : ""}`}
+              onClick={() => setInitialTieBreakToken("titans")}
+            >
+              <Image
+                src="/icons/tiebreaker_blue.png"
+                alt=""
+                width={22}
+                height={22}
+              />
+              Blue (Titans)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {stage === "setup" && (
         <div className="goa-btn-wrap">
           <button
             className="goa-btn inline-flex items-center justify-center gap-2"
@@ -568,6 +814,7 @@ function MatchTimerPageInner() {
 
       {stage === "running" && session && config && (
         <>
+        <div className="goa-timer-live-body">
           <div className="goa-timer-status">
             <span className="goa-timer-round">
               Round {session.round} · Turn {session.turn}/4
@@ -583,18 +830,18 @@ function MatchTimerPageInner() {
           <div className="goa-timer-reserves">
             <div className={`goa-timer-reserve atl${session.atlantisDraining ? " draining" : ""}`}>
               <span className="goa-timer-reserve-label">Atlantis Reserve</span>
-              <span className="goa-timer-reserve-value">{formatClock(session.atlantisReserve)}</span>
+              <span className="goa-timer-reserve-value">{formatActionTime(session.atlantisReserve)}</span>
             </div>
             <div className={`goa-timer-reserve tit${session.titansDraining ? " draining" : ""}`}>
               <span className="goa-timer-reserve-label">Titans Reserve</span>
-              <span className="goa-timer-reserve-value">{formatClock(session.titansReserve)}</span>
+              <span className="goa-timer-reserve-value">{formatActionTime(session.titansReserve)}</span>
             </div>
           </div>
 
           {(session.phase === "strategy" || session.phase === "end_of_round") && (
             <div className="goa-timer-main-count">
               {!session.atlantisDraining && !session.titansDraining
-                ? formatClock(session.phaseTimeRemaining)
+                ? formatActionTime(session.phaseTimeRemaining)
                 : "—"}
             </div>
           )}
@@ -621,39 +868,92 @@ function MatchTimerPageInner() {
           )}
 
           {session.phase === "select_player" && (
-            <div className="goa-timer-select-teams">
-              {[
-                { label: "Atlantis", labelClass: "atl", players: atlantis },
-                { label: "Titans", labelClass: "tit", players: titans },
-              ].map(({ label, labelClass, players }) => (
-                <div key={label} className="goa-section">
-                  <div
-                    className={`goa-section-header ${labelClass === "atl" ? "atlantis-header" : "titans-header"}`}
-                  >
-                    <h2 className="goa-section-title">{label}</h2>
+            <>
+              <div className="goa-timer-token-indicator">
+                <Image
+                  src={
+                    session.tieBreakToken === "atlantis"
+                      ? "/icons/tiebreaker_orange.png"
+                      : "/icons/tiebreaker_blue.png"
+                  }
+                  alt=""
+                  width={66}
+                  height={66}
+                />
+              </div>
+              <div
+                className="goa-timer-select-teams"
+                style={
+                  {
+                    "--roster-size": Math.max(atlantis.length, titans.length, 1),
+                  } as CSSProperties
+                }
+              >
+                {[
+                  { label: "Atlantis", labelClass: "atl", players: atlantis },
+                  { label: "Titans", labelClass: "tit", players: titans },
+                ].map(({ label, labelClass, players }) => (
+                  <div key={label} className="goa-section">
+                    <div
+                      className={`goa-section-header ${labelClass === "atl" ? "atlantis-header" : "titans-header"}`}
+                    >
+                      <h2 className="goa-section-title">{label}</h2>
+                    </div>
+                    <div className="goa-players">
+                      {players.map((p) => {
+                        const acted = session.actedThisTurn.includes(p.id);
+                        const highlighted = initiativeHighlight.has(p.id);
+                        // Only the initiative-highlighted player(s) can be
+                        // picked — everyone else still gets an initiative
+                        // select (so the controller can set it up before
+                        // their turn comes), just not a clickable row yet.
+                        const selectable = !acted && highlighted;
+                        return (
+                          <div
+                            key={p.id}
+                            className={`goa-player-row${selectable ? " clickable" : ""}${highlighted ? " goa-timer-initiative-highlight" : ""}`}
+                            onClick={() => selectable && handleSelectPlayer(p.id)}
+                            style={
+                              acted
+                                ? { opacity: 0.4 }
+                                : !highlighted
+                                  ? { opacity: 0.7 }
+                                  : undefined
+                            }
+                          >
+                            <span className="goa-player-name">
+                              <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
+                              {p.name}
+                            </span>
+                            {!acted && (
+                              <select
+                                className="goa-timer-initiative-select"
+                                value={session.initiative[p.id] ?? ""}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSetInitiative(p.id, Number(e.target.value));
+                                }}
+                              >
+                                <option value="" disabled>
+                                  —
+                                </option>
+                                {INITIATIVE_OPTIONS.map((v) => (
+                                  <option key={v} value={v}>
+                                    {v}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            {acted && <CheckCircle2 size={15} />}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="goa-players">
-                    {players.map((p) => {
-                      const acted = session.actedThisTurn.includes(p.id);
-                      return (
-                        <div
-                          key={p.id}
-                          className={`goa-player-row${acted ? "" : " clickable"}`}
-                          onClick={() => !acted && handleSelectPlayer(p.id)}
-                          style={acted ? { opacity: 0.4 } : undefined}
-                        >
-                          <span className="goa-player-name">
-                            <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
-                            {p.name}
-                          </span>
-                          {acted && <CheckCircle2 size={15} />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           )}
 
           {session.phase === "action" && session.actingPlayerId && (
@@ -672,8 +972,8 @@ function MatchTimerPageInner() {
               })()}
               <div className="goa-timer-main-count">
                 {!session.actionDraining
-                  ? formatClock(session.phaseTimeRemaining)
-                  : formatClock(
+                  ? formatActionTime(session.phaseTimeRemaining)
+                  : formatActionTime(
                       teamOf(session.actingPlayerId) === "atlantis"
                         ? session.atlantisReserve
                         : session.titansReserve,
@@ -690,8 +990,18 @@ function MatchTimerPageInner() {
               </div>
             </div>
           )}
+        </div>
 
           <div className="goa-timer-controls">
+            {session.phase === "action" && (
+              <button
+                className="goa-timer-control-btn"
+                onClick={handleGoBackToSelect}
+              >
+                <Undo2 size={14} />
+                Wrong Player?
+              </button>
+            )}
             <button
               className="goa-timer-control-btn"
               onClick={() => setPaused((v) => !v)}
@@ -699,12 +1009,6 @@ function MatchTimerPageInner() {
               {paused ? <Play size={16} /> : <Pause size={16} />}
               {paused ? "Resume" : "Pause"}
             </button>
-            {session.phase !== "select_player" && (
-              <button className="goa-timer-control-btn" onClick={handleSkip}>
-                <SkipForward size={16} />
-                Skip
-              </button>
-            )}
             <button
               className="goa-timer-control-btn danger"
               onClick={() => setConfirmEndOpen(true)}

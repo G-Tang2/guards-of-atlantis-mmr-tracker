@@ -68,10 +68,4 @@ export const getHero = (heroId?: string | null) =>
 export const didWin = (team: string, winner: string) =>
   team === winner || winner === "none";
 
-export const formatActionTime = (totalSeconds: number) => {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  if (m === 0) return `${s}s`;
-  if (s === 0) return `${m}m`;
-  return `${m}m ${s}s`;
-};
+export const formatActionTime = (totalSeconds: number) => `${totalSeconds}s`;

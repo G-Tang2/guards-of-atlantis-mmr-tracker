@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next"
 import { Cinzel, Crimson_Pro } from "next/font/google";
 import { BottomNav } from "@/components/BottomNav";
+import { AppRoot } from "@/components/AppRoot";
 import "./globals.css";
 
 const cinzel = Cinzel({
@@ -42,7 +43,7 @@ export default function RootLayout({
       className={`${cinzel.variable} ${crimsonPro.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <div className="app-root">{children}</div>
+        <AppRoot>{children}</AppRoot>
         <BottomNav />
         <Analytics />
       </body>
