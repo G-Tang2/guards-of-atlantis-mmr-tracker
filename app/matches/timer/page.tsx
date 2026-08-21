@@ -70,17 +70,54 @@ const EOR_OPTIONS = [90, 120, 150, 180, 210];
 const RESERVE_OPTIONS = [60, 120, 180, 240, 300];
 const INITIATIVE_OPTIONS = Array.from({ length: 19 }, (_, i) => i); // 0–18
 
+// A player's *total* action time across a whole session can run well past
+// a minute, unlike the short live countdowns formatActionTime is normally
+// used for — this spells it out as minutes + seconds instead of a single
+// large number of seconds.
+function formatMinutesSeconds(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
 // ─── Sound ──────────────────────────────────────────────────────────────────
 // No audio assets/infra exist elsewhere in this app — a short sine-wave
 // chime is synthesized on the fly instead of shipping a new sound file.
+//
+// iOS/iPadOS Safari creates every AudioContext in a suspended state and
+// only lets it start producing sound once it's been resumed inside a
+// direct user-gesture handler (a tap) — resuming it later, from a timer
+// callback, does nothing audible. The old code made a fresh AudioContext
+// per beep and always played it from the 1s tick/reserve-interval effects
+// (never a tap), so on iPad it stayed silently suspended forever. Now a
+// single context is created lazily and reused for every cue, and
+// unlockAudioContext() is called from the timer's own tap handlers to
+// resume it on real user gestures.
 
-function playBeep() {
+let sharedAudioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
   try {
     const Ctx =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext })
         .webkitAudioContext;
-    const ctx = new Ctx();
+    if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+    return sharedAudioCtx;
+  } catch {
+    return null;
+  }
+}
+
+function unlockAudioContext() {
+  const ctx = getAudioContext();
+  if (ctx && ctx.state !== "running") ctx.resume().catch(() => {});
+}
+
+function playBeep() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
@@ -92,7 +129,6 @@ function playBeep() {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.4);
-    osc.onended = () => ctx.close();
   } catch {
     // Audio unsupported/blocked by the browser — non-fatal.
   }
@@ -101,12 +137,9 @@ function playBeep() {
 // Short, higher-pitched blip for the final-5-seconds countdown — distinct
 // from the 15s warning chime above so the two cues aren't confused.
 function playTick() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
   try {
-    const Ctx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    const ctx = new Ctx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "square";
@@ -118,7 +151,6 @@ function playTick() {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.15);
-    osc.onended = () => ctx.close();
   } catch {
     // Audio unsupported/blocked by the browser — non-fatal.
   }
@@ -129,12 +161,9 @@ function playTick() {
 // (a gentle sine, not a buzzy sawtooth) since it just needs to remind
 // people reserve is running, not startle them.
 function playReservePulse() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
   try {
-    const Ctx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    const ctx = new Ctx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
@@ -146,7 +175,33 @@ function playReservePulse() {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.6);
-    osc.onended = () => ctx.close();
+  } catch {
+    // Audio unsupported/blocked by the browser — non-fatal.
+  }
+}
+
+// A quick two-note "go" chime for whenever a fresh phase countdown begins
+// (strategy, an action pick, or end-of-round) — distinct from the other
+// cues above since it signals a start rather than a warning.
+function playCountdownStart() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    [660, 990].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const start = now + i * 0.12;
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.exponentialRampToValueAtTime(0.22, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.13);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.15);
+    });
   } catch {
     // Audio unsupported/blocked by the browser — non-fatal.
   }
@@ -465,6 +520,13 @@ function MatchTimerPageInner() {
 
   const beepFiredRef = useRef<Record<string, boolean>>({});
   const lastTickValueRef = useRef<Record<string, number>>({});
+  // Tracks the last-seen value of the *main* phase countdown (id "main" —
+  // strategy, an action pick, or end-of-round) so a fresh restart, which
+  // always jumps the value back up, can be told apart from the normal
+  // second-by-second decrement. Reserve-drain countdowns reuse other ids
+  // and already get their own start cue (the immediate reserve pulse
+  // below), so they're intentionally not covered here.
+  const lastMainCountdownValueRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     activeCountdowns.forEach(({ id, value }) => {
       // One-shot warning chime at 15s remaining.
@@ -480,7 +542,20 @@ function MatchTimerPageInner() {
         playTick();
       }
       if (value > 5) delete lastTickValueRef.current[id];
+
+      if (id === "main") {
+        if (
+          lastMainCountdownValueRef.current === undefined ||
+          value > lastMainCountdownValueRef.current
+        ) {
+          playCountdownStart();
+        }
+        lastMainCountdownValueRef.current = value;
+      }
     });
+    if (!activeCountdowns.some(({ id }) => id === "main")) {
+      lastMainCountdownValueRef.current = undefined;
+    }
   }, [activeCountdowns]);
 
   // A gentle repeating reminder for as long as any reserve clock is
@@ -505,6 +580,10 @@ function MatchTimerPageInner() {
   // ── Handlers ────────────────────────────────────────────────────────────
 
   const handleStart = () => {
+    // Must run inside this tap handler, not later from the tick effect —
+    // iOS Safari only lets an AudioContext start producing sound when
+    // resumed directly from a user gesture (see the note above playBeep).
+    unlockAudioContext();
     const cfg: TimerConfig = { strategyTime, actionTime, eorTime, reserveTime };
     setConfig(cfg);
     setSession(freshRound(1, cfg, initialTieBreakToken));
@@ -513,6 +592,7 @@ function MatchTimerPageInner() {
 
   const handleReady = (team: Team) => {
     if (!config) return;
+    unlockAudioContext();
     setSession((prev) => {
       if (!prev) return prev;
       const next =
@@ -525,6 +605,7 @@ function MatchTimerPageInner() {
 
   const handleSelectPlayer = (playerId: string) => {
     if (!config) return;
+    unlockAudioContext();
     setSession((prev) => {
       if (!prev || prev.phase !== "select_player") return prev;
       const { highlighted, tieResolvedByToken } = computeInitiativeHighlight(
@@ -558,6 +639,7 @@ function MatchTimerPageInner() {
 
   const handleCompleteAction = () => {
     if (!config) return;
+    unlockAudioContext();
     setSession((prev) => (prev ? commitAction(prev, config, allPlayerIds) : prev));
   };
 
@@ -603,7 +685,7 @@ function MatchTimerPageInner() {
 
   if (loading) {
     return (
-      <div className="goa-root goa-loading-screen">
+      <div className="goa-root goa-timer-page goa-loading-screen">
         <div className="goa-loading-inner">
           <div className="goa-loading-icon">
             <ScrollText size={32} />
@@ -615,7 +697,9 @@ function MatchTimerPageInner() {
   }
 
   return (
-    <main className={`goa-root${stage === "running" ? " goa-timer-live" : ""}`}>
+    <main
+      className={`goa-root goa-timer-page${stage === "running" ? " goa-timer-live" : ""}`}
+    >
       <header className="goa-header">
         <div className="goa-crown">
           <TimerIcon size={30} />
@@ -838,6 +922,19 @@ function MatchTimerPageInner() {
             </div>
           </div>
 
+          <div className="goa-timer-token-indicator">
+            <Image
+              src={
+                session.tieBreakToken === "atlantis"
+                  ? "/icons/tiebreaker_orange.png"
+                  : "/icons/tiebreaker_blue.png"
+              }
+              alt=""
+              width={66}
+              height={66}
+            />
+          </div>
+
           {(session.phase === "strategy" || session.phase === "end_of_round") && (
             <div className="goa-timer-main-count">
               {!session.atlantisDraining && !session.titansDraining
@@ -868,92 +965,78 @@ function MatchTimerPageInner() {
           )}
 
           {session.phase === "select_player" && (
-            <>
-              <div className="goa-timer-token-indicator">
-                <Image
-                  src={
-                    session.tieBreakToken === "atlantis"
-                      ? "/icons/tiebreaker_orange.png"
-                      : "/icons/tiebreaker_blue.png"
-                  }
-                  alt=""
-                  width={66}
-                  height={66}
-                />
-              </div>
-              <div
-                className="goa-timer-select-teams"
-                style={
-                  {
-                    "--roster-size": Math.max(atlantis.length, titans.length, 1),
-                  } as CSSProperties
-                }
-              >
-                {[
-                  { label: "Atlantis", labelClass: "atl", players: atlantis },
-                  { label: "Titans", labelClass: "tit", players: titans },
-                ].map(({ label, labelClass, players }) => (
-                  <div key={label} className="goa-section">
-                    <div
-                      className={`goa-section-header ${labelClass === "atl" ? "atlantis-header" : "titans-header"}`}
-                    >
-                      <h2 className="goa-section-title">{label}</h2>
-                    </div>
-                    <div className="goa-players">
-                      {players.map((p) => {
-                        const acted = session.actedThisTurn.includes(p.id);
-                        const highlighted = initiativeHighlight.has(p.id);
-                        // Only the initiative-highlighted player(s) can be
-                        // picked — everyone else still gets an initiative
-                        // select (so the controller can set it up before
-                        // their turn comes), just not a clickable row yet.
-                        const selectable = !acted && highlighted;
-                        return (
-                          <div
-                            key={p.id}
-                            className={`goa-player-row${selectable ? " clickable" : ""}${highlighted ? " goa-timer-initiative-highlight" : ""}`}
-                            onClick={() => selectable && handleSelectPlayer(p.id)}
-                            style={
-                              acted
-                                ? { opacity: 0.4 }
-                                : !highlighted
-                                  ? { opacity: 0.7 }
-                                  : undefined
-                            }
-                          >
-                            <span className="goa-player-name">
-                              <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
-                              {p.name}
-                            </span>
-                            {!acted && (
-                              <select
-                                className="goa-timer-initiative-select"
-                                value={session.initiative[p.id] ?? ""}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  handleSetInitiative(p.id, Number(e.target.value));
-                                }}
-                              >
-                                <option value="" disabled>
-                                  —
-                                </option>
-                                {INITIATIVE_OPTIONS.map((v) => (
-                                  <option key={v} value={v}>
-                                    {v}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-                            {acted && <CheckCircle2 size={15} />}
-                          </div>
-                        );
-                      })}
-                    </div>
+            <div
+              className="goa-timer-select-teams"
+              style={
+                {
+                  "--roster-size": Math.max(atlantis.length, titans.length, 1),
+                } as CSSProperties
+              }
+            >
+              {[
+                { label: "Atlantis", labelClass: "atl", players: atlantis },
+                { label: "Titans", labelClass: "tit", players: titans },
+              ].map(({ label, labelClass, players }) => (
+                <div key={label} className="goa-section">
+                  <div
+                    className={`goa-section-header ${labelClass === "atl" ? "atlantis-header" : "titans-header"}`}
+                  >
+                    <h2 className="goa-section-title">{label}</h2>
                   </div>
-                ))}
-              </div>
-            </>
+                  <div className="goa-players">
+                    {players.map((p) => {
+                      const acted = session.actedThisTurn.includes(p.id);
+                      const highlighted = initiativeHighlight.has(p.id);
+                      // Only the initiative-highlighted player(s) can be
+                      // picked — everyone else still gets an initiative
+                      // select (so the controller can set it up before
+                      // their turn comes), just not a clickable row yet.
+                      const selectable = !acted && highlighted;
+                      return (
+                        <div
+                          key={p.id}
+                          className={`goa-player-row${selectable ? " clickable" : ""}${highlighted ? " goa-timer-initiative-highlight" : ""}`}
+                          onClick={() => selectable && handleSelectPlayer(p.id)}
+                          style={
+                            acted
+                              ? { opacity: 0.4 }
+                              : !highlighted
+                                ? { opacity: 0.7 }
+                                : undefined
+                          }
+                        >
+                          <span className="goa-player-name">
+                            <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
+                            {p.name}
+                          </span>
+                          {!acted && (
+                            <select
+                              className="goa-timer-initiative-select"
+                              value={session.initiative[p.id] ?? ""}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleSetInitiative(p.id, Number(e.target.value));
+                              }}
+                            >
+                              <option value="" disabled>
+                                —
+                              </option>
+                              {INITIATIVE_OPTIONS.map((v) => (
+                                <option key={v} value={v}>
+                                  {v}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {acted && <CheckCircle2 size={15} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
 
           {session.phase === "action" && session.actingPlayerId && (
@@ -1083,7 +1166,7 @@ function MatchTimerPageInner() {
                         <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
                         {p.name}
                       </span>
-                      <span>{formatActionTime(session.actionSeconds[p.id] ?? 0)}</span>
+                      <span>{formatMinutesSeconds(session.actionSeconds[p.id] ?? 0)}</span>
                     </div>
                   ))}
                 </div>
