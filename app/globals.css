@@ -4372,7 +4372,7 @@
 
   .goa-split-btns {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 0.4rem;
     margin: 0 0.75rem 0.75rem 0.75rem;
   }
@@ -4447,6 +4447,16 @@
     background: rgba(68, 195, 108, 0.15);
     border-color: rgba(25, 169, 70);
     box-shadow: 0 0 12px rgba(68, 195, 108, 0.2);
+  }
+
+  .goa-split-btn.ranked {
+    border-color: rgba(201, 151, 58, 0.478);
+    color: var(--gold-light);
+  }
+  .goa-split-btn.ranked:hover:not(:disabled) {
+    background: rgba(201, 151, 58, 0.15);
+    border-color: rgba(201, 151, 58);
+    box-shadow: 0 0 12px rgba(201, 151, 58, 0.2);
   }
 
   .goa-split-icon {
@@ -5236,6 +5246,24 @@
     font-family: "Cinzel", serif;
     font-size: 0.62rem;
     color: var(--muted);
+  }
+
+  .ranked-option {
+    border: 1px solid rgba(201, 151, 58, 0.2);
+    border-radius: 6px;
+    padding: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .ranked-option-head {
+    display: flex;
+    justify-content: space-between;
+    font-family: "Cinzel", serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--gold-light);
   }
 
   .draft-live-teams {

@@ -41,12 +41,18 @@ export const formatWinCondition = (wc?: WinCondition | string | null) => {
 // How a match's two teams were assembled. "custom" covers both a fresh
 // manual build (search/add only, no split tool used) and any split-tool
 // result that was subsequently hand-edited via drag-and-drop.
-export type DraftMethod = "captains_draft" | "random" | "balanced" | "custom";
+export type DraftMethod =
+  | "captains_draft"
+  | "random"
+  | "balanced"
+  | "ranked_balanced"
+  | "custom";
 
 export const draftMethodLabel: Record<string, string> = {
   captains_draft: "Captain's Draft",
   random: "Random Split",
   balanced: "Balanced Split",
+  ranked_balanced: "Ranked Balance",
   custom: "Custom Draft",
 };
 

@@ -55,7 +55,7 @@ Three tables in Supabase:
 | `atlantis_mmr_change` | `integer` | MMR delta for Atlantis |
 | `titans_mmr_change` | `integer` | MMR delta for Titans |
 | `expected_atlantis_win` | `float` | Elo expected win probability for Atlantis |
-| `draft_method` | `draft_method` | `"captains_draft"`, `"random"`, `"balanced"`, or `"custom"`; nullable (unset on older matches) |
+| `draft_method` | `draft_method` | `"captains_draft"`, `"random"`, `"balanced"`, `"ranked_balanced"`, or `"custom"`; nullable (unset on older matches) |
 | `starting_wave_counter` | `smallint` | Wave counter's starting count (always one shared value, whether the match ran it as one lane or two); `3`, `5`, or `7`; nullable |
 | `starting_life_counter` | `smallint` | Life counter the match started with (always one shared value); `4`–`8`; nullable |
 | `wave_counter_remaining_1` | `smallint` | Wave counter remaining at match end — not team-owned, both teams share the same lane(s); `0`–`7`; nullable |
@@ -177,6 +177,7 @@ create type draft_method as enum (
   'captains_draft',
   'random',
   'balanced',
+  'ranked_balanced',
   'custom'
 );
 

@@ -23,6 +23,13 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "GoA MMR Tracker",
   },
+  // Next 16 only auto-emits the modern, unprefixed `mobile-web-app-capable`
+  // tag from appleWebApp.capable (Safari only started honoring that one in
+  // 16.4) — add the legacy Apple-prefixed tag too so "Add to Home Screen"
+  // still launches standalone (no browser chrome) on older iOS.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {

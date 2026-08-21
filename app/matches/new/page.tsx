@@ -130,6 +130,7 @@ function NewMatchPageInner() {
               "captains_draft",
               "random",
               "balanced",
+              "ranked_balanced",
               "custom",
             ];
             if (validDraftMethods.includes(saved.method)) {
