@@ -58,9 +58,6 @@ const avg = (players: Player[]) =>
     ? 0
     : Math.round(players.reduce((s, p) => s + p.mmr, 0) / players.length);
 
-const totalSkillPoints = (players: Player[]) =>
-  players.reduce((s, p) => s + skillPointsOf(p), 0);
-
 const shuffle = <T,>(arr: T[]): T[] => {
   const result = [...arr];
 
@@ -94,8 +91,8 @@ const SKILL_RANK_POINTS: Record<string, number> = {
   amy: 5.5,
   sam: 4,
   dave: 3.5,
-  stella: 1.5,
-  jenny: 1.5,
+  stella: 3,
+  jenny: 3,
 };
 
 const skillPointsOf = (p: Player) =>
@@ -989,14 +986,10 @@ export default function TeamSplitterPage() {
               </p>
 
               {rankedSplitOptions.map((split, i) => {
-                const diff = Math.abs(
-                  totalSkillPoints(split.atlantis) - totalSkillPoints(split.titans),
-                );
                 return (
                   <div key={i} className="ranked-option">
                     <div className="ranked-option-head">
                       <span>Option {i + 1}</span>
-                      <span>{diff.toFixed(1)} pt difference</span>
                     </div>
                     <div className="draft-live-teams">
                       {(["atlantis", "titans"] as const).map((faction) => {
@@ -1009,9 +1002,6 @@ export default function TeamSplitterPage() {
                               >
                                 {faction === "atlantis" ? "Atlantis" : "Titans"}
                               </span>
-                              <span className="draft-live-team-avg">
-                                {totalSkillPoints(members).toFixed(1)} pts
-                              </span>
                             </div>
                             {members.map((p) => (
                               <div key={p.id} className="draft-live-row">
@@ -1021,9 +1011,6 @@ export default function TeamSplitterPage() {
                                   size={20}
                                 />
                                 <span className="draft-live-name">{p.name}</span>
-                                <span className="draft-live-mmr sm">
-                                  {skillPointsOf(p).toFixed(1)} pts
-                                </span>
                               </div>
                             ))}
                           </div>
