@@ -5572,11 +5572,14 @@
     text-align: center;
   }
 
-  /* Running screen — no scrolling, on any device: pinned to exactly the
-     space below the header/above the bottom nav, with .goa-timer-live-body
-     and the roster grid below both set up as a genuine flex fill down
-     through every level, so however much content there is, it always
-     divides up exactly the space available instead of overflowing it. */
+  /* Running screen — fills exactly the space below the header/above the
+     bottom nav, with .goa-timer-live-body and the roster grid below set up
+     as a genuine flex fill down through every level, so a typical roster
+     divides up the space available without ever showing a scrollbar. An
+     oversized roster (or a very short screen) still shrinks as far as it
+     reasonably can first, but falls back to a scroll here — via
+     overflow-y instead of hidden — rather than silently clipping content
+     the controller can no longer reach. */
   .goa-timer-live {
     flex: none;
     /* No -56px here — BottomNav is hidden on this page (see
@@ -5584,20 +5587,24 @@
        padding that would otherwise reserve its space. */
     height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     min-height: 0;
-    overflow: hidden;
+    overflow-y: auto;
   }
   .goa-timer-live .goa-header {
     flex-shrink: 0;
     padding: 1rem 1rem 0.6rem;
   }
   .goa-timer-live-body {
+    /* No min-height: 0 here — this and the rest of the chain below stay
+       at their natural, content-based minimum size (the flexbox default),
+       so a roster too big to cram in makes .goa-timer-live-body taller
+       than its "fair share" instead of squashing/overlapping its content;
+       that overflow is what .goa-timer-live's overflow-y: auto turns into
+       an actual scrollbar. */
     flex: 1;
-    min-height: 0;
     display: flex;
     flex-direction: column;
     justify-content: space-evenly;
     gap: 0.85rem;
-    overflow: hidden;
   }
   .goa-timer-status {
     display: flex;
@@ -5813,13 +5820,12 @@
     grid-template-columns: 1fr 1fr;
     gap: 0.6rem;
     flex: 0 1 auto;
-    min-height: 0;
   }
   .goa-timer-select-teams > .goa-section {
     margin: 0;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    overflow: visible;
   }
   .goa-timer-select-teams .goa-section-header {
     flex-shrink: 0;
@@ -5830,7 +5836,6 @@
   }
   .goa-timer-select-teams .goa-players {
     flex: 1;
-    min-height: 0;
     display: flex;
     flex-direction: column;
     /* Rows keep a small fixed gap and cluster together as a group,
@@ -5845,12 +5850,11 @@
      shared with other pages, so they stay at their normal fixed size
      everywhere else. `--roster-size` (the larger team's player count, set
      inline) trims text/avatar down a bit past 4 players, so a big roster
-     doesn't make for an oddly long page. flex-grow:0 keeps rows at their
-     natural, comfortable size; flex-shrink (with min-height:0) is still
-     there so a big roster can compress rows just enough to all fit. */
+     doesn't make for an oddly long page. Rows stay at their natural,
+     legible size (no min-height: 0 shrink-to-fit here) — a roster too big
+     to fit the screen even after that trim just scrolls instead. */
   .goa-timer-select-teams .goa-player-row {
     flex: 0 1 auto;
-    min-height: 0;
     padding: 0.5rem 0.7rem;
   }
   .goa-timer-select-teams .goa-player-name {
