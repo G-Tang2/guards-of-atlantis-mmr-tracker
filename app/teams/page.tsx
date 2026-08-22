@@ -90,9 +90,9 @@ const SKILL_RANK_POINTS: Record<string, number> = {
   bao: 6.5,
   amy: 6,
   sam: 4,
-  dave: 3.5,
-  stella: 3,
+  dave: 4,
   jenny: 3,
+  stella: 2,
 };
 
 const skillPointsOf = (p: Player) =>

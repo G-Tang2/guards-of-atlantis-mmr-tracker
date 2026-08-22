@@ -987,23 +987,16 @@ function MatchTimerPageInner() {
                     {players.map((p) => {
                       const acted = session.actedThisTurn.includes(p.id);
                       const highlighted = initiativeHighlight.has(p.id);
-                      // Only the initiative-highlighted player(s) can be
-                      // picked — everyone else still gets an initiative
-                      // select (so the controller can set it up before
-                      // their turn comes), just not a clickable row yet.
-                      const selectable = !acted && highlighted;
+                      // Any not-yet-acted player can be picked — the
+                      // highlight is just a suggestion (highest initiative,
+                      // tie-break resolved), not an enforced pick order.
+                      const selectable = !acted;
                       return (
                         <div
                           key={p.id}
                           className={`goa-player-row${selectable ? " clickable" : ""}${highlighted ? " goa-timer-initiative-highlight" : ""}`}
                           onClick={() => selectable && handleSelectPlayer(p.id)}
-                          style={
-                            acted
-                              ? { opacity: 0.4 }
-                              : !highlighted
-                                ? { opacity: 0.7 }
-                                : undefined
-                          }
+                          style={acted ? { opacity: 0.4 } : undefined}
                         >
                           <span className="goa-player-name">
                             <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
