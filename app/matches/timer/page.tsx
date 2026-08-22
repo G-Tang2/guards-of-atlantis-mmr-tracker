@@ -2,7 +2,6 @@
 
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
@@ -48,18 +47,6 @@ type SessionState = {
   actionDraining: boolean;
   actionElapsed: number;
   actionSeconds: Record<string, number>;
-  // Which team currently holds the tie-break token — persists across the
-  // whole session (unlike everything else here, which resets per round or
-  // per turn), flipping only when it's actually used to break a tie.
-  tieBreakToken: Team;
-  // This turn's initiative value per not-yet-acted player, entered by the
-  // controller in the select-player screen. Cleared at the start of every
-  // new turn.
-  initiative: Record<string, number>;
-  // Whether picking the current acting player flipped the tie-break
-  // token — lets "go back" (a misclick) undo exactly that flip, since
-  // flipping a two-state token twice restores it.
-  actingPlayerTokenFlipped: boolean;
 };
 
 // ─── Config options ─────────────────────────────────────────────────────────
@@ -219,7 +206,6 @@ function playCountdownStart() {
 function freshRound(
   round: number,
   config: TimerConfig,
-  tieBreakToken: Team,
 ): SessionState {
   return {
     round,
@@ -237,9 +223,6 @@ function freshRound(
     actionDraining: false,
     actionElapsed: 0,
     actionSeconds: {},
-    tieBreakToken,
-    initiative: {},
-    actingPlayerTokenFlipped: false,
   };
 }
 
@@ -253,43 +236,7 @@ function startNewTurnStrategy(s: SessionState, config: TimerConfig): SessionStat
     titansDraining: false,
     phaseTimeRemaining: config.strategyTime,
     actedThisTurn: [],
-    initiative: {},
   };
-}
-
-function flipToken(team: Team): Team {
-  return team === "atlantis" ? "titans" : "atlantis";
-}
-
-// Who should be highlighted to go next in the select-player screen: the
-// not-yet-acted player(s) with the highest entered initiative. If several
-// are tied for highest, only the ones on the tie-break token's team are
-// highlighted instead (the token decides who among the tied group goes) —
-// unless none of the tied players are on that team, in which case the
-// token doesn't apply and the whole tied group is highlighted.
-function computeInitiativeHighlight(
-  initiative: Record<string, number>,
-  actedThisTurn: string[],
-  tieBreakToken: Team,
-  allPlayerIds: string[],
-  teamOf: (id: string) => Team,
-): { highlighted: Set<string>; tieResolvedByToken: boolean } {
-  const candidates = allPlayerIds.filter(
-    (id) => !actedThisTurn.includes(id) && initiative[id] !== undefined,
-  );
-  if (candidates.length === 0) {
-    return { highlighted: new Set(), tieResolvedByToken: false };
-  }
-  const maxValue = Math.max(...candidates.map((id) => initiative[id]));
-  const tied = candidates.filter((id) => initiative[id] === maxValue);
-  if (tied.length === 1) {
-    return { highlighted: new Set(tied), tieResolvedByToken: false };
-  }
-  const tokenTeamTied = tied.filter((id) => teamOf(id) === tieBreakToken);
-  if (tokenTeamTied.length > 0) {
-    return { highlighted: new Set(tokenTeamTied), tieResolvedByToken: true };
-  }
-  return { highlighted: new Set(tied), tieResolvedByToken: false };
 }
 
 function startEndOfRound(s: SessionState, config: TimerConfig): SessionState {
@@ -306,7 +253,7 @@ function startEndOfRound(s: SessionState, config: TimerConfig): SessionState {
 
 function startNewRound(s: SessionState, config: TimerConfig): SessionState {
   return {
-    ...freshRound(s.round + 1, config, s.tieBreakToken),
+    ...freshRound(s.round + 1, config),
     actionSeconds: s.actionSeconds,
   };
 }
@@ -341,7 +288,6 @@ function commitAction(
     actingPlayerId: null,
     actionDraining: false,
     actionElapsed: 0,
-    actingPlayerTokenFlipped: false,
   };
 
   const allActed = allPlayerIds.every((id) => actedThisTurn.includes(id));
@@ -422,7 +368,6 @@ function MatchTimerPageInner() {
   const [actionTime, setActionTime] = useState(30);
   const [eorTime, setEorTime] = useState(120);
   const [reserveTime, setReserveTime] = useState(180);
-  const [initialTieBreakToken, setInitialTieBreakToken] = useState<Team>("atlantis");
   const [config, setConfig] = useState<TimerConfig | null>(null);
 
   // A round is 4 turns of (strategy once + one action phase per player on
@@ -519,19 +464,6 @@ function MatchTimerPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, stage]);
 
-  // Who the select-player screen highlights as "up next" right now.
-  const initiativeHighlight = useMemo(() => {
-    if (!session || session.phase !== "select_player") return new Set<string>();
-    return computeInitiativeHighlight(
-      session.initiative,
-      session.actedThisTurn,
-      session.tieBreakToken,
-      allPlayerIds,
-      teamOf,
-    ).highlighted;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, allPlayerIds]);
-
   const beepFiredRef = useRef<Record<string, boolean>>({});
   const lastTickValueRef = useRef<Record<string, number>>({});
   // Tracks the last-seen value of the *main* phase countdown (id "main" —
@@ -600,7 +532,7 @@ function MatchTimerPageInner() {
     unlockAudioContext();
     const cfg: TimerConfig = { strategyTime, actionTime, eorTime, reserveTime };
     setConfig(cfg);
-    setSession(freshRound(1, cfg, initialTieBreakToken));
+    setSession(freshRound(1, cfg));
     setStage("running");
   };
 
@@ -622,14 +554,6 @@ function MatchTimerPageInner() {
     unlockAudioContext();
     setSession((prev) => {
       if (!prev || prev.phase !== "select_player") return prev;
-      const { highlighted, tieResolvedByToken } = computeInitiativeHighlight(
-        prev.initiative,
-        prev.actedThisTurn,
-        prev.tieBreakToken,
-        allPlayerIds,
-        teamOf,
-      );
-      const shouldFlip = tieResolvedByToken && highlighted.has(playerId);
       return {
         ...prev,
         phase: "action",
@@ -637,8 +561,6 @@ function MatchTimerPageInner() {
         phaseTimeRemaining: config.actionTime,
         actionDraining: false,
         actionElapsed: 0,
-        tieBreakToken: shouldFlip ? flipToken(prev.tieBreakToken) : prev.tieBreakToken,
-        actingPlayerTokenFlipped: shouldFlip,
       };
     });
   };
@@ -650,8 +572,7 @@ function MatchTimerPageInner() {
   };
 
   // Undoes an accidental pick — back to select-player with nothing
-  // committed (no action time recorded, not marked acted), and reverses
-  // the tie-break flip if picking this player had caused one.
+  // committed (no action time recorded, not marked acted).
   const handleGoBackToSelect = () => {
     setSession((prev) => {
       if (!prev || prev.phase !== "action") return prev;
@@ -661,10 +582,6 @@ function MatchTimerPageInner() {
         actingPlayerId: null,
         actionDraining: false,
         actionElapsed: 0,
-        tieBreakToken: prev.actingPlayerTokenFlipped
-          ? flipToken(prev.tieBreakToken)
-          : prev.tieBreakToken,
-        actingPlayerTokenFlipped: false,
       };
     });
   };
@@ -862,40 +779,6 @@ function MatchTimerPageInner() {
       )}
 
       {stage === "setup" && (
-        <div className="goa-card">
-          <div className="goa-card-head">Tie Breaker Coin</div>
-          <div className="goa-timer-token-row">
-            <button
-              type="button"
-              className={`goa-timer-token-btn atl${initialTieBreakToken === "atlantis" ? " active" : ""}`}
-              onClick={() => setInitialTieBreakToken("atlantis")}
-            >
-              <Image
-                src="/icons/tiebreaker_orange.png"
-                alt=""
-                width={22}
-                height={22}
-              />
-              Orange (Atlantis)
-            </button>
-            <button
-              type="button"
-              className={`goa-timer-token-btn tit${initialTieBreakToken === "titans" ? " active" : ""}`}
-              onClick={() => setInitialTieBreakToken("titans")}
-            >
-              <Image
-                src="/icons/tiebreaker_blue.png"
-                alt=""
-                width={22}
-                height={22}
-              />
-              Blue (Titans)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {stage === "setup" && (
         <div className="goa-btn-wrap">
           <button
             className="goa-btn inline-flex items-center justify-center gap-2"
@@ -931,19 +814,6 @@ function MatchTimerPageInner() {
               <span className="goa-timer-reserve-label">Titans Reserve</span>
               <span className="goa-timer-reserve-value">{formatActionTime(session.titansReserve)}</span>
             </div>
-          </div>
-
-          <div className="goa-timer-token-indicator">
-            <Image
-              src={
-                session.tieBreakToken === "atlantis"
-                  ? "/icons/tiebreaker_orange.png"
-                  : "/icons/tiebreaker_blue.png"
-              }
-              alt=""
-              width={66}
-              height={66}
-            />
           </div>
 
           {(session.phase === "strategy" || session.phase === "end_of_round") && (
@@ -997,15 +867,11 @@ function MatchTimerPageInner() {
                   <div className="goa-players">
                     {players.map((p) => {
                       const acted = session.actedThisTurn.includes(p.id);
-                      const highlighted = initiativeHighlight.has(p.id);
-                      // Any not-yet-acted player can be picked — the
-                      // highlight is just a suggestion (highest initiative,
-                      // tie-break resolved), not an enforced pick order.
                       const selectable = !acted;
                       return (
                         <div
                           key={p.id}
-                          className={`goa-player-row${selectable ? " clickable" : ""}${highlighted ? " goa-timer-initiative-highlight" : ""}`}
+                          className={`goa-player-row${selectable ? " clickable" : ""}`}
                           onClick={() => selectable && handleSelectPlayer(p.id)}
                           style={acted ? { opacity: 0.4 } : undefined}
                         >
