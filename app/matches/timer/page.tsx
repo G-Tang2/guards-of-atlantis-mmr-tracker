@@ -68,7 +68,13 @@ const STRATEGY_OPTIONS = [30, 60, 90, 120, 150];
 const ACTION_OPTIONS = [15, 30, 45, 60, 75];
 const EOR_OPTIONS = [90, 120, 150, 180, 210];
 const RESERVE_OPTIONS = [60, 120, 180, 240, 300];
-const INITIATIVE_OPTIONS = Array.from({ length: 19 }, (_, i) => i); // 0–18
+
+// Assumed real-world overhead per player action phase — picking the next
+// player, everyone glancing at the screen, etc. — on top of their actual
+// action-phase countdown. Not something the timer enforces or waits on
+// itself; it's only factored into the setup screen's estimated round time
+// so that estimate isn't unrealistically optimistic.
+const ACTION_TRANSITION_OVERHEAD_SECONDS = 10;
 
 // A player's *total* action time across a whole session can run well past
 // a minute, unlike the short live countdowns formatActionTime is normally
@@ -419,6 +425,14 @@ function MatchTimerPageInner() {
   const [initialTieBreakToken, setInitialTieBreakToken] = useState<Team>("atlantis");
   const [config, setConfig] = useState<TimerConfig | null>(null);
 
+  // A round is 4 turns of (strategy once + one action phase per player on
+  // both rosters), plus end-of-round once. Each action phase also carries
+  // an assumed overhead for actually picking/switching to that player.
+  const totalPlayers = atlantis.length + titans.length;
+  const estimatedRoundSeconds =
+    4 * (strategyTime + totalPlayers * (actionTime + ACTION_TRANSITION_OVERHEAD_SECONDS)) +
+    eorTime;
+
   const [session, setSession] = useState<SessionState | null>(null);
   const [paused, setPaused] = useState(false);
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
@@ -627,14 +641,6 @@ function MatchTimerPageInner() {
         actingPlayerTokenFlipped: shouldFlip,
       };
     });
-  };
-
-  const handleSetInitiative = (playerId: string, value: number) => {
-    setSession((prev) =>
-      prev
-        ? { ...prev, initiative: { ...prev.initiative, [playerId]: value } }
-        : prev,
-    );
   };
 
   const handleCompleteAction = () => {
@@ -847,6 +853,11 @@ function MatchTimerPageInner() {
               </select>
             </div>
           </div>
+          <p className="goa-timer-round-estimate">
+            Estimated round: ~{formatMinutesSeconds(estimatedRoundSeconds)} (4
+            turns, {totalPlayers} players, +{ACTION_TRANSITION_OVERHEAD_SECONDS}
+            s overhead per action)
+          </p>
         </div>
       )}
 
@@ -1002,26 +1013,6 @@ function MatchTimerPageInner() {
                             <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
                             {p.name}
                           </span>
-                          {!acted && (
-                            <select
-                              className="goa-timer-initiative-select"
-                              value={session.initiative[p.id] ?? ""}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                handleSetInitiative(p.id, Number(e.target.value));
-                              }}
-                            >
-                              <option value="" disabled>
-                                —
-                              </option>
-                              {INITIATIVE_OPTIONS.map((v) => (
-                                <option key={v} value={v}>
-                                  {v}
-                                </option>
-                              ))}
-                            </select>
-                          )}
                           {acted && <CheckCircle2 size={15} />}
                         </div>
                       );
