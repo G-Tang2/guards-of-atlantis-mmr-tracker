@@ -200,6 +200,30 @@ function playCountdownStart() {
   }
 }
 
+// ─── Screen Wake Lock ───────────────────────────────────────────────────────
+// The device this runs on is normally propped up on a table for an entire
+// match — keep its screen from auto-dimming/locking for the duration
+// instead of leaving that to the OS's own timeout. Feature-detected since
+// Wake Lock isn't universal (Safari only added it in 16.4); a device that
+// doesn't support it just falls back to its own auto-lock behavior, same
+// as before this existed.
+let wakeLockSentinel: WakeLockSentinel | null = null;
+
+async function requestWakeLock() {
+  try {
+    if (!("wakeLock" in navigator)) return;
+    wakeLockSentinel = await navigator.wakeLock.request("screen");
+  } catch {
+    // Denied, unsupported, or the document isn't visible right now —
+    // non-fatal, the match timer itself doesn't depend on this.
+  }
+}
+
+function releaseWakeLock() {
+  wakeLockSentinel?.release().catch(() => {});
+  wakeLockSentinel = null;
+}
+
 // ─── Session state machine (pure, so the 1s tick and every button handler
 // can share the exact same transition logic) ───────────────────────────────
 
@@ -297,62 +321,120 @@ function commitAction(
     : startEndOfRound(base, config);
 }
 
-function tick(
+// One "step" of the clock: advances whichever single countdown is
+// currently active (the main phase timer, or — once that's exhausted — a
+// reserve drain) by at most `budget` seconds, and reports how much of
+// that budget it actually used. `tick` below calls this in a loop rather
+// than always spending the whole budget on whatever was active when the
+// call began — that's what lets one call correctly replay a real gap
+// that spans a phase timer running out, its reserve then running out
+// too, and landing in a fresh phase after that, instead of losing
+// whatever part of the gap fell past the first transition.
+function tickStep(
   s: SessionState,
   config: TimerConfig,
   teamOf: (id: string) => Team,
   allPlayerIds: string[],
-): SessionState {
+  budget: number,
+): { state: SessionState; consumed: number } {
+  if (budget <= 0) return { state: s, consumed: 0 };
+
   if (s.phase === "strategy" || s.phase === "end_of_round") {
-    const next = { ...s };
-    if (!next.atlantisDraining && !next.titansDraining) {
-      if (next.phaseTimeRemaining > 0) {
-        next.phaseTimeRemaining -= 1;
-        if (next.phaseTimeRemaining === 0) {
-          if (!next.atlantisReady) next.atlantisDraining = true;
-          if (!next.titansReady) next.titansDraining = true;
-        }
+    if (!s.atlantisDraining && !s.titansDraining) {
+      const use = Math.min(budget, s.phaseTimeRemaining);
+      const next = { ...s, phaseTimeRemaining: s.phaseTimeRemaining - use };
+      if (next.phaseTimeRemaining <= 0) {
+        next.phaseTimeRemaining = 0;
+        if (!next.atlantisReady) next.atlantisDraining = true;
+        if (!next.titansReady) next.titansDraining = true;
       }
-      return resolveReadyPhase(next, config);
+      return { state: resolveReadyPhase(next, config), consumed: use };
     }
+    // Both reserves drain in parallel in real time, so this step is
+    // bounded by whichever (the budget, or a draining team's reserve)
+    // runs out first.
+    const caps = [budget];
+    if (s.atlantisDraining && !s.atlantisReady) caps.push(s.atlantisReserve);
+    if (s.titansDraining && !s.titansReady) caps.push(s.titansReserve);
+    const use = Math.min(...caps);
+    const next = { ...s };
     if (next.atlantisDraining && !next.atlantisReady) {
-      next.atlantisReserve = Math.max(0, next.atlantisReserve - 1);
-      if (next.atlantisReserve === 0) {
+      next.atlantisReserve -= use;
+      if (next.atlantisReserve <= 0) {
+        next.atlantisReserve = 0;
         next.atlantisReady = true;
         next.atlantisDraining = false;
       }
     }
     if (next.titansDraining && !next.titansReady) {
-      next.titansReserve = Math.max(0, next.titansReserve - 1);
-      if (next.titansReserve === 0) {
+      next.titansReserve -= use;
+      if (next.titansReserve <= 0) {
+        next.titansReserve = 0;
         next.titansReady = true;
         next.titansDraining = false;
       }
     }
-    return resolveReadyPhase(next, config);
+    return { state: resolveReadyPhase(next, config), consumed: use };
   }
 
   if (s.phase === "action" && s.actingPlayerId) {
     const team = teamOf(s.actingPlayerId);
-    let next: SessionState = { ...s, actionElapsed: s.actionElapsed + 1 };
-    if (!next.actionDraining) {
-      if (next.phaseTimeRemaining > 0) {
-        next.phaseTimeRemaining -= 1;
-        if (next.phaseTimeRemaining === 0) next.actionDraining = true;
+    if (!s.actionDraining) {
+      const use = Math.min(budget, s.phaseTimeRemaining);
+      const next: SessionState = {
+        ...s,
+        phaseTimeRemaining: s.phaseTimeRemaining - use,
+        actionElapsed: s.actionElapsed + use,
+      };
+      if (next.phaseTimeRemaining <= 0) {
+        next.phaseTimeRemaining = 0;
+        next.actionDraining = true;
       }
-      return next;
+      return { state: next, consumed: use };
     }
-    if (team === "atlantis") {
-      next.atlantisReserve = Math.max(0, next.atlantisReserve - 1);
-      if (next.atlantisReserve === 0) next = commitAction(next, config, allPlayerIds);
-    } else {
-      next.titansReserve = Math.max(0, next.titansReserve - 1);
-      if (next.titansReserve === 0) next = commitAction(next, config, allPlayerIds);
+    const reserve = team === "atlantis" ? s.atlantisReserve : s.titansReserve;
+    const use = Math.min(budget, reserve);
+    let next: SessionState = { ...s, actionElapsed: s.actionElapsed + use };
+    if (team === "atlantis") next.atlantisReserve -= use;
+    else next.titansReserve -= use;
+    const reserveAfter = team === "atlantis" ? next.atlantisReserve : next.titansReserve;
+    if (reserveAfter <= 0) {
+      if (team === "atlantis") next.atlantisReserve = 0;
+      else next.titansReserve = 0;
+      next = commitAction(next, config, allPlayerIds);
     }
-    return next;
+    return { state: next, consumed: use };
   }
 
-  return s;
+  // No active countdown right now (e.g. select_player) — nothing to
+  // consume, so the caller stops looping instead of fast-forwarding
+  // through a phase that's actually waiting on the controller.
+  return { state: s, consumed: 0 };
+}
+
+// Advances the session clock by `deltaSeconds` of real elapsed time,
+// generalized from "exactly 1 second" so a tick that runs late (the tab
+// was backgrounded, the screen locked, etc.) catches the session up to
+// where it truly should be instead of silently falling behind while
+// unattended. Loops in bounded steps since a long-enough gap can span
+// more than one transition; stops the moment a step can't make progress,
+// discarding any leftover budget there.
+function tick(
+  s: SessionState,
+  config: TimerConfig,
+  teamOf: (id: string) => Team,
+  allPlayerIds: string[],
+  deltaSeconds: number,
+): SessionState {
+  let state = s;
+  let remaining = deltaSeconds;
+  for (let hops = 0; hops < 50 && remaining > 0; hops++) {
+    const { state: next, consumed } = tickStep(state, config, teamOf, allPlayerIds, remaining);
+    state = next;
+    if (consumed <= 0) break;
+    remaining -= consumed;
+  }
+  return state;
 }
 
 // ─── Page ───────────────────────────────────────────────────────────────────
@@ -425,16 +507,55 @@ function MatchTimerPageInner() {
   const teamOf = (id: string): Team => (atlantisIdSet.has(id) ? "atlantis" : "titans");
 
   // 1Hz tick — the whole clock lives in `session`, updated as one pure
-  // transition per second so every rule (draining, auto-ready, forced
-  // advance) is evaluated in one consistent place.
+  // transition per real elapsed second so every rule (draining,
+  // auto-ready, forced advance) is evaluated in one consistent place.
+  // Ticks by the *actual* elapsed time since the last tick rather than
+  // always assuming exactly 1s passed — setInterval callbacks get
+  // throttled or paused outright while the tab is backgrounded or the
+  // iPad's screen locks, so without this the on-screen clock would just
+  // freeze in place during that stretch and then keep counting down from
+  // there, silently drifting behind real time instead of catching up.
+  const lastTickAtRef = useRef<number>(0);
   useEffect(() => {
     if (stage !== "running" || paused || !config) return;
-    const id = setInterval(() => {
-      setSession((prev) => (prev ? tick(prev, config, teamOf, allPlayerIds) : prev));
-    }, 1000);
-    return () => clearInterval(id);
+    lastTickAtRef.current = Date.now();
+    const runTick = () => {
+      const now = Date.now();
+      const deltaSeconds = Math.round((now - lastTickAtRef.current) / 1000);
+      if (deltaSeconds <= 0) return;
+      lastTickAtRef.current = now;
+      setSession((prev) => (prev ? tick(prev, config, teamOf, allPlayerIds, deltaSeconds) : prev));
+    };
+    const id = setInterval(runTick, 1000);
+    // Catch up immediately on returning to the tab/unlocking the screen,
+    // rather than waiting for the next scheduled interval fire.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") runTick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, paused, config, atlantis, titans]);
+
+  // Hold the screen awake for the whole running stage (paused or not —
+  // pausing just freezes the clock, it's not a reason to let the screen
+  // sleep). A wake lock is auto-released by the browser whenever the tab
+  // is hidden, so it's re-requested on visibilitychange too.
+  useEffect(() => {
+    if (stage !== "running") return;
+    requestWakeLock();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") requestWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      releaseWakeLock();
+    };
+  }, [stage]);
 
   // Active countdown(s) this instant, for the 15s beep / 5s big-number cues.
   const activeCountdowns = useMemo(() => {
@@ -530,6 +651,7 @@ function MatchTimerPageInner() {
     // iOS Safari only lets an AudioContext start producing sound when
     // resumed directly from a user gesture (see the note above playBeep).
     unlockAudioContext();
+    requestWakeLock();
     const cfg: TimerConfig = { strategyTime, actionTime, eorTime, reserveTime };
     setConfig(cfg);
     setSession(freshRound(1, cfg));
