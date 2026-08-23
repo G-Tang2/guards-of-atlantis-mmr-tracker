@@ -11,6 +11,10 @@ type TeamPanelProps = {
   players: MatchPlayer[];
   avgMmr: number;
   onSelectPlayer: (id: string) => void;
+  // The action-time badge is only shown on the match detail page — the
+  // Battle Archive list is a scan of many matches at once, where it's
+  // just noise.
+  showActionTime?: boolean;
 };
 
 export function TeamPanel({
@@ -19,6 +23,7 @@ export function TeamPanel({
   players,
   avgMmr,
   onSelectPlayer,
+  showActionTime = false,
 }: TeamPanelProps) {
   return (
     <div className="goa-team">
@@ -81,7 +86,7 @@ export function TeamPanel({
                   1ST
                 </span>
               )}
-              {p.action_time_seconds != null && (
+              {showActionTime && p.action_time_seconds != null && (
                 <span className="goa-action-time-badge" title="Action time">
                   <Timer size={10} />
                   {formatActionTime(p.action_time_seconds)}

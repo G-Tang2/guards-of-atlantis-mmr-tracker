@@ -471,6 +471,7 @@ export default function MatchDetailPage() {
             players={atlantis}
             avgMmr={match.atlantis_avg_mmr}
             onSelectPlayer={goToProfile}
+            showActionTime
           />
           <TeamPanel
             label="Titans"
@@ -478,6 +479,7 @@ export default function MatchDetailPage() {
             players={titans}
             avgMmr={match.titans_avg_mmr}
             onSelectPlayer={goToProfile}
+            showActionTime
           />
         </div>
       </div>

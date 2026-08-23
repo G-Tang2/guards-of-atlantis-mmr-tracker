@@ -155,6 +155,13 @@
     backdrop-filter: blur(10px);
     border-top: 1px solid var(--nav-border);
     padding-bottom: env(safe-area-inset-bottom);
+    /* Promotes this to its own compositing layer — on iOS WebKit (Safari
+       and every other iOS browser, since Apple requires them all to use
+       it) a plain position:fixed element can visually lag a frame or two
+       behind during the browser chrome's show/hide-on-scroll animation,
+       making it briefly appear off the bottom edge. Layer promotion is
+       the standard mitigation for that; it's a no-op everywhere else. */
+    transform: translateZ(0);
   }
   .goa-bottom-nav-item {
     position: relative;
