@@ -227,9 +227,15 @@ function releaseWakeLock() {
 // ─── Session state machine (pure, so the 1s tick and every button handler
 // can share the exact same transition logic) ───────────────────────────────
 
+// Reserves are only ever seeded from config.reserveTime here at the very
+// start of the session (the caller omits `reserves`) — every subsequent
+// round carries over whatever's left, rather than topping back up, so
+// team reserve is one bank that depletes across the whole match instead
+// of resetting each round.
 function freshRound(
   round: number,
   config: TimerConfig,
+  reserves?: { atlantis: number; titans: number },
 ): SessionState {
   return {
     round,
@@ -237,8 +243,8 @@ function freshRound(
     phase: "strategy",
     atlantisReady: false,
     titansReady: false,
-    atlantisReserve: config.reserveTime,
-    titansReserve: config.reserveTime,
+    atlantisReserve: reserves?.atlantis ?? config.reserveTime,
+    titansReserve: reserves?.titans ?? config.reserveTime,
     atlantisDraining: false,
     titansDraining: false,
     actedThisTurn: [],
@@ -277,7 +283,10 @@ function startEndOfRound(s: SessionState, config: TimerConfig): SessionState {
 
 function startNewRound(s: SessionState, config: TimerConfig): SessionState {
   return {
-    ...freshRound(s.round + 1, config),
+    ...freshRound(s.round + 1, config, {
+      atlantis: s.atlantisReserve,
+      titans: s.titansReserve,
+    }),
     actionSeconds: s.actionSeconds,
   };
 }
@@ -761,7 +770,7 @@ function MatchTimerPageInner() {
               viewBox="0 0 960 300"
               className="goa-timer-diagram"
               role="img"
-              aria-label="One round begins, runs strategy phase then action phase across four turns, then end of round phase, then loops back into a fresh round with reserves refilled."
+              aria-label="One round begins, runs strategy phase then action phase across four turns, then end of round phase, then loops back into a fresh round. Team reserve time carries over between rounds instead of refilling."
             >
               <defs>
                 <marker id="timerArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -813,7 +822,7 @@ function MatchTimerPageInner() {
               <text x="800" y="153" textAnchor="middle" fontSize="10" letterSpacing="0.06em" fill="currentColor" opacity="0.6">END</text>
 
               <path d="M800,134 C 800,235 40,235 40,134" fill="none" stroke="#c9973a" strokeWidth="1.5" strokeDasharray="2 5" markerEnd="url(#timerArrowGold)" opacity="0.85" />
-              <text x="420" y="255" textAnchor="middle" fontSize="11" letterSpacing="0.05em" fill="#c9973a" fontWeight="600">NEXT ROUND — RESERVES REFILL</text>
+              <text x="420" y="255" textAnchor="middle" fontSize="11" letterSpacing="0.05em" fill="#c9973a" fontWeight="600">NEXT ROUND</text>
 
               <g transform="translate(60,270)">
                 <circle cx="0" cy="0" r="3.5" fill="#c42a3a" />
