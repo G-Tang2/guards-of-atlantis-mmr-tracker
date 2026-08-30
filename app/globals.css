@@ -2991,6 +2991,11 @@
     height: 24px;
     flex-shrink: 0;
     border-radius: 4px;
+    /* Cinzel's all-caps glyphs read as optically centered a couple px
+       above the line box's true geometric center, so a plain
+       align-items: center leaves this icon looking low next to the
+       name — nudge it up to match. */
+    margin-top: -2px;
     background: radial-gradient(
       circle at 50% 32%,
       rgba(58, 54, 40, 0.55),
@@ -3007,8 +3012,6 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    filter: brightness(0) opacity(0.45);
-    transition: filter 0.25s ease;
   }
   .goa-badge-row.complete .goa-badge-name-icon {
     background: radial-gradient(
@@ -3020,9 +3023,6 @@
       inset 0 2px 4px rgba(0, 0, 0, 0.4),
       0 0 0 1px rgba(201, 151, 58, 0.5),
       0 0 10px 2px rgba(201, 151, 58, 0.65);
-  }
-  .goa-badge-row.complete .goa-badge-name-icon img {
-    filter: none;
   }
   .goa-badge-row.complete .goa-badge-name {
     color: var(--gold-light);
