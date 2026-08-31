@@ -16,7 +16,13 @@ import {
   WinCondition,
 } from "@/lib/match";
 import { ScrollText, Swords } from "lucide-react";
-import { buildFirstHeroWinMap, isFirstHeroWinMatch } from "@/lib/heroWinBonus";
+import {
+  buildFirstHeroWinMap,
+  isFirstHeroWinMatch,
+  buildBadgeCompletionMap,
+  getBadgeEarnedInMatch,
+} from "@/lib/heroWinBonus";
+import { Badge } from "@/lib/badges";
 
 type Match = {
   id: string;
@@ -235,6 +241,9 @@ export default function MatchDetailPage() {
   const [firstHeroWinMap, setFirstHeroWinMap] = useState<Map<string, number>>(
     new Map(),
   );
+  const [badgeCompletionMap, setBadgeCompletionMap] = useState<
+    Map<string, Badge>
+  >(new Map());
 
   useEffect(() => {
     if (!matchId) return;
@@ -269,6 +278,7 @@ export default function MatchDetailPage() {
         return;
       }
       setFirstHeroWinMap(buildFirstHeroWinMap(data ?? []));
+      setBadgeCompletionMap(buildBadgeCompletionMap(data ?? []));
     };
     loadFirstHeroWins();
   }, []);
@@ -308,6 +318,11 @@ export default function MatchDetailPage() {
         firstHeroWinMap,
         p.player_id,
         p.hero_id,
+        match.match_number,
+      ),
+      badge_earned: getBadgeEarnedInMatch(
+        badgeCompletionMap,
+        p.player_id,
         match.match_number,
       ),
     }));

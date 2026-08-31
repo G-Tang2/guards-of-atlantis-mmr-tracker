@@ -5,7 +5,6 @@
 import type { ComponentType } from "react";
 import { Shield, Swords } from "lucide-react";
 import { BADGES } from "@/lib/badges";
-import { getBadgeCompleteMmrBonus } from "@/lib/heroWinBonus";
 
 export type UpdateDetailItem = {
   label?: string;
@@ -21,6 +20,16 @@ export type UpdateEntry = {
 };
 
 export const UPDATES: UpdateEntry[] = [
+  {
+    date: "Aug 23",
+    title: "Badge MMR Bonus Removed",
+    summary: "Completing a badge is no longer worth extra MMR on top of the usual result.",
+    details: [
+      {
+        text: "The flat MMR bonus for completing a badge (below) has been removed. Badges are still earned and shown on your profile the same way, and the win that completes one still gets the usual first-hero-win 30% boost.",
+      },
+    ],
+  },
   {
     date: "Aug 7",
     title: "Profile Cover Photos",
@@ -47,9 +56,12 @@ export const UPDATES: UpdateEntry[] = [
       {
         text: "Each badge covers a hero pack. Winning at least one match with every hero in a badge earns it, along with a flat MMR bonus on top of the usual result:",
       },
+      // Historical record of the bonus as it stood when this shipped —
+      // hardcoded rather than computed, since the bonus itself was
+      // removed later (see the "Badge MMR Bonus Removed" entry above).
       ...BADGES.map((badge) => ({
         label: badge.name,
-        text: `+${getBadgeCompleteMmrBonus(badge)} MMR (${badge.heroIds.length} heroes)`,
+        text: `+${badge.id === "base" ? 75 : 50} MMR (${badge.heroIds.length} heroes)`,
       })),
       {
         text: "Winning with a hero for the first time also grants a 30% MMR boost on that match's gain.",

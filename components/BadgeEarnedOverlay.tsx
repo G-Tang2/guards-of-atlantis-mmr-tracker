@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Badge } from "@/lib/badges";
-import { getBadgeCompleteMmrBonus } from "@/lib/heroWinBonus";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 export type EarnedBadgeInfo = {
@@ -55,9 +54,6 @@ export function BadgeEarnedOverlay({
           />
           <span>{current.playerName}</span>
         </div>
-        <p className="goa-badge-earned-bonus">
-          +{getBadgeCompleteMmrBonus(current.badge)} MMR
-        </p>
         <button
           className="goa-badge-earned-btn"
           onClick={(e) => {

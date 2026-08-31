@@ -86,6 +86,20 @@ export function TeamPanel({
                   1ST
                 </span>
               )}
+              {p.badge_earned && (
+                <span
+                  className="goa-match-badge-tag"
+                  title={`Earned the ${p.badge_earned.name} badge`}
+                >
+                  <Image
+                    src={p.badge_earned.icon}
+                    alt=""
+                    width={12}
+                    height={12}
+                  />
+                  {p.badge_earned.name}
+                </span>
+              )}
               {showActionTime && p.action_time_seconds != null && (
                 <span className="goa-action-time-badge" title="Action time">
                   <Timer size={10} />

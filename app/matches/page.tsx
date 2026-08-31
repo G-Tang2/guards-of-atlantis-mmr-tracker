@@ -13,7 +13,13 @@ import {
   WinCondition,
 } from "@/lib/match";
 import { ScrollText, Swords } from "lucide-react";
-import { buildFirstHeroWinMap, isFirstHeroWinMatch } from "@/lib/heroWinBonus";
+import {
+  buildFirstHeroWinMap,
+  isFirstHeroWinMatch,
+  buildBadgeCompletionMap,
+  getBadgeEarnedInMatch,
+} from "@/lib/heroWinBonus";
+import { Badge } from "@/lib/badges";
 import {
   Cell,
   Pie,
@@ -198,6 +204,9 @@ export default function MatchHistoryPage() {
   const [firstHeroWinMap, setFirstHeroWinMap] = useState<Map<string, number>>(
     new Map(),
   );
+  const [badgeCompletionMap, setBadgeCompletionMap] = useState<
+    Map<string, Badge>
+  >(new Map());
 
   // Archive-wide win condition breakdown, independent of match pagination —
   // covers every recorded match.
@@ -234,6 +243,7 @@ export default function MatchHistoryPage() {
         return;
       }
       setFirstHeroWinMap(buildFirstHeroWinMap(data ?? []));
+      setBadgeCompletionMap(buildBadgeCompletionMap(data ?? []));
     };
     loadFirstHeroWins();
   }, []);
@@ -354,6 +364,11 @@ export default function MatchHistoryPage() {
                 firstHeroWinMap,
                 p.player_id,
                 p.hero_id,
+                match.match_number,
+              ),
+              badge_earned: getBadgeEarnedInMatch(
+                badgeCompletionMap,
+                p.player_id,
                 match.match_number,
               ),
             }));

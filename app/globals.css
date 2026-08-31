@@ -1455,6 +1455,30 @@
     margin-left: auto;
   }
 
+  /* Badge-completing win — shown on the one match where a player's hero
+     win completed a badge (every hero in it now has a win). */
+  .goa-match-badge-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--gold);
+    border-radius: 999px;
+    background: rgba(201, 151, 58, 0.15);
+    color: var(--gold-light);
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .goa-match-badge-tag img {
+    border-radius: 999px;
+  }
+
   /* Cumulative action-phase time, recorded when a match used the
      /matches/timer clock — same pill treatment as bounty/first-win, in a
      neutral slate tone since it isn't a bonus or achievement. */
@@ -1912,8 +1936,19 @@
     /* .goa-root's own `flex: 1` shorthand sets flex-basis:0, which would
        otherwise make the flex algorithm ignore this height entirely. */
     flex: none;
+    /* svh (small viewport height), not dvh — dvh tracks the mobile
+       browser's toolbar live as it collapses/expands, and this page's own
+       post-load layout effect (measuring how many update posts fit) is
+       enough extra reflow to trigger that collapse right as this height
+       is computed, leaving it based on a viewport size that no longer
+       matches reality — the bottom nav (a separate, always-correctly
+       fixed element) ends up with a gap of this page's own background
+       below it. svh is the smallest possible viewport size and doesn't
+       change with the toolbar, so there's nothing for it to fall out of
+       sync with — worst case there's a little unused space above the
+       nav instead of a broken layout below it. */
     height: calc(
-      100dvh - env(safe-area-inset-top) - 56px - env(safe-area-inset-bottom)
+      100svh - env(safe-area-inset-top) - 56px - env(safe-area-inset-bottom)
     );
     min-height: 0;
   }
@@ -1925,7 +1960,7 @@
   .goa-home-root.updates-expanded {
     height: auto;
     min-height: calc(
-      100dvh - env(safe-area-inset-top) - 56px - env(safe-area-inset-bottom)
+      100svh - env(safe-area-inset-top) - 56px - env(safe-area-inset-bottom)
     );
   }
 

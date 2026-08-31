@@ -1,4 +1,5 @@
 import { HEROES } from "@/lib/heroes";
+import { Badge } from "@/lib/badges";
 
 export type Team = "atlantis" | "titans" | "none";
 
@@ -19,6 +20,7 @@ export type MatchPlayer = {
   is_bounty?: boolean;
   is_first_hero_win?: boolean;
   action_time_seconds?: number | null;
+  badge_earned?: Badge | null;
 };
 
 export enum WinCondition {
