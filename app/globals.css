@@ -6089,21 +6089,25 @@
     padding: 1rem 1rem 0.6rem;
   }
   .goa-vote-live-body {
+    /* No overflow-y here — .goa-vote-live above is the single scroll
+       container for the whole live stage. A second overflow-y:auto here
+       created a nested scroll area that could drift independently of the
+       outer one, leaving a gap where content from this box's own
+       unscrolled top peeked out above the sticky header below. */
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 0.7rem;
     padding: 0.2rem 0.9rem calc(1rem + env(safe-area-inset-bottom));
-    overflow-y: auto;
   }
 
-  /* Sticky within .goa-vote-live-body's own scroll area (not the page) —
-     the dots are the only thing telling the group how voting is going, so
-     they need to stay on-screen even if a big roster pushes the option
-     cards below the fold. Negative margin + its own padding/background
-     bleed it back out to the scroll container's full width and cover
-     whatever scrolls underneath it. */
+  /* Sticky within .goa-vote-live's scroll area — the dots are the only
+     thing telling the group how voting is going, so they need to stay
+     on-screen even if a big roster pushes the option cards below the
+     fold. Negative margin + its own padding/background bleed it back out
+     to the scroll container's full width and cover whatever scrolls
+     underneath it. */
   .goa-vote-ballot-head {
     position: sticky;
     top: 0;

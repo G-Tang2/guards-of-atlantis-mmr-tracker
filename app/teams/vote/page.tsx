@@ -10,7 +10,7 @@ import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
 import { rankedBalancedSplits, Split } from "@/lib/rankedBalance";
 import { Star, Crown, ScrollText, Swords } from "lucide-react";
 
-type Player = { id: string; name: string; avatar_url?: string | null };
+type Player = { id: string; name: string; mmr: number; avatar_url?: string | null };
 type Stage = "ballot" | "tie_reveal" | "results";
 
 type StoredVote = {
@@ -20,6 +20,11 @@ type StoredVote = {
 };
 
 const FACTIONS = ["atlantis", "titans"] as const;
+
+const avg = (players: Player[]) =>
+  players.length === 0
+    ? 0
+    : Math.round(players.reduce((s, p) => s + p.mmr, 0) / players.length);
 
 // Pure, module-level (mirrors shuffle() in app/teams/page.tsx) so the
 // random pick lives outside the component's closures — kept in a plain
@@ -54,15 +59,21 @@ function OptionCard({
       <div className="draft-live-teams">
         {FACTIONS.map((faction) => (
           <div key={faction} className="draft-live-team">
-            <span
-              className={`draft-faction-label ${faction === "atlantis" ? "atl" : "tit"}`}
-            >
-              {faction === "atlantis" ? "Atlantis" : "Titans"}
-            </span>
+            <div className="flex justify-between align-center">
+              <span
+                className={`draft-faction-label ${faction === "atlantis" ? "atl" : "tit"}`}
+              >
+                {faction === "atlantis" ? "Atlantis" : "Titans"}
+              </span>
+              <span className="draft-live-team-avg">
+                AVG MMR: {avg(split[faction])}
+              </span>
+            </div>
             {split[faction].map((p) => (
               <div key={p.id} className="draft-live-row">
                 <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={18} />
                 <span className="draft-live-name">{p.name}</span>
+                <span className="draft-live-mmr sm">{p.mmr} MMR</span>
               </div>
             ))}
           </div>
@@ -122,7 +133,7 @@ function TeamsVotePageInner() {
       }
       supabaseClient
         .from("players")
-        .select("id, name, avatar_url")
+        .select("id, name, mmr, avatar_url")
         .in("id", saved.playerIds)
         .then(({ data, error }) => {
           if (error || !data) {
