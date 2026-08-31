@@ -21,6 +21,7 @@ export type MatchPlayer = {
   is_first_hero_win?: boolean;
   action_time_seconds?: number | null;
   badge_earned?: Badge | null;
+  badges_completed?: Badge[];
 };
 
 export enum WinCondition {

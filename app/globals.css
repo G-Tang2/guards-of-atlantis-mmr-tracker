@@ -126,7 +126,9 @@
   .app-root {
     display: flex;
     flex-direction: column;
-    min-height: 100dvh;
+    /* var(--vvh) — see the note on .goa-home-root below for why this is
+       preferred over a plain dvh unit; svh is the fallback. */
+    min-height: var(--vvh, 100svh);
     padding-top: env(safe-area-inset-top);
     padding-bottom: calc(56px + env(safe-area-inset-bottom));
   }
@@ -899,6 +901,17 @@
     text-overflow: ellipsis;
     max-width: 60%;
     justify-self: center;
+  }
+  /* A player's full badge collection, next to their name (Battle Archive
+     list + leaderboard only — see TeamPanel's showAllBadges). */
+  .goa-player-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+  }
+  .goa-player-badges img {
+    border-radius: 999px;
   }
 
   .goa-profile-player-name {
@@ -1936,19 +1949,21 @@
     /* .goa-root's own `flex: 1` shorthand sets flex-basis:0, which would
        otherwise make the flex algorithm ignore this height entirely. */
     flex: none;
-    /* svh (small viewport height), not dvh — dvh tracks the mobile
-       browser's toolbar live as it collapses/expands, and this page's own
-       post-load layout effect (measuring how many update posts fit) is
-       enough extra reflow to trigger that collapse right as this height
-       is computed, leaving it based on a viewport size that no longer
-       matches reality — the bottom nav (a separate, always-correctly
-       fixed element) ends up with a gap of this page's own background
-       below it. svh is the smallest possible viewport size and doesn't
-       change with the toolbar, so there's nothing for it to fall out of
-       sync with — worst case there's a little unused space above the
-       nav instead of a broken layout below it. */
+    /* var(--vvh) — set live in AppRoot.tsx from window.visualViewport,
+       the browser's own authoritative "how tall is the visible viewport
+       right now" figure — in preference to a plain CSS viewport unit.
+       This page's own post-load layout effect (measuring how many
+       update posts fit) is enough extra reflow to trigger the mobile
+       browser chrome settling mid-calculation, especially noticeable
+       when launched from an iOS home-screen shortcut rather than a
+       normal tab (Chrome's home-screen shortcuts aren't a true
+       standalone launch the way Safari's are, so this can happen even
+       there) — a CSS dvh/svh unit can't always track that reliably, but
+       visualViewport can. svh is still the fallback for the brief moment
+       before that JS runs (or if it's unavailable at all). */
     height: calc(
-      100svh - env(safe-area-inset-top) - 56px - env(safe-area-inset-bottom)
+      var(--vvh, 100svh) - env(safe-area-inset-top) - 56px -
+        env(safe-area-inset-bottom)
     );
     min-height: 0;
   }
@@ -1960,7 +1975,8 @@
   .goa-home-root.updates-expanded {
     height: auto;
     min-height: calc(
-      100svh - env(safe-area-inset-top) - 56px - env(safe-area-inset-bottom)
+      var(--vvh, 100svh) - env(safe-area-inset-top) - 56px -
+        env(safe-area-inset-bottom)
     );
   }
 
@@ -5636,8 +5652,14 @@
     flex: none;
     /* No -56px here — BottomNav is hidden on this page (see
        components/BottomNav.tsx) and .app-root.no-bottom-nav drops the
-       padding that would otherwise reserve its space. */
-    height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+       padding that would otherwise reserve its space. var(--vvh) — see
+       the note on .goa-home-root for why this is preferred over a plain
+       dvh unit; svh is the fallback. overflow-y: auto below is also a
+       safety net in case this still runs short on some device/launch
+       path this wasn't tested against. */
+    height: calc(
+      var(--vvh, 100svh) - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    );
     min-height: 0;
     overflow-y: auto;
   }

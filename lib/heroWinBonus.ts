@@ -111,6 +111,48 @@ export function getBadgeEarnedInMatch(
   return map.get(`${playerId}::${matchNumber}`) ?? null;
 }
 
+// The badges a player has fully completed, given every hero they've ever
+// won at least one match with — order-independent, unlike
+// buildBadgeCompletionMap above (which needs to replay chronologically to
+// find the one specific match that completed each badge).
+export function getCompletedBadges(wonHeroIds: Set<string>): Badge[] {
+  return BADGES.filter((badge) =>
+    badge.heroIds.every((id) => wonHeroIds.has(id)),
+  );
+}
+
+// Maps playerId -> every hero they've won at least one match with, across
+// their full history.
+export function buildWonHeroesByPlayer(
+  rows: FirstHeroWinRow[],
+): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  rows.forEach((row) => {
+    const matchInfo = Array.isArray(row.matches) ? row.matches[0] : row.matches;
+    if (!matchInfo || !row.hero_id) return;
+    if (!didWin(row.team, matchInfo.winner)) return;
+    const set = map.get(row.player_id) ?? new Set<string>();
+    set.add(row.hero_id);
+    map.set(row.player_id, set);
+  });
+  return map;
+}
+
+// Maps playerId -> the badges they've fully completed, across their full
+// history (not scoped to any one match — see buildBadgeCompletionMap for
+// that instead).
+export function buildCompletedBadgesMap(
+  rows: FirstHeroWinRow[],
+): Map<string, Badge[]> {
+  const wonHeroesByPlayer = buildWonHeroesByPlayer(rows);
+  const map = new Map<string, Badge[]>();
+  wonHeroesByPlayer.forEach((wonHeroIds, playerId) => {
+    const completed = getCompletedBadges(wonHeroIds);
+    if (completed.length > 0) map.set(playerId, completed);
+  });
+  return map;
+}
+
 // Completing a badge no longer carries its own MMR bonus — a
 // badge-completing win still gets the ordinary first-win 30% boost above,
 // same as any other first win, it just also triggers the badge-earned

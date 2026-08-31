@@ -18,6 +18,7 @@ import {
   isFirstHeroWinMatch,
   buildBadgeCompletionMap,
   getBadgeEarnedInMatch,
+  buildCompletedBadgesMap,
 } from "@/lib/heroWinBonus";
 import { Badge } from "@/lib/badges";
 import {
@@ -207,6 +208,9 @@ export default function MatchHistoryPage() {
   const [badgeCompletionMap, setBadgeCompletionMap] = useState<
     Map<string, Badge>
   >(new Map());
+  const [completedBadgesMap, setCompletedBadgesMap] = useState<
+    Map<string, Badge[]>
+  >(new Map());
 
   // Archive-wide win condition breakdown, independent of match pagination —
   // covers every recorded match.
@@ -244,6 +248,7 @@ export default function MatchHistoryPage() {
       }
       setFirstHeroWinMap(buildFirstHeroWinMap(data ?? []));
       setBadgeCompletionMap(buildBadgeCompletionMap(data ?? []));
+      setCompletedBadgesMap(buildCompletedBadgesMap(data ?? []));
     };
     loadFirstHeroWins();
   }, []);
@@ -371,6 +376,7 @@ export default function MatchHistoryPage() {
                 p.player_id,
                 match.match_number,
               ),
+              badges_completed: completedBadgesMap.get(p.player_id) ?? [],
             }));
           const atlantis = withFirstWinFlag(
             match.match_players.filter((p) => p.team === "atlantis"),
@@ -409,6 +415,7 @@ export default function MatchHistoryPage() {
                   players={atlantis}
                   avgMmr={match.atlantis_avg_mmr}
                   onSelectPlayer={goToProfile}
+                  showAllBadges
                 />
                 <TeamPanel
                   label="Titans"
@@ -416,6 +423,7 @@ export default function MatchHistoryPage() {
                   players={titans}
                   avgMmr={match.titans_avg_mmr}
                   onSelectPlayer={goToProfile}
+                  showAllBadges
                 />
               </div>
             </div>

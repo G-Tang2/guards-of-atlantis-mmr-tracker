@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { didWin } from "@/lib/match";
+import { getCompletedBadges } from "@/lib/heroWinBonus";
+import { Badge } from "@/lib/badges";
 import { Trophy, Medal, Shield, Swords } from "lucide-react";
 
 type Player = {
@@ -37,6 +40,7 @@ type Match = {
   match_players: {
     player_id: string;
     team: "atlantis" | "titans";
+    hero_id: string | null;
   }[];
 };
 
@@ -51,6 +55,7 @@ type PlayerStats = {
   matches: number;
   winRate: number;
   last_played_match_number: number;
+  badges: Badge[];
 };
 
 type SortKey = "rank" | "name" | "mmr" | "winRate" | "wl" | "matches";
@@ -80,7 +85,9 @@ export default function LeaderboardPage() {
           .select("id, name, mmr, rank, avatar_url, last_played_match_number"),
         supabaseClient
           .from("matches")
-          .select("id, match_number, winner, match_players ( player_id, team )")
+          .select(
+            "id, match_number, winner, match_players ( player_id, team, hero_id )",
+          )
           .order("created_at", { ascending: false }),
         supabaseClient
           .from("matches")
@@ -102,7 +109,7 @@ export default function LeaderboardPage() {
   const leaderboard: PlayerStats[] = useMemo(() => {
     const statsMap = new Map<
       string,
-      { wins: number; losses: number; matches: number }
+      { wins: number; losses: number; matches: number; wonHeroIds: Set<string> }
     >();
 
     matches.forEach((match) => {
@@ -111,10 +118,12 @@ export default function LeaderboardPage() {
           wins: 0,
           losses: 0,
           matches: 0,
+          wonHeroIds: new Set<string>(),
         };
         stats.matches++;
         if (didWin(mp.team, match.winner)) {
           stats.wins++;
+          if (mp.hero_id) stats.wonHeroIds.add(mp.hero_id);
         } else {
           stats.losses++;
         }
@@ -127,6 +136,7 @@ export default function LeaderboardPage() {
         wins: 0,
         losses: 0,
         matches: 0,
+        wonHeroIds: new Set<string>(),
       };
       return {
         id: player.id,
@@ -139,6 +149,7 @@ export default function LeaderboardPage() {
         losses: stats.losses,
         matches: stats.matches,
         winRate: stats.matches === 0 ? 0 : (stats.wins / stats.matches) * 100,
+        badges: getCompletedBadges(stats.wonHeroIds),
       };
     });
   }, [players, matches]);
@@ -503,6 +514,20 @@ export default function LeaderboardPage() {
                   size={26}
                 />
                 {p.name}
+                {p.badges.length > 0 && (
+                  <span className="goa-player-badges">
+                    {p.badges.map((b) => (
+                      <Image
+                        key={b.id}
+                        src={b.icon}
+                        alt={b.name}
+                        title={b.name}
+                        width={14}
+                        height={14}
+                      />
+                    ))}
+                  </span>
+                )}
                 <span className="goa-name-arrow">›</span>
               </span>
               <span className="goa-cell-mmr">{p.mmr}</span>

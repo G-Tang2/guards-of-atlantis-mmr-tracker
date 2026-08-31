@@ -15,6 +15,11 @@ type TeamPanelProps = {
   // Battle Archive list is a scan of many matches at once, where it's
   // just noise.
   showActionTime?: boolean;
+  // A player's full badge collection (not scoped to this one match) —
+  // shown next to their name on the Battle Archive list and leaderboard,
+  // not the match detail page (which already shows the specific badge
+  // this match earned them, if any, next to their hero pick).
+  showAllBadges?: boolean;
 };
 
 export function TeamPanel({
@@ -24,6 +29,7 @@ export function TeamPanel({
   avgMmr,
   onSelectPlayer,
   showActionTime = false,
+  showAllBadges = false,
 }: TeamPanelProps) {
   return (
     <div className="goa-team">
@@ -49,6 +55,20 @@ export function TeamPanel({
                   size={32}
                 />
                 {p.players.name}
+                {showAllBadges && p.badges_completed && p.badges_completed.length > 0 && (
+                  <span className="goa-player-badges">
+                    {p.badges_completed.map((b) => (
+                      <Image
+                        key={b.id}
+                        src={b.icon}
+                        alt={b.name}
+                        title={b.name}
+                        width={14}
+                        height={14}
+                      />
+                    ))}
+                  </span>
+                )}
               </span>
               <span className="goa-mmr-change">
                 {p.mmr_before} → {p.mmr_after}
