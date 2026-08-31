@@ -10,7 +10,8 @@ import { usePathname } from "next/navigation";
 // sitting empty.
 export function AppRoot({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const noBottomNav = pathname.startsWith("/matches/timer");
+  const noBottomNav =
+    pathname.startsWith("/matches/timer") || pathname.startsWith("/teams/vote");
 
   // Any full-viewport-height layout on this app (the home page, the
   // running battle timer) uses --vvh in preference to a plain dvh/svh CSS

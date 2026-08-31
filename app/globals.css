@@ -5316,11 +5316,18 @@
   }
   .ranked-option-head {
     display: flex;
+    justify-content: space-between;
+    align-items: center;
     font-family: "Cinzel", serif;
     font-size: 0.68rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--gold-light);
+  }
+  .ranked-option.winner {
+    border-color: var(--gold-light);
+    background: rgba(201, 151, 58, 0.06);
+    box-shadow: 0 0 20px rgba(201, 151, 58, 0.4);
   }
 
   .draft-live-teams {
@@ -6061,6 +6068,210 @@
     .goa-timer-page .goa-timer-control-btn {
       font-size: clamp(0.85rem, 1.5vw, 1.25rem);
       padding: clamp(0.7rem, 1.4vw, 1.1rem) clamp(1.1rem, 2.5vw, 1.8rem);
+    }
+  }
+
+  /* ── Ranked Balance Vote (/teams/vote) ── */
+  /* Fixed-height "fill the screen" variant for the ballot/pass stages —
+     the device is handed hand-to-hand between voters during these, same
+     rationale as .goa-timer-live. Uses --vvh (see AppRoot.tsx) rather than
+     a raw dvh/svh unit for the same iOS-viewport reasons documented there. */
+  .goa-vote-live {
+    flex: none;
+    height: calc(
+      var(--vvh, 100svh) - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    );
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .goa-vote-live .goa-header {
+    flex-shrink: 0;
+    padding: 1rem 1rem 0.6rem;
+  }
+  .goa-vote-live-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    padding: 0.2rem 0.9rem calc(1rem + env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  .goa-vote-ballot-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .goa-vote-ballot-title {
+    font-family: "Cinzel", serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+  }
+
+  .goa-vote-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .vote-option-card {
+    background: rgba(28, 26, 20, 0.4);
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s,
+      background 0.15s;
+  }
+  .vote-option-card:hover {
+    border-color: rgba(201, 151, 58, 0.45);
+  }
+  .vote-option-card.selected {
+    border-color: var(--gold-light);
+    background: rgba(201, 151, 58, 0.08);
+    box-shadow: 0 0 16px rgba(201, 151, 58, 0.35);
+  }
+
+  .vote-results-count {
+    margin-left: auto;
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.03em;
+    text-transform: none;
+    color: var(--muted);
+  }
+
+  .vote-continue-now {
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: "Cinzel", serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .vote-pass-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    text-align: center;
+    padding: 2rem 1rem;
+  }
+  .vote-pass-icon {
+    color: var(--gold-light);
+    filter: drop-shadow(0 0 12px rgba(201, 151, 58, 0.4));
+  }
+  .vote-pass-title {
+    font-family: "Cinzel", serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+  }
+
+  .vote-tie-scene {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2rem 1rem;
+  }
+  .vote-tie-options {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 720px;
+  }
+  .vote-tie-option {
+    flex: 1 1 200px;
+    max-width: 260px;
+    transition:
+      border-color 0.3s,
+      box-shadow 0.3s,
+      opacity 0.3s,
+      filter 0.3s,
+      transform 0.3s;
+  }
+  .vote-tie-option.active {
+    border-color: var(--gold-light);
+    box-shadow: 0 0 20px rgba(201, 151, 58, 0.5);
+    transform: scale(1.04);
+  }
+  .vote-tie-option.winner {
+    border-color: var(--gold-light);
+    box-shadow:
+      0 0 28px rgba(201, 151, 58, 0.65),
+      0 0 8px rgba(201, 151, 58, 0.4);
+    animation: winnerPulse 0.65s ease forwards;
+  }
+  .vote-tie-option.loser {
+    opacity: 0.35;
+    filter: grayscale(0.85);
+  }
+
+  /* ── iPad+ scale-up (/teams/vote only, via .goa-vote-page) ── same
+     rationale as .goa-timer-page above: several base classes re-tuned here
+     (.goa-card, .goa-btn, .ranked-option) are shared with /teams, so this
+     stays scoped rather than resizing that page's UI too. */
+  @media (min-width: 744px) {
+    .goa-vote-page .goa-crown {
+      font-size: 2.4rem;
+    }
+    .goa-vote-page .goa-title {
+      font-size: 1.9rem;
+    }
+    .goa-vote-page .goa-subtitle {
+      font-size: 1.2rem;
+    }
+    .goa-vote-page.goa-vote-live .goa-header {
+      padding: 1.2rem 1.2rem 0.7rem;
+    }
+    .goa-vote-page .goa-card-head {
+      padding: 0.75rem 1.1rem;
+      font-size: 0.9rem;
+    }
+    .goa-vote-page .goa-vote-ballot-title {
+      font-size: 1.05rem;
+    }
+    .goa-vote-page .goa-card-count {
+      font-size: 0.75rem;
+    }
+    .goa-vote-page .goa-btn-wrap {
+      padding: 1.4rem;
+    }
+    .goa-vote-page .goa-btn {
+      font-size: 1.3rem;
+      padding: 1.3rem;
+    }
+    .goa-vote-page .ranked-option-head {
+      font-size: 0.85rem;
+    }
+    .goa-vote-page .draft-live-name {
+      font-size: 1.15rem;
+    }
+    .goa-vote-page .vote-pass-title {
+      font-size: 1.4rem;
+    }
+    .goa-vote-page .draft-coin-label {
+      font-size: 0.9rem;
     }
   }
 }

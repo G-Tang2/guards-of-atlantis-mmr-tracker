@@ -8,6 +8,7 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { DraftMethod } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
+import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
 import { Swords, Crown, Dices, Scale, GripVertical, Timer, Star } from "lucide-react";
 import {
   DndContext,
@@ -73,73 +74,6 @@ const randomSplit = (pool: Player[]): Split => {
   const shuffled = shuffle(pool);
   const mid = Math.ceil(shuffled.length / 2);
   return { atlantis: shuffled.slice(0, mid), titans: shuffled.slice(mid) };
-};
-
-// Hand-assigned skill scores for a small pool of known players (out of a
-// possible 10), rather than anything derived from recorded match MMR.
-// Anyone not listed here ranks last, at 0.
-const SKILL_RANK_POINTS: Record<string, number> = {
-  xi: 10,
-  keith: 9,
-  adrian: 9,
-  garvin: 8.5,
-  harry: 8.5,
-  eddy: 7.5,
-  han: 6.5,
-  tu: 6.5,
-  bao: 6.5,
-  amy: 6,
-  sam: 4,
-  dave: 4,
-  jenny: 3,
-  stella: 2,
-};
-
-const skillPointsOf = (p: Player) =>
-  SKILL_RANK_POINTS[p.name.toLowerCase()] ?? 0;
-
-// The `count` most-balanced Atlantis/Titans splits by total skill points
-// (lowest point difference first). Unlike balancedSplit (which just wants
-// the single best MMR split), this hands back several near-optimal options
-// since which specific players end up together can vary a lot between
-// splits that are otherwise equally balanced on paper — worth letting the
-// controller pick rather than always taking the first one found.
-//
-// Enumerates all 2^n subsets (fine for the small rosters this splitter
-// handles) and folds each partition's Atlantis/Titans-swapped mirror into a
-// single candidate by fixing pool[0] to always land on the "titans" side —
-// since a mask and its bitwise complement always have the same point
-// difference, this loses no candidates while halving the work.
-const rankedBalancedSplits = (pool: Player[], count: number): Split[] => {
-  const n = pool.length;
-  const weights = pool.map(skillPointsOf);
-  const total = weights.reduce((s, w) => s + w, 0);
-  const candidates: { mask: number; diff: number }[] = [];
-
-  for (let mask = 0; mask < 1 << n; mask++) {
-    if (mask & 1) continue;
-    let sizeA = 0;
-    let weightA = 0;
-    for (let i = 0; i < n; i++) {
-      if (mask & (1 << i)) {
-        sizeA++;
-        weightA += weights[i];
-      }
-    }
-    if (Math.abs(sizeA - (n - sizeA)) > 1) continue;
-    candidates.push({ mask, diff: Math.abs(weightA - (total - weightA)) });
-  }
-
-  candidates.sort((a, b) => a.diff - b.diff);
-
-  return candidates.slice(0, count).map(({ mask }) => {
-    const atlantis: Player[] = [];
-    const titans: Player[] = [];
-    for (let i = 0; i < n; i++) {
-      (mask & (1 << i) ? atlantis : titans).push(pool[i]);
-    }
-    return { atlantis, titans };
-  });
 };
 
 const balancedSplit = (pool: Player[]): Split => {
@@ -311,12 +245,6 @@ export default function TeamSplitterPage() {
   const [draftOpen, setDraftOpen] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [coinWinner, setCoinWinner] = useState<"atlantis" | "titans" | null>(null);
-
-  // Ranked Balance picker: the 3 candidate splits offered after tapping the
-  // button, or null when the picker is closed.
-  const [rankedSplitOptions, setRankedSplitOptions] = useState<Split[] | null>(
-    null,
-  );
 
   // Drag-and-drop: require a small movement before a drag starts, so it
   // doesn't hijack a plain tap/scroll on the rows.
@@ -491,15 +419,14 @@ export default function TeamSplitterPage() {
     setAssemblyMethod("balanced");
   };
 
-  const handleRankedBalance = () => {
-    setRankedSplitOptions(rankedBalancedSplits(allAdded, 3));
+  const goToRankedVote = () => {
+    persistDraft();
+    sessionStorage.setItem(
+      RANKED_VOTE_STORAGE_KEY,
+      JSON.stringify({ playerIds: allAdded.map((p) => p.id) }),
+    );
+    router.push("/teams/vote");
   };
-  const chooseRankedSplit = (split: Split) => {
-    setColumns({ pool: [], atlantis: split.atlantis, titans: split.titans });
-    setAssemblyMethod("ranked_balanced");
-    setRankedSplitOptions(null);
-  };
-  const closeRankedSplitPicker = () => setRankedSplitOptions(null);
 
   const teamsReady = columns.atlantis.length > 0 && columns.titans.length > 0;
   const canBattle = teamsReady && waveCounter !== "" && lifeCounter !== "";
@@ -765,7 +692,7 @@ export default function TeamSplitterPage() {
           </button>
           <button
             className="goa-split-btn ranked"
-            onClick={handleRankedBalance}
+            onClick={goToRankedVote}
             disabled={!canSplit}
           >
             <span className="goa-split-icon">
@@ -957,75 +884,6 @@ export default function TeamSplitterPage() {
                   No, Skip to Record of Battle
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════ RANKED BALANCE PICKER ══════════════ */}
-      {rankedSplitOptions && (
-        <div
-          className="draft-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeRankedSplitPicker();
-          }}
-        >
-          <div className="draft-sheet">
-            <div className="draft-head">
-              <span className="draft-head-title inline-flex items-center gap-1.5">
-                <Star size={16} />
-                Ranked Balance
-              </span>
-              <button className="draft-close" onClick={closeRankedSplitPicker}>
-                ✕
-              </button>
-            </div>
-            <div className="draft-body">
-              <p className="draft-note">
-                The most balanced splits by hand-ranked skill — pick one.
-              </p>
-
-              {rankedSplitOptions.map((split, i) => {
-                return (
-                  <div key={i} className="ranked-option">
-                    <div className="ranked-option-head">
-                      <span>Option {i + 1}</span>
-                    </div>
-                    <div className="draft-live-teams">
-                      {(["atlantis", "titans"] as const).map((faction) => {
-                        const members = split[faction];
-                        return (
-                          <div key={faction} className="draft-live-team">
-                            <div className="flex justify-between align-center">
-                              <span
-                                className={`draft-faction-label ${faction === "atlantis" ? "atl" : "tit"}`}
-                              >
-                                {faction === "atlantis" ? "Atlantis" : "Titans"}
-                              </span>
-                            </div>
-                            {members.map((p) => (
-                              <div key={p.id} className="draft-live-row">
-                                <PlayerAvatar
-                                  avatarUrl={p.avatar_url}
-                                  name={p.name}
-                                  size={20}
-                                />
-                                <span className="draft-live-name">{p.name}</span>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <button
-                      className="draft-start-btn"
-                      onClick={() => chooseRankedSplit(split)}
-                    >
-                      ✓ Use This Split
-                    </button>
-                  </div>
-                );
-              })}
             </div>
           </div>
         </div>

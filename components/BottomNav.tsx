@@ -53,10 +53,11 @@ const TABS = [
 export function BottomNav() {
   const pathname = usePathname();
 
-  // Hidden on the timer page — a stray tap here mid-game would navigate
-  // away, and it's easy to bump on a phone or tablet passed around a
-  // table or propped up during play.
-  if (pathname.startsWith("/matches/timer")) return null;
+  // Hidden on the timer and ranked-balance vote pages — a stray tap here
+  // mid-game/mid-vote would navigate away, and it's easy to bump on a
+  // phone or tablet passed around a table or propped up during play.
+  if (pathname.startsWith("/matches/timer") || pathname.startsWith("/teams/vote"))
+    return null;
 
   return (
     <nav className="goa-bottom-nav">
