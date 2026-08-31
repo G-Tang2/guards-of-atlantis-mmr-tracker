@@ -8,10 +8,10 @@ import { PasswordGate } from "@/components/PasswordGate";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
 import { rankedBalancedSplits, Split } from "@/lib/rankedBalance";
-import { Star, Swords, CheckCircle2, Crown, ScrollText } from "lucide-react";
+import { Star, Crown, ScrollText } from "lucide-react";
 
 type Player = { id: string; name: string; avatar_url?: string | null };
-type Stage = "intro" | "ballot" | "pass" | "tie_reveal" | "results";
+type Stage = "ballot" | "tie_reveal" | "results";
 
 type StoredVote = {
   playerIds: string[];
@@ -20,6 +20,17 @@ type StoredVote = {
 };
 
 const FACTIONS = ["atlantis", "titans"] as const;
+
+// Pure, module-level (mirrors shuffle() in app/teams/page.tsx) so the
+// random pick lives outside the component's closures — kept in a plain
+// function called from an event handler rather than nested inside one.
+function buildTieBreak(tied: number[]) {
+  const winner = tied[Math.floor(Math.random() * tied.length)];
+  const steps = 14;
+  const sequence = Array.from({ length: steps }, (_, i) => tied[i % tied.length]);
+  sequence[steps - 1] = winner;
+  return { winner, sequence };
+}
 
 function OptionCard({
   index,
@@ -70,6 +81,19 @@ function OptionCard({
   );
 }
 
+// Empty dots for players who haven't voted yet, filled/green for those who
+// have — the only signal shown during voting, so nobody's specific pick
+// leaks before every player has gone.
+function VoteDots({ total, cast }: { total: number; cast: number }) {
+  return (
+    <div className="goa-vote-dots" aria-label={`${cast} of ${total} voted`}>
+      {Array.from({ length: total }, (_, i) => (
+        <span key={i} className={`goa-vote-dot${i < cast ? " voted" : ""}`} />
+      ))}
+    </div>
+  );
+}
+
 function TeamsVotePageInner() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -77,10 +101,9 @@ function TeamsVotePageInner() {
   const [splits, setSplits] = useState<Split<Player>[]>([]);
   const [skippedVoting, setSkippedVoting] = useState(false);
 
-  const [stage, setStage] = useState<Stage>("intro");
+  const [stage, setStage] = useState<Stage>("ballot");
   const [votes, setVotes] = useState<number[]>([]);
   const [votesCast, setVotesCast] = useState(0);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
   const [tieCandidates, setTieCandidates] = useState<number[]>([]);
   const [tieActiveIndex, setTieActiveIndex] = useState<number | null>(null);
@@ -126,18 +149,14 @@ function TeamsVotePageInner() {
             setVotes([saved.playerIds.length]);
             setWinnerIndex(0);
             setStage("results");
-          } else if (
-            saved.votes &&
-            saved.votes.length === computedSplits.length &&
-            saved.votesCast != null &&
-            saved.votesCast > 0
-          ) {
-            setVotes(saved.votes);
-            setVotesCast(saved.votesCast);
-            setStage("pass");
           } else {
-            setVotes(new Array(computedSplits.length).fill(0));
-            setStage("intro");
+            // Resume an in-progress tally (e.g. after an accidental
+            // refresh) instead of restarting voting from zero.
+            const resumable =
+              saved.votes && saved.votes.length === computedSplits.length;
+            setVotes(resumable ? saved.votes! : new Array(computedSplits.length).fill(0));
+            setVotesCast(resumable ? (saved.votesCast ?? 0) : 0);
+            setStage("ballot");
           }
           setLoading(false);
         });
@@ -157,10 +176,7 @@ function TeamsVotePageInner() {
     setTieCandidates(tied);
     setStage("tie_reveal");
 
-    const finalWinner = tied[Math.floor(Math.random() * tied.length)];
-    const steps = 14;
-    const sequence = Array.from({ length: steps }, (_, i) => tied[i % tied.length]);
-    sequence[steps - 1] = finalWinner;
+    const { winner: finalWinner, sequence } = buildTieBreak(tied);
 
     let delay = 90;
     let cumulative = 0;
@@ -192,19 +208,17 @@ function TeamsVotePageInner() {
     }
   };
 
-  const confirmVote = () => {
-    if (selectedIndex === null) return;
-    const nextVotes = votes.map((v, i) => (i === selectedIndex ? v + 1 : v));
+  // A tap commits immediately — no separate confirm step and no
+  // "vote recorded, pass the device" interstitial between voters.
+  const castVote = (index: number) => {
+    const nextVotes = votes.map((v, i) => (i === index ? v + 1 : v));
     const nextVotesCast = votesCast + 1;
     setVotes(nextVotes);
     setVotesCast(nextVotesCast);
-    setSelectedIndex(null);
     persistProgress(nextVotes, nextVotesCast);
 
     if (nextVotesCast >= playerIds.length) {
       settleTally(nextVotes);
-    } else {
-      setStage("pass");
     }
   };
 
@@ -255,7 +269,7 @@ function TeamsVotePageInner() {
     );
   }
 
-  const isLiveStage = stage === "ballot" || stage === "pass";
+  const isLiveStage = stage === "ballot";
 
   return (
     <main
@@ -269,83 +283,26 @@ function TeamsVotePageInner() {
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
 
-      {stage === "intro" && (
-        <div className="goa-card">
-          <div className="goa-card-head">Anonymous Vote</div>
-          <div className="draft-body">
-            <p className="draft-note" style={{ textAlign: "left" }}>
-              {playerIds.length} players will vote anonymously for their
-              preferred split. Pass the device to each player when prompted
-              — only the number of votes cast is shown until everyone has
-              voted.
-            </p>
-            <div className="goa-btn-wrap" style={{ margin: 0 }}>
-              <button
-                className="goa-btn inline-flex items-center justify-center gap-2"
-                onClick={() => setStage("ballot")}
-              >
-                <Star size={18} />
-                Begin Voting
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isLiveStage && (
+      {stage === "ballot" && (
         <div className="goa-vote-live-body">
-          {stage === "ballot" && (
-            <>
-              <div className="goa-vote-ballot-head">
-                <span className="goa-vote-ballot-title">Cast Your Vote</span>
-                <span className="goa-card-count">
-                  Vote {votesCast + 1} of {playerIds.length}
-                </span>
-              </div>
-              <p className="draft-note">
-                Tap an option, then confirm to cast your vote.
-              </p>
-              <div className="goa-vote-options">
-                {splits.map((split, i) => (
-                  <OptionCard
-                    key={i}
-                    index={i}
-                    split={split}
-                    className={`ranked-option vote-option-card${selectedIndex === i ? " selected" : ""}`}
-                    onClick={() => setSelectedIndex(i)}
-                  />
-                ))}
-              </div>
-              {selectedIndex !== null && (
-                <div className="goa-btn-wrap">
-                  <button
-                    className="goa-btn inline-flex items-center justify-center gap-2"
-                    onClick={confirmVote}
-                  >
-                    <CheckCircle2 size={18} />
-                    Confirm &amp; Pass Device
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-          {stage === "pass" && (
-            <div className="vote-pass-screen">
-              <CheckCircle2 size={40} className="vote-pass-icon" />
-              <p className="vote-pass-title">Vote Recorded</p>
-              <p className="draft-note">Pass the device to the next player.</p>
-              <div className="goa-btn-wrap">
-                <button
-                  className="goa-btn inline-flex items-center justify-center gap-2"
-                  onClick={() => setStage("ballot")}
-                >
-                  <Swords size={18} />
-                  Ready — Show Ballot
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="goa-vote-ballot-head">
+            <span className="goa-vote-ballot-title">Cast Your Vote</span>
+            <VoteDots total={playerIds.length} cast={votesCast} />
+          </div>
+          <p className="draft-note">
+            Tap an option to cast your vote, then pass the device on.
+          </p>
+          <div className="goa-vote-options">
+            {splits.map((split, i) => (
+              <OptionCard
+                key={i}
+                index={i}
+                split={split}
+                className="ranked-option vote-option-card"
+                onClick={() => castVote(i)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
