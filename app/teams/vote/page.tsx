@@ -8,7 +8,7 @@ import { PasswordGate } from "@/components/PasswordGate";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
 import { rankedBalancedSplits, Split } from "@/lib/rankedBalance";
-import { Star, Crown, ScrollText } from "lucide-react";
+import { Star, Crown, ScrollText, Swords } from "lucide-react";
 
 type Player = { id: string; name: string; avatar_url?: string | null };
 type Stage = "ballot" | "tie_reveal" | "results";
@@ -107,7 +107,6 @@ function TeamsVotePageInner() {
   const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
   const [tieCandidates, setTieCandidates] = useState<number[]>([]);
   const [tieActiveIndex, setTieActiveIndex] = useState<number | null>(null);
-  const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
     const raw = sessionStorage.getItem(RANKED_VOTE_STORAGE_KEY);
@@ -241,21 +240,6 @@ function TeamsVotePageInner() {
     router.replace("/teams");
   };
 
-  // Auto-return once a winner has settled — the primary path is automatic;
-  // "Continue Now" (below) just skips the wait for an impatient controller.
-  useEffect(() => {
-    if (stage !== "results" || winnerIndex === null) return;
-    const t1 = setTimeout(() => setCountdown(2), 1000);
-    const t2 = setTimeout(() => setCountdown(1), 2000);
-    const t3 = setTimeout(() => finish(), 3000);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, winnerIndex]);
-
   if (loading) {
     return (
       <div className="goa-root goa-vote-page goa-loading-screen">
@@ -357,12 +341,15 @@ function TeamsVotePageInner() {
                 />
               ))}
             </div>
-            <p className="draft-note">
-              Returning to Divide the Host in {countdown}…{" "}
-              <button className="vote-continue-now" onClick={finish}>
-                Continue Now
+            <div className="goa-btn-wrap" style={{ margin: 0 }}>
+              <button
+                className="goa-btn inline-flex items-center justify-center gap-2"
+                onClick={finish}
+              >
+                <Swords size={18} />
+                Continue to Divide the Host
               </button>
-            </p>
+            </div>
           </div>
         </div>
       )}

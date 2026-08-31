@@ -6098,10 +6098,23 @@
     overflow-y: auto;
   }
 
+  /* Sticky within .goa-vote-live-body's own scroll area (not the page) —
+     the dots are the only thing telling the group how voting is going, so
+     they need to stay on-screen even if a big roster pushes the option
+     cards below the fold. Negative margin + its own padding/background
+     bleed it back out to the scroll container's full width and cover
+     whatever scrolls underneath it. */
   .goa-vote-ballot-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin: -0.2rem -0.9rem 0;
+    padding: 0.6rem 0.9rem 0.5rem;
+    background: var(--stone);
+    border-bottom: 1px solid var(--border);
   }
   .goa-vote-ballot-title {
     font-family: "Cinzel", serif;
@@ -6167,19 +6180,6 @@
     letter-spacing: 0.03em;
     text-transform: none;
     color: var(--muted);
-  }
-
-  .vote-continue-now {
-    background: none;
-    border: none;
-    padding: 0;
-    font-family: "Cinzel", serif;
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--gold-light);
-    text-decoration: underline;
-    cursor: pointer;
   }
 
   .vote-tie-scene {
