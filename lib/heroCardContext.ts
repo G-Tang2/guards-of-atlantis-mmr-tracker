@@ -218,7 +218,17 @@ const STRATEGY_INTENT_PATTERNS = [
 export function wantsHeroCardContext(question: string): boolean {
   if (isCardDetailQuestion(question)) return true;
   const lower = question.toLowerCase();
-  return STRATEGY_INTENT_PATTERNS.some((re) => re.test(lower));
+  if (STRATEGY_INTENT_PATTERNS.some((re) => re.test(lower))) return true;
+  // If the question names a specific hero (or a distinctive term unique
+  // to their kit, e.g. "bounty" for Bain, "Pyro" for Widget) at all, get
+  // their card data — a hero-specific question almost always benefits
+  // from their real card text as grounding regardless of how it's
+  // phrased ("does Bain's bounty token go away if he dies" never says
+  // "card"/"tips"/"strategy", but is squarely about his kit). Missing
+  // this previously left the model with only Discord/rulebook text and
+  // no way to cross-check a specific hero mechanic, so it defaulted to
+  // "I don't have that data" even when Discord actually answered it.
+  return getRelevantHeroIds(question).length > 0;
 }
 
 // Scans a model reply for real card names and returns their exact data
