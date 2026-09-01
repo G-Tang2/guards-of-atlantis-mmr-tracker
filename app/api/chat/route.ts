@@ -83,10 +83,14 @@ export async function POST(request: Request) {
     const systemInstruction = `You are a helpful assistant for the Guards of Atlantis II board game group.${priorityInstruction} For rules questions specifically: only state a rule, exception, or restriction if it is explicitly written in the rulebook or card text below — do not infer, speculate, or invent an exception based on theme, flavor text, "spirit of the rules", or assumed community consensus. If a general rule (e.g. what a Clear/Attack/Skill action can target) doesn't list an exception for a specific case, the general rule applies as written, even if the specific case sounds narratively special. If something isn't covered by the data below, say so honestly rather than making it up. You do not have access to the group's match history, player stats/MMR, or hero pick/win rates — if asked about those, say so rather than guessing.\n\n${sections.join("\n\n")}`;
 
     const reply = await generateChatReply({ systemInstruction, history, message });
-    const cardReferences = wantsDetail
+    // Computed whenever card context was sent at all (not just wantsDetail)
+    // so a strategy reply's card mentions are still tappable in the UI for
+    // an on-demand detail popout, even though they don't auto-render as
+    // visible blocks — see showCardDetails below for that distinction.
+    const cardReferences = wantsContext
       ? findMentionedCards(reply, relevantHeroIds, askedColors)
       : [];
-    return Response.json({ ok: true, reply, cardReferences });
+    return Response.json({ ok: true, reply, cardReferences, showCardDetails: wantsDetail });
   } catch (e) {
     console.error("Chat route error:", e);
     return Response.json(

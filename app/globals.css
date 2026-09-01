@@ -6560,6 +6560,72 @@
     margin: 0;
   }
 
+  /* A card name mentioned inline in a reply's prose (a strategy answer
+     doesn't auto-show its stat blocks — see showCardDetails in
+     lib/chat.ts) is tappable in place of that auto-shown block, opening
+     the same CardStatBlock content in a popout instead. Styled as a
+     plain-text link rather than a chip, so it reads as part of the
+     sentence rather than interrupting it. */
+  .goa-card-mention {
+    display: inline;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: var(--gold-light);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .goa-card-mention:active {
+    color: var(--gold);
+  }
+
+  .goa-card-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(10, 9, 6, 0.65);
+    padding: 0 0.9rem calc(0.9rem + env(safe-area-inset-bottom));
+  }
+  .goa-card-modal {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    max-height: min(70vh, 70dvh);
+    overflow-y: auto;
+    background: var(--stone-mid);
+    border: 1px solid var(--border-bright);
+    border-radius: 12px;
+    padding: 1.1rem 0.9rem 0.9rem;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+  }
+  .goa-card-modal .goa-card-ref {
+    background: none;
+    border: none;
+    padding: 0;
+  }
+  .goa-card-modal-close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: rgba(28, 26, 20, 0.85);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
   .goa-chat-input-bar {
     flex-shrink: 0;
     display: flex;

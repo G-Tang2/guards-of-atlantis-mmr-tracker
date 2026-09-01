@@ -4,7 +4,7 @@ import { Fragment, FormEvent, ReactNode, useEffect, useRef, useState } from "rea
 import { PasswordGate } from "@/components/PasswordGate";
 import { CHAT_HISTORY_STORAGE_KEY, ChatTurn } from "@/lib/chat";
 import { CardReference } from "@/lib/heroCardContext";
-import { MessageCircle, Send } from "lucide-react";
+import { MessageCircle, Send, X } from "lucide-react";
 
 // NEXT_PUBLIC_MATCH_PASSWORD is already inlined into the client bundle —
 // PasswordGate itself reads it the same way to check the unlock form, so
@@ -26,26 +26,91 @@ function formatIconToken(raw: string): string {
     .join(" ");
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Finds real card names (from this message's own cardReferences — never
+// the full database, to avoid matching generic English words against
+// unrelated heroes) inside a plain-text segment and wraps each as a
+// tappable span that opens the on-demand detail popout. Longer names are
+// matched first so e.g. "Grand Melee" doesn't get shadowed by a shorter
+// "Melee" match. Cards whose block is already auto-shown (showDetails)
+// still get wrapped, so tapping the name in prose works the same way
+// everywhere instead of only for strategy replies.
+function wrapCardMentions(
+  text: string,
+  cardReferences: CardReference[],
+  keyPrefix: string,
+  onSelectCard: (ref: CardReference) => void,
+): ReactNode[] {
+  const names = Array.from(
+    new Set(
+      cardReferences
+        .map((ref) => (typeof ref.card.name === "string" ? ref.card.name : ""))
+        .filter((n) => n.length >= 4),
+    ),
+  ).sort((a, b) => b.length - a.length);
+  if (names.length === 0) return [text];
+
+  const pattern = new RegExp(`(${names.map(escapeRegExp).join("|")})`, "gi");
+  const parts = text.split(pattern);
+  if (parts.length === 1) return [text];
+
+  return parts.map((part, i) => {
+    const ref = cardReferences.find(
+      (r) => typeof r.card.name === "string" && r.card.name.toLowerCase() === part.toLowerCase(),
+    );
+    if (!ref) return part;
+    return (
+      <button
+        key={`${keyPrefix}-mention-${i}`}
+        type="button"
+        className="goa-card-mention"
+        onClick={() => onSelectCard(ref)}
+      >
+        {part}
+      </button>
+    );
+  });
+}
+
 // Lightweight Markdown-ish rendering for the model's replies (bold,
 // italic, inline code, bullet lists, paragraphs) — Gemini's answers
 // commonly use this handful of patterns, and this stays dependency-free
 // by building React nodes directly rather than pulling in a markdown
 // library. Never uses dangerouslySetInnerHTML, so there's no HTML
 // injection risk regardless of what text comes back.
-function renderInline(text: string, keyPrefix: string): ReactNode[] {
+function renderInline(
+  text: string,
+  keyPrefix: string,
+  cardReferences: CardReference[],
+  onSelectCard: (ref: CardReference) => void,
+): ReactNode[] {
   const nodes: ReactNode[] = [];
   const pattern = /\*\*(.+?)\*\*|`(.+?)`|::([a-zA-Z0-9_]+)::|\*(.+?)\*|_(.+?)_/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let i = 0;
+  const pushPlain = (segment: string, key: string) => {
+    if (!segment) return;
+    nodes.push(...wrapCardMentions(segment, cardReferences, key, onSelectCard));
+  };
   while ((match = pattern.exec(text))) {
-    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    if (match.index > lastIndex) pushPlain(text.slice(lastIndex, match.index), `${keyPrefix}-${i}`);
     const key = `${keyPrefix}-${i++}`;
-    if (match[1] !== undefined) nodes.push(<strong key={key}>{match[1]}</strong>);
+    // Card names commonly land inside bold/code/italic (Gemini reaches
+    // for **Card Name** or `Card Name` on its own) — wrap the inner text
+    // through wrapCardMentions too, not just plain segments, or every
+    // formatted mention would silently stay untappable.
+    if (match[1] !== undefined)
+      nodes.push(
+        <strong key={key}>{wrapCardMentions(match[1], cardReferences, key, onSelectCard)}</strong>,
+      );
     else if (match[2] !== undefined)
       nodes.push(
         <code key={key} className="goa-chat-code">
-          {match[2]}
+          {wrapCardMentions(match[2], cardReferences, key, onSelectCard)}
         </code>,
       );
     else if (match[3] !== undefined)
@@ -54,14 +119,21 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
           {formatIconToken(match[3])}
         </span>,
       );
-    else nodes.push(<em key={key}>{match[4] ?? match[5]}</em>);
+    else
+      nodes.push(
+        <em key={key}>{wrapCardMentions(match[4] ?? match[5], cardReferences, key, onSelectCard)}</em>,
+      );
     lastIndex = pattern.lastIndex;
   }
-  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  if (lastIndex < text.length) pushPlain(text.slice(lastIndex), `${keyPrefix}-tail`);
   return nodes;
 }
 
-function renderChatText(text: string): ReactNode[] {
+function renderChatText(
+  text: string,
+  cardReferences: CardReference[] = [],
+  onSelectCard: (ref: CardReference) => void = () => {},
+): ReactNode[] {
   const blocks: ReactNode[] = [];
   let listItems: string[] = [];
 
@@ -71,7 +143,7 @@ function renderChatText(text: string): ReactNode[] {
     blocks.push(
       <ul key={`list-${blocks.length}`} className="goa-chat-list">
         {items.map((item, i) => (
-          <li key={i}>{renderInline(item, `li-${blocks.length}-${i}`)}</li>
+          <li key={i}>{renderInline(item, `li-${blocks.length}-${i}`, cardReferences, onSelectCard)}</li>
         ))}
       </ul>,
     );
@@ -84,7 +156,7 @@ function renderChatText(text: string): ReactNode[] {
       flushList();
       blocks.push(
         <p key={`h-${i}`} className="goa-chat-heading">
-          {renderInline(headingMatch[1], `h-${i}`)}
+          {renderInline(headingMatch[1], `h-${i}`, cardReferences, onSelectCard)}
         </p>,
       );
       return;
@@ -100,7 +172,7 @@ function renderChatText(text: string): ReactNode[] {
     } else {
       blocks.push(
         <p key={`p-${i}`} className="goa-chat-line">
-          {renderInline(line, `p-${i}`)}
+          {renderInline(line, `p-${i}`, cardReferences, onSelectCard)}
         </p>,
       );
     }
@@ -193,12 +265,36 @@ function CardStatBlock({ reference }: { reference: CardReference }) {
   );
 }
 
+// On-demand popout for a card tapped inline in a strategy reply's prose
+// (where the block doesn't auto-show) — reuses CardStatBlock's exact
+// rendering so a tapped card always looks identical to an auto-shown one.
+function CardDetailModal({
+  reference,
+  onClose,
+}: {
+  reference: CardReference;
+  onClose: () => void;
+}) {
+  return (
+    <div className="goa-card-modal-backdrop" onClick={onClose}>
+      <div className="goa-card-modal" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="goa-card-modal-close" onClick={onClose} aria-label="Close">
+          <X size={18} />
+        </button>
+        <CardStatBlock reference={reference} />
+      </div>
+    </div>
+  );
+}
+
 function ChatPageInner() {
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<CardReference | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Every visit to this page starts a fresh conversation — clears out
   // whatever a prior visit may have persisted, rather than restoring it.
@@ -229,6 +325,14 @@ function ChatPageInner() {
     const trimmed = input.trim();
     if (!trimmed || sending) return;
 
+    // Close the keyboard as soon as the message is sent, rather than
+    // leaving it open until the reply arrives (or requiring a manual tap
+    // elsewhere to dismiss it) — matches the app's earlier fix that keeps
+    // focus on the textarea through the send tap itself; this just moves
+    // the blur to happen right after, once we know a send actually went
+    // through, instead of not at all.
+    textareaRef.current?.blur();
+
     const historyBeforeSend = messages;
     const nextMessages: ChatTurn[] = [...messages, { role: "user", text: trimmed }];
     persistMessages(nextMessages);
@@ -246,7 +350,12 @@ function ChatPageInner() {
       if (!data.ok) throw new Error(data.error || "Something went wrong");
       persistMessages([
         ...nextMessages,
-        { role: "model", text: data.reply, cardReferences: data.cardReferences },
+        {
+          role: "model",
+          text: data.reply,
+          cardReferences: data.cardReferences,
+          showCardDetails: data.showCardDetails,
+        },
       ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -257,15 +366,19 @@ function ChatPageInner() {
 
   return (
     <main className="goa-root goa-chat-page">
-      <header className="goa-header">
-        <div className="goa-crown">
-          <MessageCircle size={30} />
-        </div>
-        <h1 className="goa-title">Ask the Oracle</h1>
-        <p className="goa-subtitle">Guards of Atlantis II</p>
-      </header>
-
       <div className="goa-chat-messages">
+        {/* Lives inside the scroll container (not as a fixed sibling) so
+            it scrolls away with the rest of the conversation once there's
+            enough of it — the message list gets the full viewport instead
+            of permanently losing space to a header that stays pinned. */}
+        <header className="goa-header">
+          <div className="goa-crown">
+            <MessageCircle size={30} />
+          </div>
+          <h1 className="goa-title">Ask the Oracle</h1>
+          <p className="goa-subtitle">Guards of Atlantis II</p>
+        </header>
+
         {messages.length === 0 && (
           <p className="goa-chat-empty">
             Ask a question about the rules, hero action cards, or the group&apos;s Discord
@@ -275,9 +388,11 @@ function ChatPageInner() {
         {messages.map((m, i) => (
           <Fragment key={i}>
             <div className={`goa-chat-bubble ${m.role}`}>
-              {m.role === "model" ? renderChatText(m.text) : m.text}
+              {m.role === "model"
+                ? renderChatText(m.text, m.cardReferences ?? [], setSelectedCard)
+                : m.text}
             </div>
-            {m.role === "model" && m.cardReferences && m.cardReferences.length > 0 && (
+            {m.role === "model" && m.showCardDetails && m.cardReferences && m.cardReferences.length > 0 && (
               <div className="goa-card-ref-list">
                 {m.cardReferences.map((ref, j) => (
                   <CardStatBlock key={j} reference={ref} />
@@ -293,6 +408,7 @@ function ChatPageInner() {
 
       <form className="goa-chat-input-bar" onSubmit={handleSend}>
         <textarea
+          ref={textareaRef}
           className="goa-chat-textarea"
           placeholder="Speak to the Oracle…"
           value={input}
@@ -331,6 +447,10 @@ function ChatPageInner() {
           <Send size={18} />
         </button>
       </form>
+
+      {selectedCard && (
+        <CardDetailModal reference={selectedCard} onClose={() => setSelectedCard(null)} />
+      )}
     </main>
   );
 }
