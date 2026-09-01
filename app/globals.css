@@ -6320,7 +6320,18 @@
      stranded near the top of the screen with a dead gap below it before
      the keyboard. Pinning this element to the viewport leaves nothing
      for that native scroll to grab, so the box just resizes in place via
-     --vvh and the input bar lands correctly above the keyboard. */
+     --vvh and the input bar lands correctly above the keyboard.
+
+     translateY(--vv-offset-top) covers a second, separate iOS quirk on
+     top of that: position: fixed pins to the *layout* viewport, not the
+     visual one, and iOS Safari can pan the layout viewport under the
+     visual one when the keyboard opens (to keep the focused input
+     reachable) without resizing it — so a purely top/height-based fixed
+     box can still end up offset from what's actually on screen. --vv-
+     offset-top (set from visualViewport.offsetTop in AppRoot.tsx) is
+     that pan amount; countering it here keeps this box aligned with the
+     real visible viewport regardless of whether iOS paired the keyboard
+     with a resize, a pan, or both. */
   .goa-chat-page {
     position: fixed;
     top: env(safe-area-inset-top);
@@ -6333,6 +6344,7 @@
     );
     min-height: 0;
     overflow: hidden;
+    transform: translateY(var(--vv-offset-top, 0px));
   }
   .goa-chat-page .goa-header {
     flex-shrink: 0;

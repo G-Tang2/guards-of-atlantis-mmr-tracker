@@ -164,22 +164,40 @@ export function extractAskedColors(question: string): string[] {
   return CARD_COLORS.filter((color) => new RegExp(`\\b${color.toLowerCase()}\\b`).test(lower));
 }
 
-const CARD_INTENT_WORDS = [
-  "card", "cards", "tier", "initiative", "upgrade", "skill", "ability",
-  "abilities", "kit", "stat", "stats", "damage", "primary action",
-  "secondary", "level up", "action card", "modifier",
+// Word-boundary patterns, not plain substrings — a word list here would
+// either miss phrasing variants ("how do I play" vs. "how should I
+// play") or false-positive on substrings ("cardinal" containing "card").
+// Covers both literal card-detail asks ("what tier is X") and gameplay/
+// strategy asks ("how do I play X", "any tips for X") — the latter still
+// needs the hero's actual kit to answer well (their cards ARE the
+// strategy), even though it never says the word "card".
+const CARD_INTENT_PATTERNS = [
+  /\bcards?\b/, /\btiers?\b/, /\binitiative\b/, /\bupgrad(e|ing|es)\b/,
+  /\bskills?\b/, /\babilit(y|ies)\b/, /\bkit\b/, /\bstats?\b/,
+  /\bdamage\b/, /\bmodifiers?\b/, /\blevel(ed|s)? up\b/,
+  /\bhow (do|did|does|should|would|can|could) (i|you|we|one) plays?\b/,
+  /\bhow to play\b/, /\bplay(ing)? as\b/, /\bstrateg(y|ies)\b/,
+  /\btips?\b/, /\bguide\b/, /\bplaystyle\b/, /\bplay style\b/,
+  /\bbuild\b/, /\bcombos?\b/, /\bcounter(s|ing)?\b/, /\bmatchups?\b/,
+  /\brecommend(s|ed|ation)?\b/, /\bsuggest(s|ed|ion)?\b/,
+  /\bbest way to play\b/, /\bgood against\b/, /\bweak against\b/,
+  /\bwin condition\b/, /\bopening\b/,
 ];
 
-// Whether a question is actually asking about hero action card details, as
-// opposed to a general/Discord-history question that just happens to
-// mention a hero by name (e.g. "what did people say about Rowenna last
-// night?") — gates whether hero-card data is sent at all and whether the
-// card stat-block UI shows up, so mentioning a hero in passing doesn't
-// trigger an unrelated dump of their card stats.
+// Whether a question is actually asking about a hero's action cards or
+// how to play them, as opposed to a general/Discord-history question
+// that just happens to mention a hero by name (e.g. "what did people say
+// about Rowenna last night?") — gates whether hero-card data is sent at
+// all and whether the card stat-block UI shows up, so a passing mention
+// doesn't trigger an unrelated dump of their card stats. Deliberately
+// broad: sending a small amount of extra card context on a false
+// positive is cheap, while missing a real "how do I play X" question
+// starves the model of the exact data it needs to give real advice
+// instead of vague generic rules-only prose.
 export function isCardDetailQuestion(question: string): boolean {
   const lower = question.toLowerCase();
   if (extractAskedColors(question).length > 0) return true;
-  return CARD_INTENT_WORDS.some((w) => lower.includes(w));
+  return CARD_INTENT_PATTERNS.some((re) => re.test(lower));
 }
 
 // Scans a model reply for real card names and returns their exact data

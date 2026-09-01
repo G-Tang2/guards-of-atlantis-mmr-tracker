@@ -26,12 +26,26 @@ export function AppRoot({ children }: { children: ReactNode }) {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
+    // position: fixed elements (e.g. the chat page) are pinned to the
+    // *layout* viewport, not the visual one — when the on-screen keyboard
+    // opens, iOS Safari can pan the layout viewport under the visual one
+    // (to keep the focused input reachable) without resizing it, so a
+    // fixed element can end up offset from what's actually visible unless
+    // that pan is measured and compensated for. --vv-offset-top carries
+    // that pan amount (vv.offsetTop) so CSS can counteract it with a
+    // translateY; listening to "scroll" (not just "resize") is required
+    // since the pan itself fires as a visualViewport scroll event.
     const update = () => {
       document.documentElement.style.setProperty("--vvh", `${vv.height}px`);
+      document.documentElement.style.setProperty("--vv-offset-top", `${vv.offsetTop}px`);
     };
     update();
     vv.addEventListener("resize", update);
-    return () => vv.removeEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
   }, []);
 
   return (
