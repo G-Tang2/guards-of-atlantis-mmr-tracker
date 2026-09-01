@@ -164,6 +164,24 @@ export function extractAskedColors(question: string): string[] {
   return CARD_COLORS.filter((color) => new RegExp(`\\b${color.toLowerCase()}\\b`).test(lower));
 }
 
+const CARD_INTENT_WORDS = [
+  "card", "cards", "tier", "initiative", "upgrade", "skill", "ability",
+  "abilities", "kit", "stat", "stats", "damage", "primary action",
+  "secondary", "level up", "action card", "modifier",
+];
+
+// Whether a question is actually asking about hero action card details, as
+// opposed to a general/Discord-history question that just happens to
+// mention a hero by name (e.g. "what did people say about Rowenna last
+// night?") — gates whether hero-card data is sent at all and whether the
+// card stat-block UI shows up, so mentioning a hero in passing doesn't
+// trigger an unrelated dump of their card stats.
+export function isCardDetailQuestion(question: string): boolean {
+  const lower = question.toLowerCase();
+  if (extractAskedColors(question).length > 0) return true;
+  return CARD_INTENT_WORDS.some((w) => lower.includes(w));
+}
+
 // Scans a model reply for real card names and returns their exact data
 // straight from HERO_CARDS — this is the actual fix for the model
 // misstating a card's color/stats while summarizing: instead of trusting

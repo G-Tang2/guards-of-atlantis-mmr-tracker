@@ -6322,6 +6322,20 @@
     flex-shrink: 0;
     padding: 1rem 1rem 0.6rem;
   }
+  /* A position:fixed bottom nav doesn't reliably stay above an on-screen
+     mobile keyboard (iOS Safari keeps the layout viewport full-height and
+     only shrinks the visual one, so a `bottom: 0` element can end up
+     positioned behind/under the keyboard instead of above it) — rather
+     than fight that, hide the nav entirely while the message input is
+     focused (see app/chat/page.tsx's onFocus/onBlur) and let this page
+     reclaim the 56px it normally leaves for the nav, since --vvh already
+     tracks the shrunk visual viewport correctly on its own. */
+  body.goa-chat-input-focused .goa-bottom-nav {
+    display: none;
+  }
+  body.goa-chat-input-focused .goa-chat-page {
+    height: calc(var(--vvh, 100svh) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
 
   .goa-chat-messages {
     flex: 1;

@@ -212,6 +212,13 @@ function ChatPageInner() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
+  // Safety net: if this page unmounts while the textarea still has focus
+  // (e.g. a back gesture instead of a normal blur), don't leave the body
+  // stuck in the "keyboard open" state for whatever page loads next.
+  useEffect(() => {
+    return () => document.body.classList.remove("goa-chat-input-focused");
+  }, []);
+
   const persistMessages = (next: ChatTurn[]) => {
     setMessages(next);
     sessionStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(next));
@@ -296,6 +303,14 @@ function ChatPageInner() {
               handleSend(e as unknown as FormEvent);
             }
           }}
+          // On mobile, a position:fixed bottom nav doesn't reliably stay
+          // above the on-screen keyboard (it tracks the layout viewport,
+          // which iOS Safari doesn't shrink, not the visual one, which
+          // does) — it can end up overlapping the input bar instead.
+          // Hiding it specifically while actively typing sidesteps that
+          // entirely; it's still shown for normal browsing on this page.
+          onFocus={() => document.body.classList.add("goa-chat-input-focused")}
+          onBlur={() => document.body.classList.remove("goa-chat-input-focused")}
           rows={1}
         />
         <button type="submit" className="goa-chat-send-btn" disabled={sending || !input.trim()}>
