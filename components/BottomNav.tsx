@@ -55,7 +55,9 @@ export function BottomNav() {
 
   // Hidden on the timer and ranked-balance vote pages — a stray tap here
   // mid-game/mid-vote would navigate away, and it's easy to bump on a
-  // phone or tablet passed around a table or propped up during play.
+  // phone or tablet passed around a table or propped up during play. The
+  // chat page keeps it visible (it's a normal navigable page, not a
+  // focused live session).
   if (pathname.startsWith("/matches/timer") || pathname.startsWith("/teams/vote"))
     return null;
 

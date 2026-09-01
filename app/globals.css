@@ -2028,6 +2028,29 @@
     margin-bottom: 0;
   }
 
+  .goa-chat-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 1rem;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(201, 151, 58, 0.35);
+    background: rgba(28, 26, 20, 0.6);
+    color: var(--gold-light);
+    font-family: "Cinzel", serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .goa-chat-entry:hover {
+    border-color: var(--gold);
+    background: rgba(201, 151, 58, 0.12);
+  }
+
   .goa-hero-wrap {
     padding: 0.3rem 0.55rem 0.45rem;
   }
@@ -6273,6 +6296,300 @@
     }
     .goa-vote-page .draft-coin-label {
       font-size: 0.9rem;
+    }
+  }
+
+  /* ── Ask the Oracle (/chat) ── */
+  /* A single scroll container, unlike the timer/vote pages — .goa-chat-page
+     is sized to exactly fill --vvh with overflow: hidden, and only
+     .goa-chat-messages (flex:1) scrolls internally. Header/input bar are
+     both flex-shrink:0 natural-height siblings, so nothing else needs its
+     own scroll or sticky handling. Unlike the timer/vote pages, the
+     bottom nav stays visible here — its 56px is subtracted below to
+     match the space .app-root itself reserves for it (see .app-root's
+     own padding-bottom), so the input bar lands just above the nav
+     instead of underneath it. */
+  .goa-chat-page {
+    flex: none;
+    height: calc(
+      var(--vvh, 100svh) - env(safe-area-inset-top) - env(safe-area-inset-bottom) -
+        56px
+    );
+    min-height: 0;
+    overflow: hidden;
+  }
+  .goa-chat-page .goa-header {
+    flex-shrink: 0;
+    padding: 1rem 1rem 0.6rem;
+  }
+
+  .goa-chat-messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.9rem;
+  }
+
+  .goa-chat-empty {
+    margin: auto 0;
+    text-align: center;
+    font-family: "Crimson Pro", serif;
+    font-style: italic;
+    color: var(--text-muted);
+    padding: 1rem;
+  }
+
+  .goa-chat-bubble {
+    max-width: 85%;
+    padding: 0.55rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    font-family: "Crimson Pro", serif;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .goa-chat-bubble.user {
+    align-self: flex-end;
+    background: rgba(201, 151, 58, 0.12);
+    border-color: rgba(201, 151, 58, 0.35);
+    color: var(--gold-light);
+  }
+  .goa-chat-bubble.model {
+    align-self: flex-start;
+    background: rgba(28, 26, 20, 0.6);
+    color: var(--text-primary);
+  }
+  /* Bold needs its own color, not just heavier weight, to actually stand
+     out against each bubble's own text color — .user text is already
+     gold, so bold there brightens to cream instead; .model text is cream,
+     so bold there pops to gold. */
+  .goa-chat-bubble strong {
+    font-weight: 700;
+  }
+  .goa-chat-bubble.model strong {
+    color: var(--gold-light);
+  }
+  .goa-chat-bubble.user strong {
+    color: var(--text-primary);
+  }
+  /* Same reasoning as strong above — a plain font-style: italic slant on
+     a small serif bubble is too subtle to register as "different" on its
+     own, even though it's genuinely rendering (it's not a parsing bug).
+     A distinct muted color makes it actually noticeable, same as bold. */
+  .goa-chat-bubble em {
+    font-style: italic;
+    color: var(--text-muted);
+  }
+  .goa-chat-line {
+    margin: 0;
+  }
+  .goa-chat-line + .goa-chat-line {
+    margin-top: 0.2rem;
+  }
+  .goa-chat-heading {
+    margin: 0.3rem 0 0.15rem;
+    font-family: "Cinzel", serif;
+    font-weight: 700;
+    font-size: 0.8em;
+    letter-spacing: 0.03em;
+    color: var(--gold-light);
+  }
+  .goa-chat-heading:first-child {
+    margin-top: 0;
+  }
+  .goa-chat-list {
+    margin: 0.2rem 0;
+    padding-left: 1.15rem;
+  }
+  .goa-chat-list li {
+    margin: 0.1rem 0;
+  }
+  .goa-chat-code {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-family: monospace;
+    font-size: 0.85em;
+  }
+  /* Card text uses inline "::token_blast::"-style placeholders for a
+     small icon on the physical card — rendered as a readable label chip
+     instead of the raw placeholder syntax. */
+  .goa-icon-token {
+    display: inline-block;
+    background: rgba(201, 151, 58, 0.15);
+    border: 1px solid rgba(201, 151, 58, 0.35);
+    border-radius: 999px;
+    padding: 0.02rem 0.4rem;
+    font-family: "Cinzel", serif;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: var(--gold-light);
+    white-space: nowrap;
+  }
+  .goa-chat-thinking {
+    font-style: italic;
+    color: var(--text-muted);
+    animation: loadingPulse 1.4s ease-in-out infinite;
+  }
+
+  .goa-chat-error {
+    color: var(--loss);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  /* Deterministic card-fact blocks — rendered from source data, not the
+     model's own text, so they sit visually apart from the chat bubbles
+     (a "reference card" look, not a conversational one). */
+  .goa-card-ref-list {
+    align-self: flex-start;
+    max-width: 90%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .goa-card-ref {
+    background: rgba(28, 26, 20, 0.75);
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 6px;
+    padding: 0.55rem 0.7rem;
+  }
+  .goa-card-ref-warning {
+    margin: 0 0 0.4rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(196, 74, 74, 0.15);
+    border: 1px solid rgba(196, 74, 74, 0.4);
+    color: var(--loss);
+    font-family: "Cinzel", serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.02em;
+  }
+  .goa-card-ref-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .goa-card-ref-name {
+    font-family: "Cinzel", serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .goa-card-ref-hero {
+    font-family: "Cinzel", serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .goa-card-ref-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+  }
+  .goa-card-ref-tag {
+    font-family: "Cinzel", serif;
+    font-size: 0.58rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+  }
+  .goa-card-ref-desc {
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
+    font-family: "Crimson Pro", serif;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+  }
+  .goa-card-ref-desc .goa-chat-line {
+    margin: 0;
+  }
+
+  .goa-chat-input-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: var(--stone);
+  }
+  .goa-chat-textarea {
+    flex: 1;
+    resize: none;
+    max-height: 120px;
+    background: rgba(28, 26, 20, 0.85);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    color: var(--text-primary);
+    font-family: "Crimson Pro", serif;
+    font-size: 0.95rem;
+  }
+  .goa-chat-textarea:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+  .goa-chat-send-btn {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid var(--gold);
+    background: linear-gradient(
+      135deg,
+      rgba(201, 151, 58, 0.2),
+      rgba(122, 88, 26, 0.3)
+    );
+    color: var(--gold-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .goa-chat-send-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .goa-chat-send-btn:not(:disabled):hover {
+    box-shadow: 0 0 16px rgba(201, 151, 58, 0.3);
+  }
+
+  /* ── iPad+ scale-up (/chat only, via .goa-chat-page) — same rationale
+     as .goa-timer-page/.goa-vote-page above. */
+  @media (min-width: 744px) {
+    .goa-chat-page .goa-crown {
+      font-size: 2.4rem;
+    }
+    .goa-chat-page .goa-title {
+      font-size: 1.9rem;
+    }
+    .goa-chat-page .goa-subtitle {
+      font-size: 1.2rem;
+    }
+    .goa-chat-page .goa-header {
+      padding: 1.2rem 1.2rem 0.7rem;
+    }
+    .goa-chat-bubble {
+      font-size: 1.1rem;
+      max-width: 70%;
+    }
+    .goa-chat-textarea {
+      font-size: 1.1rem;
     }
   }
 }
