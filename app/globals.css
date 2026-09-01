@@ -6579,7 +6579,11 @@
     padding: 0.6rem 0.75rem;
     color: var(--text-primary);
     font-family: "Crimson Pro", serif;
-    font-size: 0.95rem;
+    /* iOS Safari auto-zooms the page on focus for any text input whose
+       computed font-size is under 16px — 16px is a floor, not a design
+       choice; below it every phone visit starts with an unwanted pinch
+       zoom the user has to manually undo. */
+    font-size: 16px;
   }
   .goa-chat-textarea:focus {
     outline: none;

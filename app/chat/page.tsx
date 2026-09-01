@@ -313,7 +313,21 @@ function ChatPageInner() {
           onBlur={() => document.body.classList.remove("goa-chat-input-focused")}
           rows={1}
         />
-        <button type="submit" className="goa-chat-send-btn" disabled={sending || !input.trim()}>
+        <button
+          type="submit"
+          className="goa-chat-send-btn"
+          disabled={sending || !input.trim()}
+          // Without this, tapping the button first blurs the textarea
+          // (the default action of a mousedown on another element) before
+          // the click fires — that blur closes the keyboard and, via the
+          // onBlur handler above, triggers a layout reflow (nav
+          // reappearing, page height changing) mid-touch, which can shift
+          // the button out from under the tap and swallow the click
+          // entirely. Preventing the mousedown's default keeps focus (and
+          // the keyboard) exactly where it was, so the tap always reaches
+          // the click/submit on the first try.
+          onMouseDown={(e) => e.preventDefault()}
+        >
           <Send size={18} />
         </button>
       </form>

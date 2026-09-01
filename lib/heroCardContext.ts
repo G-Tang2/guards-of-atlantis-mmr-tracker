@@ -167,14 +167,45 @@ export function extractAskedColors(question: string): string[] {
 // Word-boundary patterns, not plain substrings — a word list here would
 // either miss phrasing variants ("how do I play" vs. "how should I
 // play") or false-positive on substrings ("cardinal" containing "card").
-// Covers both literal card-detail asks ("what tier is X") and gameplay/
-// strategy asks ("how do I play X", "any tips for X") — the latter still
-// needs the hero's actual kit to answer well (their cards ARE the
-// strategy), even though it never says the word "card".
-const CARD_INTENT_PATTERNS = [
-  /\bcards?\b/, /\btiers?\b/, /\binitiative\b/, /\bupgrad(e|ing|es)\b/,
-  /\bskills?\b/, /\babilit(y|ies)\b/, /\bkit\b/, /\bstats?\b/,
-  /\bdamage\b/, /\bmodifiers?\b/, /\blevel(ed|s)? up\b/,
+// Narrow on purpose: literal asks for a card's own facts, not just any
+// question that happens to touch on a hero's kit — "how do I play X"
+// doesn't belong here (see wantsHeroCardContext below), because naming
+// the hero doesn't mean the user wants a stat-block dump.
+const CARD_DETAIL_PATTERNS = [
+  /\bcards?\b/, /\btiers?\b/, /\binitiative\b/, /\bstats?\b/,
+  /\bmodifiers?\b/, /\bwhich card\b/, /\bwhat card\b/,
+  /\bkit\b/, /\bshow (me )?(her|his|their|the) cards\b/,
+  /\blist (her|his|their|the) cards\b/,
+];
+
+// Whether a question explicitly wants a hero card's own facts (name,
+// tier, color, exact numbers) — as opposed to a general strategy
+// question that merely benefits from card data as background (see
+// wantsHeroCardContext) or a Discord-history question that just happens
+// to mention a hero by name. Gates the "don't restate stats yourself"
+// instruction, the color-mismatch check, and whether the deterministic
+// card stat-block UI renders at all — the user explicitly asked for
+// those blocks to stay hidden unless they actually asked about card
+// details, even on a question that also gets card data as context.
+export function isCardDetailQuestion(question: string): boolean {
+  const lower = question.toLowerCase();
+  if (extractAskedColors(question).length > 0) return true;
+  return CARD_DETAIL_PATTERNS.some((re) => re.test(lower));
+}
+
+// Broader than isCardDetailQuestion — also covers gameplay/strategy
+// phrasing ("how do I play X", "any tips for X") that never says the
+// word "card" but still needs the hero's actual kit to answer well
+// (their cards ARE the strategy). Gates only whether hero-card data is
+// sent to the model at all, not whether the reply shows card facts —
+// see isCardDetailQuestion for that narrower gate. Deliberately broad:
+// sending a small amount of extra card context on a false positive is
+// cheap, while missing a real "how do I play X" question starves the
+// model of the data it needs to give real advice instead of vague
+// generic rules-only prose.
+const STRATEGY_INTENT_PATTERNS = [
+  /\bupgrad(e|ing|es)\b/, /\bskills?\b/, /\babilit(y|ies)\b/, /\bdamage\b/,
+  /\blevel(ed|s)? up\b/,
   /\bhow (do|did|does|should|would|can|could) (i|you|we|one) plays?\b/,
   /\bhow to play\b/, /\bplay(ing)? as\b/, /\bstrateg(y|ies)\b/,
   /\btips?\b/, /\bguide\b/, /\bplaystyle\b/, /\bplay style\b/,
@@ -184,20 +215,10 @@ const CARD_INTENT_PATTERNS = [
   /\bwin condition\b/, /\bopening\b/,
 ];
 
-// Whether a question is actually asking about a hero's action cards or
-// how to play them, as opposed to a general/Discord-history question
-// that just happens to mention a hero by name (e.g. "what did people say
-// about Rowenna last night?") — gates whether hero-card data is sent at
-// all and whether the card stat-block UI shows up, so a passing mention
-// doesn't trigger an unrelated dump of their card stats. Deliberately
-// broad: sending a small amount of extra card context on a false
-// positive is cheap, while missing a real "how do I play X" question
-// starves the model of the exact data it needs to give real advice
-// instead of vague generic rules-only prose.
-export function isCardDetailQuestion(question: string): boolean {
+export function wantsHeroCardContext(question: string): boolean {
+  if (isCardDetailQuestion(question)) return true;
   const lower = question.toLowerCase();
-  if (extractAskedColors(question).length > 0) return true;
-  return CARD_INTENT_PATTERNS.some((re) => re.test(lower));
+  return STRATEGY_INTENT_PATTERNS.some((re) => re.test(lower));
 }
 
 // Scans a model reply for real card names and returns their exact data
