@@ -11,7 +11,7 @@ import {
   isCardDetailQuestion,
   wantsHeroCardContext,
 } from "@/lib/heroCardContext";
-import { generateChatReply } from "@/lib/gemini";
+import { generateChatReply, GeminiRateLimitError } from "@/lib/gemini";
 import { ChatRequestBody, ChatTurn } from "@/lib/chat";
 
 const MAX_MESSAGE_LENGTH = 4000;
@@ -93,6 +93,12 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, reply, cardReferences, showCardDetails: wantsDetail });
   } catch (e) {
     console.error("Chat route error:", e);
+    if (e instanceof GeminiRateLimitError) {
+      return Response.json(
+        { ok: false, error: "The Oracle is receiving too many questions right now. Please try again in about a minute." },
+        { status: 429 },
+      );
+    }
     return Response.json(
       { ok: false, error: "Failed to get a reply. Please try again." },
       { status: 502 },

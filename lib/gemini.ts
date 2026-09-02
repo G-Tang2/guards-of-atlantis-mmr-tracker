@@ -8,6 +8,17 @@ import { ChatTurn } from "@/lib/chat";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
+// Distinguished from a generic failure so the route handler can show the
+// user something actionable ("try again in a minute") instead of a
+// one-size-fits-all error — Gemini returns 429 for both per-minute and
+// per-day quota exhaustion, which this app has hit firsthand.
+export class GeminiRateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GeminiRateLimitError";
+  }
+}
+
 // Plain REST call rather than the @google/genai SDK — this generateContent
 // request shape is Google's long-stable public REST contract, and using it
 // directly avoids adding an SDK dependency (and its own version/API-shape
@@ -54,6 +65,9 @@ export async function generateChatReply({
 
   if (!res.ok) {
     const body = await res.text();
+    if (res.status === 429) {
+      throw new GeminiRateLimitError(`Gemini API rate limit: ${body}`);
+    }
     throw new Error(`Gemini API error ${res.status}: ${body}`);
   }
 
