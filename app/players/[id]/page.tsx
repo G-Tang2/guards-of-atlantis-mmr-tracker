@@ -35,6 +35,7 @@ type MatchPlayer = {
   mmr_after: number;
   hero_id?: string | null;
   is_bounty?: boolean;
+  bounty_bonus?: number | null;
   players: Player;
 };
 
@@ -58,6 +59,7 @@ type RawMatchPlayer = {
   mmr_after: number;
   hero_id?: string | null;
   is_bounty?: boolean;
+  bounty_bonus?: number | null;
   players: Player | Player[] | null;
 };
 
@@ -527,7 +529,7 @@ export default function PlayerProfilePage() {
             `
             id, match_number, winner, created_at, atlantis_avg_mmr, titans_avg_mmr,
             match_players (
-              player_id, team, mmr_before, mmr_after, hero_id, is_bounty,
+              player_id, team, mmr_before, mmr_after, hero_id, is_bounty, bounty_bonus,
               players ( id, name, mmr, avatar_url )
             )
           `,
@@ -953,6 +955,7 @@ export default function PlayerProfilePage() {
                       {earnedCount}/{badge.heroIds.length}
                     </span>
                   </div>
+                  <p className="goa-badge-desc">{badge.description}</p>
                   <div className="goa-badge-icons">
                     {badge.heroIds.map((heroId) => {
                       const hero = getHero(heroId);
@@ -1203,8 +1206,7 @@ export default function PlayerProfilePage() {
                   </div>
                   {me.is_bounty && (
                     <span className="goa-bounty-badge">
-                      <Coins size={10} />
-                      +5
+                      <Coins size={10} />+{me.bounty_bonus ?? 5}
                     </span>
                   )}
                 </div>

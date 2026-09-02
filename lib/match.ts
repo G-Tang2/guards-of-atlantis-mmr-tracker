@@ -22,6 +22,14 @@ export type MatchPlayer = {
   action_time_seconds?: number | null;
   badge_earned?: Badge | null;
   badges_completed?: Badge[];
+  // Actual signed MMR amount each badge reward contributed to this row,
+  // precomputed at match-recording time (see lib/badgeRewards.ts and
+  // app/matches/new/page.tsx) — null/absent on older rows recorded before
+  // these existed, and on rows the reward didn't apply to.
+  bounty_bonus?: number | null;
+  devoted_bonus?: number | null;
+  renowned_bonus?: number | null;
+  defiant_bonus?: number | null;
 };
 
 export enum WinCondition {

@@ -8,6 +8,8 @@ import { PasswordGate } from "@/components/PasswordGate";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
 import { rankedBalancedSplits, Split } from "@/lib/rankedBalance";
+import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
+import { getOwnedBadgeIds } from "@/lib/badgeRewards";
 import { Star, Crown, ScrollText, Swords } from "lucide-react";
 
 type Player = { id: string; name: string; mmr: number; avatar_url?: string | null };
@@ -111,6 +113,12 @@ function TeamsVotePageInner() {
   const [playerIds, setPlayerIds] = useState<string[]>([]);
   const [splits, setSplits] = useState<Split<Player>[]>([]);
   const [skippedVoting, setSkippedVoting] = useState(false);
+  // Total expected taps, not total voters — a player who already owns the
+  // Base badge gets a second vote (see lib/badges.ts), so this can exceed
+  // playerIds.length. Voting itself stays fully anonymous: this number is
+  // computed once up front purely so the app knows when everyone's done,
+  // never used to track who cast which tap.
+  const [totalVotes, setTotalVotes] = useState(0);
 
   const [stage, setStage] = useState<Stage>("ballot");
   const [votes, setVotes] = useState<number[]>([]);
@@ -131,11 +139,21 @@ function TeamsVotePageInner() {
         router.replace("/teams");
         return;
       }
-      supabaseClient
-        .from("players")
-        .select("id, name, mmr, avatar_url")
-        .in("id", saved.playerIds)
-        .then(({ data, error }) => {
+      Promise.all([
+        supabaseClient
+          .from("players")
+          .select("id, name, mmr, avatar_url")
+          .in("id", saved.playerIds),
+        // Base badge ownership — every hero any of tonight's players has
+        // ever won with, used only to work out how many of them get a
+        // second vote (see totalVotes above). Not scoped to didWin here;
+        // buildWonHeroesByPlayer already applies that filter itself.
+        supabaseClient
+          .from("match_players")
+          .select("player_id, hero_id, team, match_number, matches!inner(winner)")
+          .in("player_id", saved.playerIds)
+          .not("hero_id", "is", null),
+      ]).then(([{ data, error }, { data: heroHistory }]) => {
           if (error || !data) {
             router.replace("/teams");
             return;
@@ -149,14 +167,21 @@ function TeamsVotePageInner() {
             return;
           }
 
+          const wonHeroesByPlayer = buildWonHeroesByPlayer(heroHistory ?? []);
+          const baseOwnerCount = saved.playerIds.filter((id) =>
+            getOwnedBadgeIds(wonHeroesByPlayer.get(id) ?? new Set()).has("base"),
+          ).length;
+          const computedTotalVotes = saved.playerIds.length + baseOwnerCount;
+
           const computedSplits = rankedBalancedSplits(resolved, 3);
           setPlayerIds(saved.playerIds);
           setSplits(computedSplits);
+          setTotalVotes(computedTotalVotes);
 
           if (computedSplits.length <= 1) {
             // Nothing to vote on — apply the one possible split directly.
             setSkippedVoting(true);
-            setVotes([saved.playerIds.length]);
+            setVotes([computedTotalVotes]);
             setWinnerIndex(0);
             setStage("results");
           } else {
@@ -227,7 +252,7 @@ function TeamsVotePageInner() {
     setVotesCast(nextVotesCast);
     persistProgress(nextVotes, nextVotesCast);
 
-    if (nextVotesCast >= playerIds.length) {
+    if (nextVotesCast >= totalVotes) {
       settleTally(nextVotes);
     }
   };
@@ -282,10 +307,12 @@ function TeamsVotePageInner() {
         <div className="goa-vote-live-body">
           <div className="goa-vote-ballot-head">
             <span className="goa-vote-ballot-title">Cast Your Vote</span>
-            <VoteDots total={playerIds.length} cast={votesCast} />
+            <VoteDots total={totalVotes} cast={votesCast} />
           </div>
           <p className="draft-note">
-            Tap an option to cast your vote, then pass the device on.
+            Tap an option to cast your vote, then pass the device on. If you
+            have two votes from the Base badge, use them on two different
+            options.
           </p>
           <div className="goa-vote-options">
             {splits.map((split, i) => (
@@ -345,7 +372,7 @@ function TeamsVotePageInner() {
                   headExtra={
                     !skippedVoting ? (
                       <span className="vote-results-count">
-                        {votes[i]} of {playerIds.length} votes
+                        {votes[i]} of {totalVotes} votes
                       </span>
                     ) : undefined
                   }

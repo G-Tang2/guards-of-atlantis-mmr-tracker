@@ -7,8 +7,18 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { calculateMMR, PlayerResult } from "@/lib/mmr";
 import { HeroPicker } from "@/components/HeroPicker";
 import { Hero, HEROES } from "@/lib/heroes";
-import { computeBountyHeroIds, BOUNTY_MMR_BONUS } from "@/lib/bounty";
-import { computeHeroWinBonus, applyHeroWinBonus } from "@/lib/heroWinBonus";
+import {
+  computeBountyHeroIds,
+  computePersonalBountyHeroIds,
+  BOUNTY_MMR_BONUS,
+  WAYWARD_BOUNTY_MMR_BONUS,
+} from "@/lib/bounty";
+import {
+  computeHeroWinBonus,
+  applyHeroWinBonus,
+  buildWonHeroesByPlayer,
+} from "@/lib/heroWinBonus";
+import { applyBadgeRewards, getOwnedBadgeIds } from "@/lib/badgeRewards";
 import { DraftMethod, didWin } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { TIMER_LOG_STORAGE_KEY } from "@/lib/timerLog";
@@ -265,26 +275,67 @@ function NewMatchPageInner() {
           (e) => e.player.id === playerId,
         )?.hero?.id ?? null;
 
+      // Every participant's full hero-win history (not just this match's
+      // winners) — needed both for the existing first-hero-win/badge-
+      // completion bonus below AND for badge-reward eligibility (Arcane,
+      // Wayward, Devoted, Defiant, Renowned all key off badges owned
+      // BEFORE this match, which requires knowing every participant's
+      // wins regardless of whether they won this particular match).
+      const allParticipantIds = [
+        ...atlantis.map((e) => e.player.id),
+        ...titans.map((e) => e.player.id),
+      ];
+      const { data: heroHistory } = await supabaseClient
+        .from("match_players")
+        .select("player_id, hero_id, team, match_number, matches!inner(winner)")
+        .in("player_id", allParticipantIds)
+        .not("hero_id", "is", null);
+
+      const wonHeroesByPlayer = buildWonHeroesByPlayer(heroHistory ?? []);
+      const ownedBadgesByPlayer = new Map<string, Set<string>>(
+        allParticipantIds.map((id) => [
+          id,
+          getOwnedBadgeIds(wonHeroesByPlayer.get(id) ?? new Set()),
+        ]),
+      );
+
       // A bounty hero is one nobody has played in the last several matches —
       // picking one awards a flat bonus on top of the normal Elo delta,
-      // regardless of whether the match was won or lost.
+      // regardless of whether the match was won or lost. The Arcane badge
+      // adds a personal version of this rule (5 of the owner's own games
+      // instead of 7 games server-wide) and Wayward boosts the payout for
+      // its owner — both independent perks, so either or both can apply.
       const { data: priorMatches } = await supabaseClient
         .from("matches")
-        .select("id, match_players ( hero_id )")
+        .select("id, match_players ( hero_id, player_id )")
         .order("created_at", { ascending: false });
       const bountyHeroIds = computeBountyHeroIds(
         priorMatches ?? [],
         HEROES.map((h) => h.id),
       );
+      const allHeroIds = HEROES.map((h) => h.id);
 
+      const bountyBonusByPlayer = new Map<string, number>();
       const applyBounty = (list: PlayerResult[], team: Team): PlayerResult[] =>
         list.map((p) => {
           const heroId = heroIdFor(p.id, team);
-          if (!heroId || !bountyHeroIds.has(heroId)) return p;
+          if (!heroId) return p;
+          const ownedBadges = ownedBadgesByPlayer.get(p.id);
+          const isBounty =
+            bountyHeroIds.has(heroId) ||
+            (ownedBadges?.has("arcane") &&
+              computePersonalBountyHeroIds(p.id, priorMatches ?? [], allHeroIds).has(
+                heroId,
+              ));
+          if (!isBounty) return p;
+          const bonusAmount = ownedBadges?.has("wayward")
+            ? WAYWARD_BOUNTY_MMR_BONUS
+            : BOUNTY_MMR_BONUS;
+          bountyBonusByPlayer.set(p.id, bonusAmount);
           return {
             ...p,
-            mmrChange: p.mmrChange + BOUNTY_MMR_BONUS,
-            newMmr: p.newMmr + BOUNTY_MMR_BONUS,
+            mmrChange: p.mmrChange + bonusAmount,
+            newMmr: p.newMmr + bonusAmount,
           };
         });
 
@@ -302,29 +353,6 @@ function NewMatchPageInner() {
         ...titans.map((e) => ({ ...e, team: "titans" as Team })),
       ].filter((e) => e.hero && didWin(e.team, winner));
 
-      const heroWonByPlayer = new Map<string, Set<string>>();
-      if (eligiblePlayers.length > 0) {
-        const { data: heroHistory } = await supabaseClient
-          .from("match_players")
-          .select("player_id, hero_id, team, matches!inner(winner)")
-          .in(
-            "player_id",
-            eligiblePlayers.map((e) => e.player.id),
-          )
-          .not("hero_id", "is", null);
-
-        (heroHistory ?? []).forEach((row) => {
-          const matchInfo = Array.isArray(row.matches)
-            ? row.matches[0]
-            : row.matches;
-          if (!matchInfo || !row.hero_id) return;
-          if (!didWin(row.team, matchInfo.winner)) return;
-          const set = heroWonByPlayer.get(row.player_id) ?? new Set<string>();
-          set.add(row.hero_id);
-          heroWonByPlayer.set(row.player_id, set);
-        });
-      }
-
       const newlyEarnedBadges: EarnedBadgeInfo[] = [];
       const applyHeroBonus = (
         list: PlayerResult[],
@@ -339,7 +367,7 @@ function NewMatchPageInner() {
 
           const bonus = computeHeroWinBonus(
             heroId,
-            heroWonByPlayer.get(p.id) ?? new Set(),
+            wonHeroesByPlayer.get(p.id) ?? new Set(),
           );
           if (!bonus) return p;
 
@@ -360,8 +388,20 @@ function NewMatchPageInner() {
           };
         });
 
-      const atlantisFinal = applyHeroBonus(atlantisResults, "atlantis");
-      const titansFinal = applyHeroBonus(titansResults, "titans");
+      const atlantisAfterHeroBonus = applyHeroBonus(atlantisResults, "atlantis");
+      const titansAfterHeroBonus = applyHeroBonus(titansResults, "titans");
+
+      // Renowned/Devoted/Defiant — must run last, after every other
+      // per-player adjustment, since Defiant is the only cross-team effect
+      // and needs to see everyone's otherwise-final numbers.
+      const badgeRewards = applyBadgeRewards(
+        atlantisAfterHeroBonus,
+        titansAfterHeroBonus,
+        winner,
+        ownedBadgesByPlayer,
+      );
+      const atlantisFinal = badgeRewards.atlantis;
+      const titansFinal = badgeRewards.titans;
 
       const { data: match, error } = await supabaseClient
         .from("matches")
@@ -423,6 +463,7 @@ function NewMatchPageInner() {
       const matchPlayers = [
         ...atlantisFinal.map((p) => {
           const heroId = heroIdFor(p.id, "atlantis");
+          const bonuses = badgeRewards.bonuses.get(p.id);
           return {
             match_id: match.id,
             match_number: newMatchNumber,
@@ -431,12 +472,17 @@ function NewMatchPageInner() {
             mmr_before: atlPlayers.find((x) => x.id === p.id)?.mmr,
             mmr_after: p.newMmr,
             hero_id: heroId,
-            is_bounty: heroId ? bountyHeroIds.has(heroId) : false,
+            is_bounty: bountyBonusByPlayer.has(p.id),
+            bounty_bonus: bountyBonusByPlayer.get(p.id) ?? null,
+            devoted_bonus: bonuses?.devoted ?? null,
+            renowned_bonus: bonuses?.renowned ?? null,
+            defiant_bonus: bonuses?.defiant ?? null,
             action_time_seconds: timerLog[p.id] ?? null,
           };
         }),
         ...titansFinal.map((p) => {
           const heroId = heroIdFor(p.id, "titans");
+          const bonuses = badgeRewards.bonuses.get(p.id);
           return {
             match_id: match.id,
             match_number: newMatchNumber,
@@ -445,7 +491,11 @@ function NewMatchPageInner() {
             mmr_before: titPlayers.find((x) => x.id === p.id)?.mmr,
             mmr_after: p.newMmr,
             hero_id: heroId,
-            is_bounty: heroId ? bountyHeroIds.has(heroId) : false,
+            is_bounty: bountyBonusByPlayer.has(p.id),
+            bounty_bonus: bountyBonusByPlayer.get(p.id) ?? null,
+            devoted_bonus: bonuses?.devoted ?? null,
+            renowned_bonus: bonuses?.renowned ?? null,
+            defiant_bonus: bonuses?.defiant ?? null,
             action_time_seconds: timerLog[p.id] ?? null,
           };
         }),

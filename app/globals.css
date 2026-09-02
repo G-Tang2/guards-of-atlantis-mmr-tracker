@@ -1492,6 +1492,65 @@
     border-radius: 999px;
   }
 
+  /* Badge-reward tags — shown on a match's hero pick when an owned badge's
+     ongoing perk (see lib/badgeRewards.ts) actually changed that row's
+     MMR. Same pill shape as bounty/first-win above, one accent color per
+     badge so multiple can appear together without blending. */
+  .goa-renowned-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--gold);
+    border-radius: 999px;
+    background: rgba(201, 151, 58, 0.15);
+    color: var(--gold-light);
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .goa-devoted-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid #d47f9b;
+    border-radius: 999px;
+    background: rgba(212, 127, 155, 0.15);
+    color: #eec3d3;
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .goa-defiant-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid #e08a4a;
+    border-radius: 999px;
+    background: rgba(224, 138, 74, 0.15);
+    color: #f0c39a;
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
   /* Cumulative action-phase time, recorded when a match used the
      /matches/timer clock — same pill treatment as bounty/first-win, in a
      neutral slate tone since it isn't a bonus or achievement. */
@@ -3109,6 +3168,16 @@
   }
   .goa-badge-row.complete .goa-badge-progress {
     color: var(--gold-light);
+  }
+  .goa-badge-desc {
+    margin: 0.15rem 0 0.5rem;
+    font-family: "Crimson Pro", serif;
+    font-style: italic;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .goa-badge-row.complete .goa-badge-desc {
+    color: var(--text-primary);
   }
   .goa-badge-icons {
     display: flex;

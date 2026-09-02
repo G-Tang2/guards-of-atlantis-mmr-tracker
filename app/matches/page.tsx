@@ -60,6 +60,10 @@ const MATCH_SELECT = `
     mmr_after,
     hero_id,
     is_bounty,
+    bounty_bonus,
+    devoted_bonus,
+    renowned_bonus,
+    defiant_bonus,
     action_time_seconds,
     players (
       id,
@@ -80,6 +84,10 @@ type RawMatchPlayer = {
   mmr_after: number;
   hero_id?: string;
   is_bounty?: boolean;
+  bounty_bonus?: number | null;
+  devoted_bonus?: number | null;
+  renowned_bonus?: number | null;
+  defiant_bonus?: number | null;
   action_time_seconds?: number | null;
   players: Player | Player[] | null;
 };
@@ -109,6 +117,10 @@ const normalizeMatch = (match: RawMatch): Match => {
         mmr_after: mp.mmr_after,
         hero_id: mp.hero_id,
         is_bounty: mp.is_bounty ?? false,
+        bounty_bonus: mp.bounty_bonus ?? null,
+        devoted_bonus: mp.devoted_bonus ?? null,
+        renowned_bonus: mp.renowned_bonus ?? null,
+        defiant_bonus: mp.defiant_bonus ?? null,
         action_time_seconds: mp.action_time_seconds ?? null,
         players: {
           id: player.id,

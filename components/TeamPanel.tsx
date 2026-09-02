@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { getHero, renderStars, formatActionTime, MatchPlayer } from "@/lib/match";
-import { Coins, Sparkles, Timer } from "lucide-react";
+import { Coins, Sparkles, Timer, Crown, Heart, Flame } from "lucide-react";
 
 type TeamPanelProps = {
   label: string;
@@ -93,8 +93,7 @@ export function TeamPanel({
               {hero?.name} {renderStars(Number(hero?.complexity ?? 0))}
               {p.is_bounty && (
                 <span className="goa-bounty-badge">
-                  <Coins size={10} />
-                  +5
+                  <Coins size={10} />+{p.bounty_bonus ?? 5}
                 </span>
               )}
               {p.is_first_hero_win && (
@@ -104,6 +103,36 @@ export function TeamPanel({
                 >
                   <Sparkles size={10} />
                   1ST
+                </span>
+              )}
+              {!!p.renowned_bonus && (
+                <span
+                  className="goa-renowned-badge"
+                  title="Renowned badge: extra MMR for winning"
+                >
+                  <Crown size={10} />+{p.renowned_bonus}
+                </span>
+              )}
+              {!!p.devoted_bonus && (
+                <span
+                  className="goa-devoted-badge"
+                  title="Devoted badge: loss softened"
+                >
+                  <Heart size={10} />+{p.devoted_bonus}
+                </span>
+              )}
+              {!!p.defiant_bonus && (
+                <span
+                  className="goa-defiant-badge"
+                  title={
+                    p.defiant_bonus > 0
+                      ? "Defiant badge: extra MMR for the team"
+                      : "Defiant badge: opponents' gain reduced"
+                  }
+                >
+                  <Flame size={10} />
+                  {p.defiant_bonus > 0 ? "+" : ""}
+                  {p.defiant_bonus}
                 </span>
               )}
               {p.badge_earned && (
