@@ -3154,6 +3154,14 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* Unearned badges show as a plain dark silhouette (respects the
+       icon's own transparent background) rather than their full
+       artwork, matching the collapsed .goa-badge-pill treatment. */
+    filter: brightness(0) opacity(0.45);
+    transition: filter 0.25s ease;
+  }
+  .goa-badge-row.complete .goa-badge-name-icon img {
+    filter: none;
   }
   .goa-badge-row.complete .goa-badge-name-icon {
     background: radial-gradient(
