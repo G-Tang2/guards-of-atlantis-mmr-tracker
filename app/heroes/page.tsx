@@ -7,8 +7,8 @@ import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { HEROES, Hero } from "@/lib/heroes";
 import { didWin, renderStars } from "@/lib/match";
-import { BOUNTY_THRESHOLD, BOUNTY_MMR_BONUS } from "@/lib/bounty";
-import { Coins, ChartNoAxesCombined, BookUser } from "lucide-react";
+import { BOUNTY_THRESHOLD, BOUNTY_MMR_BONUS, ARCANE_BOUNTY_THRESHOLD } from "@/lib/bounty";
+import { Coins, ChartNoAxesCombined, BookUser, Wand2 } from "lucide-react";
 
 type RawMatch = {
   id: string;
@@ -125,6 +125,21 @@ export default function HeroesPage() {
       });
   }, [heroStats, threshold]);
 
+  // 1b. The Arcane badge's shorter 5-game bounty window is a superset of
+  // the 7-game one above (anything unplayed for 7+ games is also unplayed
+  // for 5+) — show only the incremental heroes here (unplayed 5-6 games)
+  // so nothing is listed twice across the two sections.
+  const arcaneOnlyHeroes = useMemo(() => {
+    return heroStats
+      .filter(
+        (s) =>
+          s.lastPlayedGame !== null &&
+          s.lastPlayedGame > ARCANE_BOUNTY_THRESHOLD &&
+          s.lastPlayedGame <= threshold,
+      )
+      .sort((a, b) => b.lastPlayedGame! - a.lastPlayedGame!);
+  }, [heroStats, threshold]);
+
   // 2. Sort the main compendium table
   const sortedTable = useMemo(() => {
     const list = [...heroStats];
@@ -216,6 +231,57 @@ export default function HeroesPage() {
                     {s.lastPlayedGame === null
                       ? "Never played"
                       : `${s.lastPlayedGame} ${s.lastPlayedGame === 1 ? "game" : "games"} ago`}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Arcane Bounty Heroes — the badge's shorter 5-game window, shown
+          separately since it only applies for players who've earned
+          Arcane (see lib/badges.ts); heroes already listed above (7+
+          games) aren't repeated here. */}
+      {arcaneOnlyHeroes.length > 0 && (
+        <div className="goa-bounty-section arcane">
+          <div className="goa-bounty-header">
+            <div className="inline-flex items-center gap-1.5">
+              <Wand2 size={16} />
+              Arcane Bounty Heroes
+            </div>
+            <div className="goa-bounty-header-sub">
+              <span>
+                Not picked in {ARCANE_BOUNTY_THRESHOLD}+ games · Counts as
+                bounty for Arcane badge owners only
+              </span>
+            </div>
+          </div>
+
+          <div className="goa-bounty-grid">
+            {arcaneOnlyHeroes.map((s) => (
+              <div
+                key={s.hero.id}
+                className="goa-bounty-card"
+                onClick={() => router.push(`/heroes/${s.hero.id}`)}
+              >
+                <div className="goa-bounty-card-icon-wrap">
+                  <Image
+                    src={s.hero.icon}
+                    alt={s.hero.name}
+                    fill
+                    sizes="22px"
+                    className="object-contain"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display =
+                        "none";
+                    }}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="goa-bounty-card-name">{s.hero.name}</div>
+                  <div className="goa-bounty-card-meta">
+                    {s.lastPlayedGame} {s.lastPlayedGame === 1 ? "game" : "games"} ago
                   </div>
                 </div>
               </div>

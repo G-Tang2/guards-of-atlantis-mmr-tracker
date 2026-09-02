@@ -1640,6 +1640,15 @@
     margin-top: 0.1rem;
   }
 
+  /* Arcane's shorter bounty window — same layout as the section above,
+     violet instead of gold so the two read as clearly distinct groups. */
+  .goa-bounty-section.arcane .goa-bounty-header {
+    color: #9b7fd4;
+  }
+  .goa-bounty-section.arcane .goa-bounty-card {
+    border-color: rgba(155, 127, 212, 0.25);
+  }
+
   /* Hero Compendium — main table */
   .goa-heroes-col-header {
     display: grid;

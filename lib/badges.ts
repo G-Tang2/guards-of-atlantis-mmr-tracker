@@ -35,7 +35,7 @@ export const BADGES: Badge[] = [
     icon: "/badges/arcane.png",
     heroIds: ["rowenna", "mrak", "snorri", "razzle", "gydion"],
     description:
-      "For you personally, any hero you haven't played in your last 5 games counts as a bounty hero.",
+      "For you, a hero nobody has played in the last 5 games counts as a bounty hero (instead of the usual 7).",
   },
   {
     id: "wayward",

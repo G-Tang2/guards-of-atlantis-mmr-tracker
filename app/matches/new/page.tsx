@@ -9,8 +9,8 @@ import { HeroPicker } from "@/components/HeroPicker";
 import { Hero, HEROES } from "@/lib/heroes";
 import {
   computeBountyHeroIds,
-  computePersonalBountyHeroIds,
   BOUNTY_MMR_BONUS,
+  ARCANE_BOUNTY_THRESHOLD,
   WAYWARD_BOUNTY_MMR_BONUS,
 } from "@/lib/bounty";
 import {
@@ -302,18 +302,20 @@ function NewMatchPageInner() {
       // A bounty hero is one nobody has played in the last several matches —
       // picking one awards a flat bonus on top of the normal Elo delta,
       // regardless of whether the match was won or lost. The Arcane badge
-      // adds a personal version of this rule (5 of the owner's own games
-      // instead of 7 games server-wide) and Wayward boosts the payout for
-      // its owner — both independent perks, so either or both can apply.
+      // shortens that window to 5 games (still "nobody's played it", just a
+      // shorter one) for its owner, and Wayward boosts the payout for its
+      // owner — both independent perks, so either or both can apply.
       const { data: priorMatches } = await supabaseClient
         .from("matches")
-        .select("id, match_players ( hero_id, player_id )")
+        .select("id, match_players ( hero_id )")
         .order("created_at", { ascending: false });
-      const bountyHeroIds = computeBountyHeroIds(
-        priorMatches ?? [],
-        HEROES.map((h) => h.id),
-      );
       const allHeroIds = HEROES.map((h) => h.id);
+      const bountyHeroIds = computeBountyHeroIds(priorMatches ?? [], allHeroIds);
+      const arcaneBountyHeroIds = computeBountyHeroIds(
+        priorMatches ?? [],
+        allHeroIds,
+        ARCANE_BOUNTY_THRESHOLD,
+      );
 
       const bountyBonusByPlayer = new Map<string, number>();
       const applyBounty = (list: PlayerResult[], team: Team): PlayerResult[] =>
@@ -323,10 +325,7 @@ function NewMatchPageInner() {
           const ownedBadges = ownedBadgesByPlayer.get(p.id);
           const isBounty =
             bountyHeroIds.has(heroId) ||
-            (ownedBadges?.has("arcane") &&
-              computePersonalBountyHeroIds(p.id, priorMatches ?? [], allHeroIds).has(
-                heroId,
-              ));
+            (ownedBadges?.has("arcane") && arcaneBountyHeroIds.has(heroId));
           if (!isBounty) return p;
           const bonusAmount = ownedBadges?.has("wayward")
             ? WAYWARD_BOUNTY_MMR_BONUS
