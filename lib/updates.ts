@@ -21,6 +21,43 @@ export type UpdateEntry = {
 
 export const UPDATES: UpdateEntry[] = [
   {
+    date: "Sep 2",
+    title: "Badge Rewards",
+    summary: "Completing a badge now grants an ongoing perk, not just a one-time celebration.",
+    details: [
+      {
+        text: "Each badge now grants its owner a passive reward once fully earned, on top of the celebration when it's completed:",
+      },
+      {
+        label: "Base",
+        text: "Gain a second vote in Ranked Balance team-split voting. Your two votes can't go to the same option.",
+      },
+      {
+        label: "Arcane",
+        text: "For you, a hero nobody has played in the last 5 games counts as a bounty hero (instead of the usual 7).",
+      },
+      {
+        label: "Wayward",
+        text: "Bounty heroes grant you 7 MMR instead of 5 when played.",
+      },
+      {
+        label: "Devoted",
+        text: "Lose 3 MMR less whenever you lose.",
+      },
+      {
+        label: "Defiant",
+        text: "If you win, you and your team gain 1 extra MMR. If you lose, your opponents gain 1 less MMR.",
+      },
+      {
+        label: "Renowned",
+        text: "Gain 2 extra MMR whenever you win.",
+      },
+      {
+        text: "The Hero Compendium's Bounty Heroes section now also shows a separate Arcane Bounty Heroes group, for heroes that only qualify under the shorter 5-game window.",
+      },
+    ],
+  },
+  {
     date: "Aug 23",
     title: "Badge MMR Bonus Removed",
     summary: "Completing a badge is no longer worth extra MMR on top of the usual result.",
