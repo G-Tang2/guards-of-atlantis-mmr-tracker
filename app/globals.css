@@ -6451,6 +6451,19 @@
   .goa-chat-list li {
     margin: 0.1rem 0;
   }
+  /* A card's "~(...)" clarification text — kept visually secondary
+     (smaller, italic, muted, indented) so it still reads as a footnote
+     to the rule above it rather than another line of equal-weight rules
+     text, matching how reminder text is set apart on the physical cards
+     themselves. */
+  .goa-chat-reminder {
+    margin: 0.15rem 0 0;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--border);
+    font-style: italic;
+    font-size: 0.85em;
+    color: var(--text-muted);
+  }
   .goa-chat-code {
     background: rgba(0, 0, 0, 0.3);
     border-radius: 3px;

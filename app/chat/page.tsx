@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { PasswordGate } from "@/components/PasswordGate";
 import { CHAT_HISTORY_STORAGE_KEY, ChatTurn } from "@/lib/chat";
 import { CardReference } from "@/lib/heroCardContext";
 import { MessageCircle, Send, X } from "lucide-react";
@@ -161,9 +160,41 @@ function renderChatText(
       );
       return;
     }
+    // Card text exported from the physical cards uses its own markup, not
+    // standard Markdown: "~(...)" is small reminder/clarification text
+    // (rendered as its own muted note), ">>" starts a new option in a
+    // "Choose one —" list, and a lone ">" is that same option's text
+    // continuing after a card's hard line-wrap — appended to the option
+    // above rather than becoming its own bullet. Without this, all three
+    // markers show up as literal ~/>/>> characters in the UI.
+    const reminderMatch = line.match(/^\s*~\((.*)\)\s*$/);
+    if (reminderMatch) {
+      flushList();
+      blocks.push(
+        <p key={`rem-${i}`} className="goa-chat-reminder">
+          {renderInline(reminderMatch[1], `rem-${i}`, cardReferences, onSelectCard)}
+        </p>,
+      );
+      return;
+    }
     const bulletMatch = line.match(/^\s*[-*]\s+(.*)/);
     if (bulletMatch) {
       listItems.push(bulletMatch[1]);
+      return;
+    }
+    const optionMatch = line.match(/^\s*>>\s*(.*)/);
+    if (optionMatch) {
+      listItems.push(optionMatch[1]);
+      return;
+    }
+    const optionContinuationMatch = line.match(/^\s*>\s*(.*)/);
+    if (optionContinuationMatch) {
+      if (listItems.length > 0) {
+        listItems[listItems.length - 1] =
+          `${listItems[listItems.length - 1]} ${optionContinuationMatch[1]}`.trim();
+      } else {
+        listItems.push(optionContinuationMatch[1]);
+      }
       return;
     }
     flushList();
@@ -456,9 +487,5 @@ function ChatPageInner() {
 }
 
 export default function ChatPage() {
-  return (
-    <PasswordGate>
-      <ChatPageInner />
-    </PasswordGate>
-  );
+  return <ChatPageInner />;
 }
