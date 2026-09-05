@@ -301,10 +301,11 @@ function NewMatchPageInner() {
 
       // A bounty hero is one nobody has played in the last several matches —
       // picking one awards a flat bonus on top of the normal Elo delta,
-      // regardless of whether the match was won or lost. The Arcane badge
-      // shortens that window to 5 games (still "nobody's played it", just a
-      // shorter one) for its owner, and Wayward boosts the payout for its
-      // owner — both independent perks, so either or both can apply.
+      // regardless of whether the match was won or lost — but never on a
+      // draw, since neither side "won" it. The Arcane badge shortens that
+      // window to 5 games (still "nobody's played it", just a shorter one)
+      // for its owner, and Wayward boosts the payout for its owner — both
+      // independent perks, so either or both can apply.
       const { data: priorMatches } = await supabaseClient
         .from("matches")
         .select("id, match_number, match_players ( hero_id )")
@@ -321,7 +322,7 @@ function NewMatchPageInner() {
       const applyBounty = (list: PlayerResult[], team: Team): PlayerResult[] =>
         list.map((p) => {
           const heroId = heroIdFor(p.id, team);
-          if (!heroId) return p;
+          if (!heroId || winner === "none") return p;
           const ownedBadges = ownedBadgesByPlayer.get(p.id);
           const isBounty =
             bountyHeroIds.has(heroId) ||

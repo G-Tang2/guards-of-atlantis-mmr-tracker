@@ -1,6 +1,8 @@
 // A "bounty hero" is one nobody has picked in the last BOUNTY_THRESHOLD
-// matches (or ever) — playing one awards a flat MMR bonus regardless of the
-// match outcome, to nudge the roster away from a handful of favorites.
+// matches (or ever) — playing one awards a flat MMR bonus regardless of
+// whether the match was won or lost (but never on a draw — see
+// app/matches/new/page.tsx's applyBounty), to nudge the roster away from a
+// handful of favorites.
 
 export const BOUNTY_THRESHOLD = 7;
 export const BOUNTY_MMR_BONUS = 5;

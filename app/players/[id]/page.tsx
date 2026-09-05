@@ -1272,31 +1272,28 @@ export default function PlayerProfilePage() {
           )}
 
           {heroStats.length > 0 && (
-            <div className="goa-sort-bar">
-              {(
-                [
-                  ["name", "Hero"],
-                  ["played", "GP"],
-                  ["winRate", "Win %"],
-                  ["wins", "Wins"],
-                  ["losses", "Losses"],
-                  ["draws", "Draws"],
-                  ["complexity", "★"],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  className={`goa-sort-btn ${heroSortKey === key ? "active" : ""}`}
-                  onClick={() => handleHeroSort(key)}
-                >
-                  {label}
-                  {heroSortKey === key && (
-                    <span className="goa-sort-arrow">
-                      {heroSortAsc ? "▲" : "▼"}
-                    </span>
-                  )}
-                </button>
-              ))}
+            <div className="goa-sort-dropdown-row">
+              <select
+                className="goa-select goa-sort-select"
+                value={heroSortKey}
+                onChange={(e) => handleHeroSort(e.target.value as HeroSortKey)}
+              >
+                <option value="name">Hero</option>
+                <option value="played">GP</option>
+                <option value="winRate">Win %</option>
+                <option value="wins">Wins</option>
+                <option value="losses">Losses</option>
+                <option value="draws">Draws</option>
+                <option value="complexity">★</option>
+              </select>
+              <button
+                type="button"
+                className="goa-sort-dir-btn"
+                onClick={() => handleHeroSort(heroSortKey)}
+                aria-label={heroSortAsc ? "Sort ascending" : "Sort descending"}
+              >
+                {heroSortAsc ? "▲" : "▼"}
+              </button>
             </div>
           )}
 
@@ -1378,7 +1375,7 @@ export default function PlayerProfilePage() {
                     {hs.draws > 0 && (
                       <>
                         <span>/</span>
-                        <span className="goa-draws">{hs.draws}D</span>
+                        <span className="goa-text-draw">{hs.draws}D</span>
                       </>
                     )}
                   </div>
@@ -1445,31 +1442,28 @@ export default function PlayerProfilePage() {
           )}
 
           {h2hStats.length > 0 && (
-            <div className="goa-sort-bar">
-              {(
-                [
-                  ["name", "Name"],
-                  ["total", "GP"],
-                  ["with_wins", "With Wins"],
-                  ["with_losses", "With Losses"],
-                  ["against_wins", "Against Wins"],
-                  ["against_losses", "Against Losses"],
-                  ["mmr", "MMR"],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  className={`goa-sort-btn ${h2hSortKey === key ? "active" : ""}`}
-                  onClick={() => handleH2HSort(key)}
-                >
-                  {label}
-                  {h2hSortKey === key && (
-                    <span className="goa-sort-arrow">
-                      {h2hSortAsc ? "▲" : "▼"}
-                    </span>
-                  )}
-                </button>
-              ))}
+            <div className="goa-sort-dropdown-row">
+              <select
+                className="goa-select goa-sort-select"
+                value={h2hSortKey}
+                onChange={(e) => handleH2HSort(e.target.value as H2HSortKey)}
+              >
+                <option value="name">Name</option>
+                <option value="total">GP</option>
+                <option value="with_wins">With Wins</option>
+                <option value="with_losses">With Losses</option>
+                <option value="against_wins">Against Wins</option>
+                <option value="against_losses">Against Losses</option>
+                <option value="mmr">MMR</option>
+              </select>
+              <button
+                type="button"
+                className="goa-sort-dir-btn"
+                onClick={() => handleH2HSort(h2hSortKey)}
+                aria-label={h2hSortAsc ? "Sort ascending" : "Sort descending"}
+              >
+                {h2hSortAsc ? "▲" : "▼"}
+              </button>
             </div>
           )}
 

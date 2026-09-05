@@ -406,7 +406,7 @@ export default function HeroDetailPage() {
                     <span className="goa-text-gain">{wins}W</span>/
                     <span className="goa-text-loss">{losses}L</span>
                     {draws > 0 && (
-                      <>/<span className="goa-draws">{draws}D</span></>
+                      <>/<span className="goa-text-draw">{draws}D</span></>
                     )}
                   </span>
                   <span className="goa-hero-player-arrow">›</span>

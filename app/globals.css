@@ -1423,6 +1423,30 @@
   .goa-sort-arrow.sm {
     font-size: 0.55rem;
   }
+  .goa-sort-dropdown-row {
+    margin: 0.85rem 0.75rem;
+    display: flex;
+    align-items: stretch;
+    gap: 0.4rem;
+  }
+  .goa-sort-select {
+    width: auto;
+    flex: 1;
+  }
+  .goa-sort-dir-btn {
+    flex-shrink: 0;
+    background: rgba(42, 39, 32, 0.7);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--gold-light);
+    font-size: 0.75rem;
+    padding: 0 0.75rem;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .goa-sort-dir-btn:hover {
+    border-color: var(--border-bright);
+  }
   .goa-sort-bar.mt-sm {
     margin-top: 0.3rem;
   }
@@ -2000,6 +2024,9 @@
   }
   .goa-text-loss {
     color: var(--loss);
+  }
+  .goa-text-draw {
+    color: rgba(201, 135, 36, 1);
   }
 
   /* Hero Screen Elements */

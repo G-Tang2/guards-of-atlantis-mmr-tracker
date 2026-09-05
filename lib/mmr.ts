@@ -23,7 +23,7 @@ export type MatchResult = {
 
 const DEFAULT_K = 40;
 const WIN_BONUS = 10;
-const DRAW_DELTA = 10; // flat adjustment applied on a "none" result
+const DRAW_DELTA = 0; // flat adjustment applied on a "none" result — a draw is a wash for both sides
 
 // Expected win probability from Elo-style mmr formula
 const expectedWin = (a: number, b: number): number =>
