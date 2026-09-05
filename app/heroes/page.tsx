@@ -80,23 +80,29 @@ export default function HeroesPage() {
         });
       });
 
-      // Process matches
-      (matches as RawMatch[]).forEach((match, gameIndex) => {
+      // Process matches. lastPlayedGame (the bounty recency clock) only
+      // counts decisive games — a draw doesn't reset a hero's own clock,
+      // and doesn't consume a slot in every other hero's countdown either,
+      // since nobody actually won or lost it.
+      let decisiveGameIndex = 0;
+      (matches as RawMatch[]).forEach((match) => {
+        const isDraw = match.winner === "none";
+        if (!isDraw) decisiveGameIndex++;
+
         const mps = match.match_players ?? [];
         mps.forEach((mp) => {
           if (!mp.hero_id) return;
           const entry = map.get(mp.hero_id);
           if (!entry) return;
 
-          // Set lastPlayedGame if this is the first time we see the hero (newest match)
-          if (entry.lastPlayedGame === null) {
-            entry.lastPlayedGame = gameIndex + 1;
+          if (!isDraw && entry.lastPlayedGame === null) {
+            entry.lastPlayedGame = decisiveGameIndex;
           }
 
           entry.played++;
           entry.players.add(mp.player_id);
 
-          if (match.winner === "none") entry.draws++;
+          if (isDraw) entry.draws++;
           else if (didWin(mp.team, match.winner)) entry.wins++;
           else entry.losses++;
         });

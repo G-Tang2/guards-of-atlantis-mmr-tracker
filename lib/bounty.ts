@@ -17,11 +17,17 @@ export const ARCANE_BOUNTY_THRESHOLD = 5;
 export const WAYWARD_BOUNTY_MMR_BONUS = 7;
 
 type MatchForBounty = {
+  winner: string;
   match_players: { hero_id: string | null }[];
 };
 
 // `matches` must be ordered newest-first (created_at descending) — the same
 // order app/heroes/page.tsx already queries in for its own "games ago" stat.
+//
+// Draws don't count as a "game" for this countdown at all — a hero picked
+// in a draw doesn't reset its own bounty clock, and the draw itself doesn't
+// consume a slot in every other hero's countdown either, since nobody
+// actually won or lost it.
 export function computeBountyHeroIds(
   matches: MatchForBounty[],
   allHeroIds: string[],
@@ -29,14 +35,16 @@ export function computeBountyHeroIds(
 ): Set<string> {
   const lastPlayedGame = new Map<string, number>();
 
-  matches.forEach((match, gameIndex) => {
-    match.match_players.forEach((mp) => {
-      if (!mp.hero_id) return;
-      if (!lastPlayedGame.has(mp.hero_id)) {
-        lastPlayedGame.set(mp.hero_id, gameIndex + 1);
-      }
+  matches
+    .filter((match) => match.winner !== "none")
+    .forEach((match, gameIndex) => {
+      match.match_players.forEach((mp) => {
+        if (!mp.hero_id) return;
+        if (!lastPlayedGame.has(mp.hero_id)) {
+          lastPlayedGame.set(mp.hero_id, gameIndex + 1);
+        }
+      });
     });
-  });
 
   const bountyIds = new Set<string>();
   allHeroIds.forEach((heroId) => {

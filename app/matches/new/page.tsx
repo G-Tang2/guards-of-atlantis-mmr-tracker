@@ -308,7 +308,7 @@ function NewMatchPageInner() {
       // independent perks, so either or both can apply.
       const { data: priorMatches } = await supabaseClient
         .from("matches")
-        .select("id, match_number, match_players ( hero_id )")
+        .select("id, match_number, winner, match_players ( hero_id )")
         .order("created_at", { ascending: false });
       const allHeroIds = HEROES.map((h) => h.id);
       const bountyHeroIds = computeBountyHeroIds(priorMatches ?? [], allHeroIds);
