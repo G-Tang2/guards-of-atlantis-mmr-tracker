@@ -30,10 +30,9 @@ export type BadgeRewardBonuses = {
 // grant its reward yet, same rule the rest of the badge system already
 // follows.
 //
-// Draws (winner === "none") use the same didWin() convention already
-// established for hero-win-bonus eligibility elsewhere in this app: a
-// draw counts as a win for BOTH teams, so Renowned can apply to either
-// side and Devoted/Defiant's loss-side effects apply to neither.
+// Draws (winner === "none") aren't a win for either team, so Renowned
+// (win-only) never applies on a draw; Devoted/Defiant's loss-side effects
+// already only fire on an actual loss, so they're unaffected.
 export function applyBadgeRewards(
   atlantisResults: PlayerResult[],
   titansResults: PlayerResult[],
@@ -88,7 +87,7 @@ export function applyBadgeRewards(
   const atlantisWon = didWin("atlantis", winner);
   const titansWon = didWin("titans", winner);
 
-  // Only a genuine win/loss (not a draw, where both sides read as "won")
+  // Only a genuine win/loss (not a draw, where neither side reads as won)
   // has a winning and a losing side for Defiant's cross-team effect to
   // apply between.
   if (atlantisWon !== titansWon) {

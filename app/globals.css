@@ -1652,7 +1652,7 @@
   /* Hero Compendium — main table */
   .goa-heroes-col-header {
     display: grid;
-    grid-template-columns: 1fr 30px 50px 30px 30px;
+    grid-template-columns: 1fr 30px 50px 30px 30px 30px;
     padding: 0.45rem 0.75rem;
     border-bottom: 1px solid var(--border);
     background: rgba(42, 39, 32, 0.6);
@@ -1682,7 +1682,7 @@
   }
   .goa-heroes-row {
     display: grid;
-    grid-template-columns: 1fr 30px 50px 30px 30px;
+    grid-template-columns: 1fr 30px 50px 30px 30px 30px;
     align-items: center;
     padding: 0.55rem 0.75rem;
     border-bottom: 1px solid rgba(201, 151, 58, 0.08);
@@ -1782,6 +1782,9 @@
   }
   .goa-heroes-stat-cell.muted {
     color: var(--text-muted);
+  }
+  .goa-heroes-stat-cell.draw {
+    color: rgba(201, 135, 36, 1);
   }
 
   /* Leaderboard Tables and Rows */
@@ -1955,6 +1958,9 @@
   }
   .goa-losses {
     color: var(--loss);
+  }
+  .goa-draws {
+    color: rgba(201, 135, 36, 1);
   }
 
   /* Narrow phones (e.g. Galaxy S8+ at 360px): the fixed-width MMR/Win%/W-L/
@@ -2365,6 +2371,9 @@
   .goa-stat-val.loss {
     color: var(--loss);
   }
+  .goa-stat-val.draw {
+    color: rgba(201, 135, 36, 1);
+  }
   .goa-stat-val.muted {
     color: var(--muted);
   }
@@ -2481,6 +2490,12 @@
   }
   .goa-losses {
     color: var(--loss);
+    font-family: "Cinzel", serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .goa-draws {
+    color: rgba(201, 135, 36, 1);
     font-family: "Cinzel", serif;
     font-size: 0.85rem;
     font-weight: 600;
@@ -3859,6 +3874,9 @@
   .goa-hero-stat-bar-seg.loss {
     background: var(--loss);
   }
+  .goa-hero-stat-bar-seg.draw {
+    background: rgba(201, 135, 36, 1);
+  }
   .goa-hero-stat-games {
     font-family: "Cinzel", serif;
     font-size: 0.6rem;
@@ -5038,6 +5056,9 @@
   }
   .goa-h2h-bar-seg.loss {
     background: var(--loss);
+  }
+  .goa-h2h-bar-seg.draw {
+    background: rgba(201, 135, 36, 1);
   }
   .goa-h2h-bar-stat {
     font-family: "Cinzel", serif;

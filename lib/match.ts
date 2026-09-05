@@ -81,8 +81,10 @@ export const renderStars = (n: number | string | undefined | null) =>
 export const getHero = (heroId?: string | null) =>
   HEROES.find((h) => h.id === heroId);
 
-// Draws award a win to both sides rather than a loss to either.
-export const didWin = (team: string, winner: string) =>
-  team === winner || winner === "none";
+// A draw isn't a win for either side (nor a loss) — check isDraw separately
+// wherever that third outcome needs its own handling.
+export const didWin = (team: string, winner: string) => team === winner;
+
+export const isDraw = (winner: string) => winner === "none";
 
 export const formatActionTime = (totalSeconds: number) => `${totalSeconds}s`;

@@ -52,6 +52,7 @@ type PlayerStats = {
   avatar_url?: string | null;
   wins: number;
   losses: number;
+  draws: number;
   matches: number;
   winRate: number;
   last_played_match_number: number;
@@ -109,7 +110,13 @@ export default function LeaderboardPage() {
   const leaderboard: PlayerStats[] = useMemo(() => {
     const statsMap = new Map<
       string,
-      { wins: number; losses: number; matches: number; wonHeroIds: Set<string> }
+      {
+        wins: number;
+        losses: number;
+        draws: number;
+        matches: number;
+        wonHeroIds: Set<string>;
+      }
     >();
 
     matches.forEach((match) => {
@@ -117,11 +124,14 @@ export default function LeaderboardPage() {
         const stats = statsMap.get(mp.player_id) ?? {
           wins: 0,
           losses: 0,
+          draws: 0,
           matches: 0,
           wonHeroIds: new Set<string>(),
         };
         stats.matches++;
-        if (didWin(mp.team, match.winner)) {
+        if (match.winner === "none") {
+          stats.draws++;
+        } else if (didWin(mp.team, match.winner)) {
           stats.wins++;
           if (mp.hero_id) stats.wonHeroIds.add(mp.hero_id);
         } else {
@@ -135,6 +145,7 @@ export default function LeaderboardPage() {
       const stats = statsMap.get(player.id) ?? {
         wins: 0,
         losses: 0,
+        draws: 0,
         matches: 0,
         wonHeroIds: new Set<string>(),
       };
@@ -147,6 +158,7 @@ export default function LeaderboardPage() {
         last_played_match_number: player.last_played_match_number ?? 0,
         wins: stats.wins,
         losses: stats.losses,
+        draws: stats.draws,
         matches: stats.matches,
         winRate: stats.matches === 0 ? 0 : (stats.wins / stats.matches) * 100,
         badges: getCompletedBadges(stats.wonHeroIds),
@@ -202,10 +214,17 @@ export default function LeaderboardPage() {
     const isParticipant = (player: PlayerStats) =>
       maxMatchNumber > 0 && player.last_played_match_number === maxMatchNumber;
 
+    // Counted by real match rows played after last_played_match_number, not
+    // by subtracting match_number values — the sequence backing
+    // match_number can skip numbers (e.g. a rolled back insert), so
+    // arithmetic on it undercounts inactivity whenever a gap exists.
+    const gamesSincePlayed = (lastPlayedMatchNumber: number) =>
+      matches.filter((m) => m.match_number > lastPlayedMatchNumber).length;
+
     const isInactive = (player: PlayerStats) =>
       maxMatchNumber > 0 &&
-      player.last_played_match_number <=
-        maxMatchNumber - INACTIVE_GAME_THRESHOLD;
+      gamesSincePlayed(player.last_played_match_number) >=
+        INACTIVE_GAME_THRESHOLD;
 
     // Player A can overtake player B only if A's MMR is higher AND either:
     // A's team won the latest match against a losing side that included
@@ -263,9 +282,8 @@ export default function LeaderboardPage() {
     workingOrder.forEach((player, idx) => {
       const gamesUntilInactive = Math.max(
         0,
-        player.last_played_match_number +
-          INACTIVE_GAME_THRESHOLD -
-          maxMatchNumber,
+        INACTIVE_GAME_THRESHOLD -
+          gamesSincePlayed(player.last_played_match_number),
       );
       protectedRanks.set(player.id, {
         protectedRank: idx + 1,
@@ -540,6 +558,12 @@ export default function LeaderboardPage() {
                 <span className="goa-wins">{p.wins}</span>
                 <span className="goa-wl-sep">/</span>
                 <span className="goa-losses">{p.losses}</span>
+                {p.draws > 0 && (
+                  <>
+                    <span className="goa-wl-sep">/</span>
+                    <span className="goa-draws">{p.draws}</span>
+                  </>
+                )}
               </span>
               <span className="goa-cell-m">{p.matches}</span>
             </div>

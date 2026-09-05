@@ -26,12 +26,20 @@ type HeroStat = {
   played: number;
   wins: number;
   losses: number;
+  draws: number;
   winRate: number;
   players: Set<string>;
   lastPlayedGame: number | null;
 };
 
-type SortKey = "name" | "played" | "winRate" | "wins" | "losses" | "complexity";
+type SortKey =
+  | "name"
+  | "played"
+  | "winRate"
+  | "wins"
+  | "losses"
+  | "draws"
+  | "complexity";
 
 export default function HeroesPage() {
   const router = useRouter();
@@ -65,6 +73,7 @@ export default function HeroesPage() {
           played: 0,
           wins: 0,
           losses: 0,
+          draws: 0,
           winRate: 0,
           players: new Set(),
           lastPlayedGame: null,
@@ -87,7 +96,8 @@ export default function HeroesPage() {
           entry.played++;
           entry.players.add(mp.player_id);
 
-          if (didWin(mp.team, match.winner)) entry.wins++;
+          if (match.winner === "none") entry.draws++;
+          else if (didWin(mp.team, match.winner)) entry.wins++;
           else entry.losses++;
         });
       });
@@ -150,6 +160,7 @@ export default function HeroesPage() {
       else if (sortKey === "winRate") diff = a.winRate - b.winRate;
       else if (sortKey === "wins") diff = a.wins - b.wins;
       else if (sortKey === "losses") diff = a.losses - b.losses;
+      else if (sortKey === "draws") diff = a.draws - b.draws;
       else if (sortKey === "complexity")
         diff = Number(a.hero.complexity) - Number(b.hero.complexity);
       return sortAsc ? diff : -diff;
@@ -163,6 +174,7 @@ export default function HeroesPage() {
     { key: "winRate", label: "Win %" },
     { key: "wins", label: "Wins" },
     { key: "losses", label: "Losses" },
+    { key: "draws", label: "Draws" },
     { key: "complexity", label: "★" },
   ];
 
@@ -321,6 +333,7 @@ export default function HeroesPage() {
             { key: "winRate", label: "Win%" },
             { key: "wins", label: "W" },
             { key: "losses", label: "L" },
+            { key: "draws", label: "D" },
           ].map(({ key, label }) => (
             <span
               key={key}
@@ -424,6 +437,13 @@ export default function HeroesPage() {
                 className={`goa-heroes-stat-cell ${s.losses > 0 ? "loss" : "muted"}`}
               >
                 {s.losses > 0 ? s.losses : "—"}
+              </span>
+
+              {/* Draws */}
+              <span
+                className={`goa-heroes-stat-cell ${s.draws > 0 ? "draw" : "muted"}`}
+              >
+                {s.draws > 0 ? s.draws : "—"}
               </span>
             </div>
           );

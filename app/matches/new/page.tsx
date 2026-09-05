@@ -307,7 +307,7 @@ function NewMatchPageInner() {
       // owner — both independent perks, so either or both can apply.
       const { data: priorMatches } = await supabaseClient
         .from("matches")
-        .select("id, match_players ( hero_id )")
+        .select("id, match_number, match_players ( hero_id )")
         .order("created_at", { ascending: false });
       const allHeroIds = HEROES.map((h) => h.id);
       const bountyHeroIds = computeBountyHeroIds(priorMatches ?? [], allHeroIds);
@@ -344,9 +344,9 @@ function NewMatchPageInner() {
       // First win with a hero grants a 30% MMR boost (on top of any bounty
       // bonus already folded in above); if that win also completes a badge
       // (a win with every hero in the badge), a flat +50 replaces the 30%
-      // boost rather than stacking with it. "Won" uses the same team===winner
-      // || winner==="none" rule the rest of the app uses for hero/badge
-      // progress, so a draw counts here too.
+      // boost rather than stacking with it. A draw isn't a win for either
+      // side, so it never grants this bonus and never advances hero/badge
+      // progress — see didWin in lib/match.ts.
       const eligiblePlayers = [
         ...atlantis.map((e) => ({ ...e, team: "atlantis" as Team })),
         ...titans.map((e) => ({ ...e, team: "titans" as Team })),
@@ -552,8 +552,17 @@ function NewMatchPageInner() {
       // AND either: A's team won this match against a losing side that
       // included someone ranked at least as high as B (B doesn't need to
       // have played, or even be on the losing team — a teammate of A works
-      // too); or A sat out this match while B played it and lost MMR; or B
-      // has been inactive for at least INACTIVE_GAME_THRESHOLD games.
+      // too); or B has been inactive for at least INACTIVE_GAME_THRESHOLD
+      // games. "Games since" is counted by real match rows played after
+      // last_played_match_number, not by subtracting match_number values —
+      // the sequence backing match_number can skip numbers (e.g. a rolled
+      // back insert), so arithmetic on it undercounts a player's inactivity
+      // whenever a gap sits between their last match and this one.
+      const gamesSincePlayed = (lastPlayedMatchNumber: number) =>
+        (priorMatches ?? []).filter(
+          (m) => m.match_number > lastPlayedMatchNumber,
+        ).length + 1; // +1 for the match being recorded right now
+
       const canOvertake = (
         a: (typeof workingOrder)[number],
         b: (typeof workingOrder)[number],
@@ -569,7 +578,7 @@ function NewMatchPageInner() {
         const aSatOutBLost = !a.isParticipant && b.isParticipant && b.lostMmr;
         const bInactive =
           newMatchNumber > 0 &&
-          b.last_played_match_number <= newMatchNumber - INACTIVE_GAME_THRESHOLD;
+          gamesSincePlayed(b.last_played_match_number) >= INACTIVE_GAME_THRESHOLD;
 
         return aBeatSomeoneAboveB || aSatOutBLost || bInactive;
       };

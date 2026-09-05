@@ -221,17 +221,20 @@ export default function HeroDetailPage() {
 
   const stats = useMemo(() => {
     let wins = 0,
-      losses = 0;
+      losses = 0,
+      draws = 0;
     const playerMap = new Map<
       string,
-      { player: Player; wins: number; losses: number }
+      { player: Player; wins: number; losses: number; draws: number }
     >();
 
     matches.forEach((m) => {
       const heroPlayers = m.match_players.filter((mp) => mp.hero_id === heroId);
       heroPlayers.forEach((mp) => {
+        const isDraw = m.winner === "none";
         const won = didWin(mp.team, m.winner);
-        if (won) wins++;
+        if (isDraw) draws++;
+        else if (won) wins++;
         else losses++;
 
         if (!playerMap.has(mp.player_id)) {
@@ -239,21 +242,24 @@ export default function HeroDetailPage() {
             player: mp.players,
             wins: 0,
             losses: 0,
+            draws: 0,
           });
         }
         const entry = playerMap.get(mp.player_id)!;
-        if (won) entry.wins++;
+        if (isDraw) entry.draws++;
+        else if (won) entry.wins++;
         else entry.losses++;
       });
     });
 
-    const played = wins + losses;
+    const played = wins + losses + draws;
     const winRate = played === 0 ? 0 : Math.round((wins / played) * 100);
     const players = Array.from(playerMap.values()).sort(
-      (a, b) => b.wins + b.losses - (a.wins + a.losses),
+      (a, b) =>
+        b.wins + b.losses + b.draws - (a.wins + a.losses + a.draws),
     );
 
-    return { wins, losses, played, winRate, players };
+    return { wins, losses, draws, played, winRate, players };
   }, [matches, heroId]);
 
   if (!hero) {
@@ -359,6 +365,14 @@ export default function HeroDetailPage() {
           <div className="goa-stat-lbl">Defeats</div>
           <div className="goa-stat-val loss">{stats.losses}</div>
         </div>
+
+        {/* Draws */}
+        {stats.draws > 0 && (
+          <div className="goa-stat-tile">
+            <div className="goa-stat-lbl">Draws</div>
+            <div className="goa-stat-val draw">{stats.draws}</div>
+          </div>
+        )}
       </div>
 
       {/* Players who used this hero */}
@@ -368,11 +382,9 @@ export default function HeroDetailPage() {
             <Swords size={14} /> Played by
           </div>
           <div className="goa-hero-players-list">
-            {stats.players.map(({ player, wins, losses }) => {
-              const pr =
-                wins + losses === 0
-                  ? 0
-                  : Math.round((wins / (wins + losses)) * 100);
+            {stats.players.map(({ player, wins, losses, draws }) => {
+              const played = wins + losses + draws;
+              const pr = played === 0 ? 0 : Math.round((wins / played) * 100);
               return (
                 <div
                   key={player.id}
@@ -393,6 +405,9 @@ export default function HeroDetailPage() {
                   <span className="goa-hero-player-wl">
                     <span className="goa-text-gain">{wins}W</span>/
                     <span className="goa-text-loss">{losses}L</span>
+                    {draws > 0 && (
+                      <>/<span className="goa-draws">{draws}D</span></>
+                    )}
                   </span>
                   <span className="goa-hero-player-arrow">›</span>
                 </div>

@@ -78,6 +78,7 @@ type HeroStat = {
   played: number;
   wins: number;
   losses: number;
+  draws: number;
   winRate: number;
 };
 
@@ -85,9 +86,11 @@ type H2HEntry = {
   opponent: Player;
   withWins: number;
   withLosses: number;
+  withDraws: number;
   withMatches: number;
   againstWins: number;
   againstLosses: number;
+  againstDraws: number;
   againstMatches: number;
 };
 
@@ -408,6 +411,7 @@ export default function PlayerProfilePage() {
     | "winRate"
     | "wins"
     | "losses"
+    | "draws"
     | "complexity";
   const [heroSortKey, setHeroSortKey] = useState<HeroSortKey>("played");
   const [heroSortAsc, setHeroSortAsc] = useState(false);
@@ -570,19 +574,17 @@ export default function PlayerProfilePage() {
     [matches, playerId],
   );
 
-  const { wins, losses, totalMatches, winRate, mmrTrend, streak } =
+  const { wins, losses, draws, totalMatches, winRate, mmrTrend, streak } =
     useMemo(() => {
       let w = 0,
-        l = 0;
+        l = 0,
+        d = 0;
       const trend: TrendPoint[] = [];
 
       const chronological = [...myMatches].reverse();
       chronological.forEach((m) => {
         const me = m.match_players.find((mp) => mp.player_id === playerId);
         if (!me) return;
-        const won = didWin(me.team, m.winner);
-        if (won) w++;
-        else l++;
 
         const result: "win" | "loss" | "draw" =
           m.winner === "none"
@@ -590,14 +592,20 @@ export default function PlayerProfilePage() {
             : me.team === m.winner
               ? "win"
               : "loss";
+        if (result === "draw") d++;
+        else if (result === "win") w++;
+        else l++;
 
         trend.push({ mmr: me.mmr_after, result, date: m.created_at });
       });
 
+      // A draw doesn't count toward or against a streak — skip over it and
+      // keep looking further back, same as a match this player sat out.
       let streak = 0;
       for (const m of myMatches) {
         const me = m.match_players.find((mp) => mp.player_id === playerId);
         if (!me) break;
+        if (m.winner === "none") continue;
         const won = didWin(me.team, m.winner);
         if (streak === 0) {
           streak = won ? 1 : -1;
@@ -606,10 +614,11 @@ export default function PlayerProfilePage() {
         else break;
       }
 
-      const total = w + l;
+      const total = w + l + d;
       return {
         wins: w,
         losses: l,
+        draws: d,
         totalMatches: total,
         winRate: total === 0 ? 0 : Math.round((w / total) * 100),
         mmrTrend: trend,
@@ -626,6 +635,7 @@ export default function PlayerProfilePage() {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
       if (!me) return;
       const myTeam = me.team;
+      const isDraw = m.winner === "none";
       const won = didWin(myTeam, m.winner);
 
       m.match_players.forEach((mp) => {
@@ -637,9 +647,11 @@ export default function PlayerProfilePage() {
             opponent: mp.players,
             withWins: 0,
             withLosses: 0,
+            withDraws: 0,
             withMatches: 0,
             againstWins: 0,
             againstLosses: 0,
+            againstDraws: 0,
             againstMatches: 0,
           });
         }
@@ -648,11 +660,13 @@ export default function PlayerProfilePage() {
 
         if (mp.team === myTeam) {
           entry.withMatches++;
-          if (won) entry.withWins++;
+          if (isDraw) entry.withDraws++;
+          else if (won) entry.withWins++;
           else entry.withLosses++;
         } else {
           entry.againstMatches++;
-          if (won) entry.againstWins++;
+          if (isDraw) entry.againstDraws++;
+          else if (won) entry.againstWins++;
           else entry.againstLosses++;
         }
       });
@@ -703,27 +717,33 @@ export default function PlayerProfilePage() {
 
   // ── Hero stats ──────────────────────────────────────────────────────────────
   const heroStats = useMemo(() => {
-    const map = new Map<string, { wins: number; losses: number }>();
+    const map = new Map<
+      string,
+      { wins: number; losses: number; draws: number }
+    >();
     myMatches.forEach((m) => {
       const me = m.match_players.find((mp) => mp.player_id === playerId);
       if (!me || !me.hero_id) return;
+      const isDraw = m.winner === "none";
       const won = didWin(me.team, m.winner);
-      const cur = map.get(me.hero_id) ?? { wins: 0, losses: 0 };
+      const cur = map.get(me.hero_id) ?? { wins: 0, losses: 0, draws: 0 };
       map.set(me.hero_id, {
-        wins: cur.wins + (won ? 1 : 0),
-        losses: cur.losses + (won ? 0 : 1),
+        wins: cur.wins + (!isDraw && won ? 1 : 0),
+        losses: cur.losses + (!isDraw && !won ? 1 : 0),
+        draws: cur.draws + (isDraw ? 1 : 0),
       });
     });
     return Array.from(map.entries())
-      .map(([heroId, { wins, losses }]) => {
+      .map(([heroId, { wins, losses, draws }]) => {
         const hero = getHero(heroId);
         if (!hero) return null;
-        const played = wins + losses;
+        const played = wins + losses + draws;
         return {
           hero,
           played,
           wins,
           losses,
+          draws,
           winRate: played === 0 ? 0 : Math.round((wins / played) * 100),
         };
       })
@@ -744,6 +764,7 @@ export default function PlayerProfilePage() {
       else if (heroSortKey === "winRate") diff = a.winRate - b.winRate;
       else if (heroSortKey === "wins") diff = a.wins - b.wins;
       else if (heroSortKey === "losses") diff = a.losses - b.losses;
+      else if (heroSortKey === "draws") diff = a.draws - b.draws;
       else if (heroSortKey === "name")
         diff = a.hero.name.localeCompare(b.hero.name);
       else diff = Number(a.hero.complexity) - Number(b.hero.complexity);
@@ -1013,6 +1034,12 @@ export default function PlayerProfilePage() {
             <span className="goa-wins">{wins}W</span>
             <span className="goa-wl-sep">/</span>
             <span className="goa-losses">{losses}L</span>
+            {draws > 0 && (
+              <>
+                <span className="goa-wl-sep">/</span>
+                <span className="goa-draws">{draws}D</span>
+              </>
+            )}
           </div>
           <div className="goa-stat-sub">victories / defeats</div>
         </div>
@@ -1253,6 +1280,7 @@ export default function PlayerProfilePage() {
                   ["winRate", "Win %"],
                   ["wins", "Wins"],
                   ["losses", "Losses"],
+                  ["draws", "Draws"],
                   ["complexity", "★"],
                 ] as const
               ).map(([key, label]) => (
@@ -1316,11 +1344,21 @@ export default function PlayerProfilePage() {
                         { "--bar-width": `${hs.winRate}%` } as CSSProperties
                       }
                     />
+                    {hs.draws > 0 && (
+                      <div
+                        className="goa-hero-stat-bar-seg draw"
+                        style={
+                          {
+                            "--bar-width": `${Math.round((hs.draws / hs.played) * 100)}%`,
+                          } as CSSProperties
+                        }
+                      />
+                    )}
                     <div
                       className="goa-hero-stat-bar-seg loss"
                       style={
                         {
-                          "--bar-width": `${100 - hs.winRate}%`,
+                          "--bar-width": `${Math.round((hs.losses / hs.played) * 100)}%`,
                         } as CSSProperties
                       }
                     />
@@ -1337,6 +1375,12 @@ export default function PlayerProfilePage() {
                     <span className="goa-text-gain">{hs.wins}W</span>
                     <span>/</span>
                     <span className="goa-text-loss">{hs.losses}L</span>
+                    {hs.draws > 0 && (
+                      <>
+                        <span>/</span>
+                        <span className="goa-draws">{hs.draws}D</span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1434,10 +1478,20 @@ export default function PlayerProfilePage() {
               entry.withMatches === 0
                 ? 0
                 : Math.round((entry.withWins / entry.withMatches) * 100);
+            const withDrawRate =
+              entry.withMatches === 0
+                ? 0
+                : Math.round((entry.withDraws / entry.withMatches) * 100);
             const againstRate =
               entry.againstMatches === 0
                 ? 0
                 : Math.round((entry.againstWins / entry.againstMatches) * 100);
+            const againstDrawRate =
+              entry.againstMatches === 0
+                ? 0
+                : Math.round(
+                    (entry.againstDraws / entry.againstMatches) * 100,
+                  );
 
             return (
               <div
@@ -1468,17 +1522,29 @@ export default function PlayerProfilePage() {
                             { "--bar-width": `${withRate}%` } as CSSProperties
                           }
                         />
+                        {entry.withDraws > 0 && (
+                          <div
+                            className="goa-h2h-bar-seg draw"
+                            style={
+                              {
+                                "--bar-width": `${withDrawRate}%`,
+                              } as CSSProperties
+                            }
+                          />
+                        )}
                         <div
                           className="goa-h2h-bar-seg loss"
                           style={
                             {
-                              "--bar-width": `${100 - withRate}%`,
+                              "--bar-width": `${100 - withRate - withDrawRate}%`,
                             } as CSSProperties
                           }
                         />
                       </div>
                       <span className="goa-h2h-bar-stat">
-                        {entry.withWins}W/{entry.withLosses}L · {withRate}%
+                        {entry.withWins}W/{entry.withLosses}L
+                        {entry.withDraws > 0 && `/${entry.withDraws}D`} ·{" "}
+                        {withRate}%
                       </span>
                     </div>
                   )}
@@ -1495,18 +1561,30 @@ export default function PlayerProfilePage() {
                             } as CSSProperties
                           }
                         />
+                        {entry.againstDraws > 0 && (
+                          <div
+                            className="goa-h2h-bar-seg draw"
+                            style={
+                              {
+                                "--bar-width": `${againstDrawRate}%`,
+                              } as CSSProperties
+                            }
+                          />
+                        )}
                         <div
                           className="goa-h2h-bar-seg loss"
                           style={
                             {
-                              "--bar-width": `${100 - againstRate}%`,
+                              "--bar-width": `${100 - againstRate - againstDrawRate}%`,
                             } as CSSProperties
                           }
                         />
                       </div>
                       <span className="goa-h2h-bar-stat">
-                        {entry.againstWins}W/{entry.againstLosses}L ·{" "}
-                        {againstRate}%
+                        {entry.againstWins}W/{entry.againstLosses}L
+                        {entry.againstDraws > 0 &&
+                          `/${entry.againstDraws}D`}{" "}
+                        · {againstRate}%
                       </span>
                     </div>
                   )}
