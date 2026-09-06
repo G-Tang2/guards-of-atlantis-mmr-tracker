@@ -27,6 +27,32 @@ export type ChatResponseBody =
   | { ok: true; reply: string; cardReferences: CardReference[]; showCardDetails: boolean }
   | { ok: false; error: string };
 
+// The client resends the whole session's messages as history on every turn
+// (see app/chat/page.tsx) — harmless for the sessionStorage copy, but
+// uncapped it means a long-running conversation compounds token usage on
+// top of whatever the new question itself needs, on every single
+// subsequent turn. Trimmed to the most recent turns that fit this budget
+// (recency, not relevance, since conversation continuity is what history
+// is for) rather than the keyword-priority fill used for Discord/rulebook
+// context. Same ~4-chars-per-token heuristic as the other context budgets.
+const HISTORY_TOKEN_BUDGET = 20_000;
+const HISTORY_CHAR_BUDGET = HISTORY_TOKEN_BUDGET * 4;
+
+export function trimHistoryToBudget(history: ChatTurn[]): ChatTurn[] {
+  const kept: ChatTurn[] = [];
+  let totalChars = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const chars = history[i].text.length;
+    // Always keep at least the single most recent turn, even if it alone
+    // exceeds the budget (an unusually long model reply) — dropping it
+    // entirely would lose more continuity than the token savings are worth.
+    if (kept.length > 0 && totalChars + chars > HISTORY_CHAR_BUDGET) break;
+    kept.unshift(history[i]);
+    totalChars += chars;
+  }
+  return kept;
+}
+
 // A conversation lives only in the current browser tab's sessionStorage —
 // nothing about it is ever persisted server-side (mirrors this app's other
 // sessionStorage-only flows, e.g. lib/rankedVote.ts).

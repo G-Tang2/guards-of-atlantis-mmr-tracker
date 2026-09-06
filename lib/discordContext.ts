@@ -1,17 +1,18 @@
 import { supabaseServer } from "@/lib/supabase/server";
 
-// The active constraint for most real questions, not just a rare-edge-
-// case ceiling — the group's history has grown to tens of thousands of
-// messages, so a natural-language question's keywords routinely have
-// enough combined matches to fill this budget (see the priority-fill
-// loop below for how that's kept from crowding out the most relevant
-// hits). Estimated via a rough ~4-characters-per-token heuristic rather
-// than a real tokenizer. Kept deliberately tight (along with the
-// rulebook and hero-card contexts) so a single request stays well under
-// Gemini's per-minute token limit even when a few messages go out in
-// quick succession.
-const CONTEXT_TOKEN_BUDGET = 200_000;
-const CONTEXT_CHAR_BUDGET = CONTEXT_TOKEN_BUDGET * 4;
+// Fallback only for a caller that doesn't pass its own budget — the real
+// per-request budget is computed by app/api/chat/route.ts as whatever
+// token headroom is left after the rulebook/hero-card/guide sections for
+// that specific question (see TOTAL_CONTEXT_TOKEN_BUDGET there), so a
+// simple question with little other context gets much more Discord
+// history than a heavy multi-hero one. Estimated via a rough
+// ~4-characters-per-token heuristic rather than a real tokenizer. This
+// value was previously a flat 200_000 applied to every request regardless
+// of what else it needed — ten times the hero-card budget — which let a
+// multi-hero question (each hero name is its own keyword query) fill this
+// section alone to near Gemini's entire 250k-tokens/minute free-tier cap
+// before the rulebook/cards/guides were even added.
+const DEFAULT_CONTEXT_TOKEN_BUDGET = 20_000;
 
 // Always included regardless of keyword relevance, so the bot still has
 // some ambient context for a vague question ("what's new?") that doesn't
@@ -84,7 +85,11 @@ const SELECT_COLUMNS = "id, channel_name, author_username, content, created_at";
 // mixed into a shared OR query would otherwise flood the (also
 // row-capped) result with its own recent matches and crowd out a rarer
 // keyword's genuinely old, relevant ones before they're ever seen.
-export async function fetchRelevantDiscordContext(question: string): Promise<string> {
+export async function fetchRelevantDiscordContext(
+  question: string,
+  tokenBudget: number = DEFAULT_CONTEXT_TOKEN_BUDGET,
+): Promise<string> {
+  const charBudget = tokenBudget * 4;
   const keywords = extractKeywords(question).slice(0, MAX_QUERY_KEYWORDS);
 
   const recentPromise = supabaseServer
@@ -121,7 +126,7 @@ export async function fetchRelevantDiscordContext(question: string): Promise<str
     for (const m of rows) {
       if (seen.has(m.id)) continue;
       const lineLength = toLine(m).length + 1;
-      if (totalChars + lineLength > CONTEXT_CHAR_BUDGET) return;
+      if (totalChars + lineLength > charBudget) return;
       seen.add(m.id);
       selected.push(m);
       totalChars += lineLength;

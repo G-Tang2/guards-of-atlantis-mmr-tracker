@@ -1325,3 +1325,24 @@ This is the player-hunter card. Minions are tougher to take because you now have
 Playing As Bain:
 Bain plays best as more of a support character even though his kit is aligned with getting kills — you often struggle with the action economy and defense to perform solo kills. Use gold more as painting a target than as a guaranteed finisher; if you get the kill, great, but it's not the end of the world if you don't. If going for the block green branch, try to boost your initiative so you can make sure you can get your gold bounty out when you need it. Alt green is a good pick whenever there are some token-heavy heroes to get around, or to cross from the jungle to the enemy beach when trying to catch back up to the wave. Good uses of silver are what separate the better Bain pilots.`,
 };
+
+// Hard ceiling only, same reasoning as fetchRelevantHeroCards in
+// lib/heroCardContext.ts — an ordinary question naming one or two heroes
+// stays far under this; it only matters on an unusually broad multi-hero
+// match (e.g. comparing two full three-hero drafts at once), where without
+// this a request could still overflow even after the discordContext/
+// rulebook fixes for that same failure mode.
+const CONTEXT_TOKEN_BUDGET = 20_000;
+const CONTEXT_CHAR_BUDGET = CONTEXT_TOKEN_BUDGET * 4;
+
+export function fetchRelevantHeroGuides(heroIds: string[]): string {
+  const kept = heroIds.filter((id) => HERO_GUIDES[id]);
+  if (kept.length === 0) return "";
+
+  let combined = kept.map((id) => HERO_GUIDES[id]).join("\n\n---\n\n");
+  while (kept.length > 1 && combined.length > CONTEXT_CHAR_BUDGET) {
+    kept.pop();
+    combined = kept.map((id) => HERO_GUIDES[id]).join("\n\n---\n\n");
+  }
+  return combined;
+}
