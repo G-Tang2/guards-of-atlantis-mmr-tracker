@@ -18,24 +18,36 @@ import { ChatRequestBody, ChatTurn, trimHistoryToBudget } from "@/lib/chat";
 
 const MAX_MESSAGE_LENGTH = 4000;
 
-// Total token ceiling for the whole system instruction assembled below
-// (conversation history has its own separate budget — see
-// trimHistoryToBudget in lib/chat.ts). The hero-card and hero-guide
+// Total token ceiling for the whole system instruction assembled below.
+// This is NOT the whole request's input-token cost, though — conversation
+// history (up to HISTORY_TOKEN_BUDGET, see trimHistoryToBudget in
+// lib/chat.ts) and the user's own message (up to MAX_MESSAGE_LENGTH chars)
+// ride alongside it and count against the same Gemini free-tier
+// input-token quota, so the real worst case is roughly this plus ~21k
+// tokens (20k history + ~1k message). The hero-card and hero-guide
 // sections each carry their own hard ceiling already (see
 // fetchRelevantHeroCards/fetchRelevantHeroGuides), and the rulebook is
-// gated on/off rather than sized, so this is really about Discord history:
-// rather than giving it a flat budget that either wastes headroom on a
-// simple question or gets crowded out on a heavy one, it gets whatever
-// this total leaves over once the other sections are known for this
-// specific request (see discordTokenBudget below). Sized so even the
-// worst realistic combination (max card/guide match, a rules-flavored
-// question, full rulebook) leaves room for a few such requests within the
-// same 60-second window before nearing Gemini's 250k-tokens/minute
-// free-tier cap.
-const TOTAL_CONTEXT_TOKEN_BUDGET = 80_000;
+// gated on/off rather than sized, so this budget is really about Discord
+// history: rather than a flat cap that either wastes headroom on a simple
+// question or gets crowded out on a heavy one, it gets whatever this total
+// leaves over once the other sections are known for this specific request
+// (see discordTokenBudget below).
+//
+// Sized assuming at most one heavy (max card/guide match, rules-flavored,
+// full rulebook, full conversation history) question lands in any given
+// 60-second window — not several in a row — so 200k (worst case ~221k
+// with history/message) still leaves ~29k tokens of margin under Gemini's
+// 250k-tokens/minute free-tier cap for token-estimate slop (this budget is
+// enforced via a ~4-chars-per-token heuristic, not a real tokenizer) plus
+// room for an incidental smaller message in the same window. If that
+// assumption stops holding — e.g. multiple group members firing heavy
+// questions back-to-back — lower this rather than the per-section caps.
+const TOTAL_CONTEXT_TOKEN_BUDGET = 200_000;
 // Discord history still gets at least this much even when the other
 // sections are maxed out, so a heavy multi-hero rules question doesn't
-// squeeze it out entirely.
+// squeeze it out entirely — in practice unreachable today since the other
+// sections' own hard ceilings can't add up to enough to push Discord below
+// this, but kept as a defensive floor in case those caps grow later.
 const MIN_DISCORD_TOKEN_BUDGET = 20_000;
 
 export async function POST(request: Request) {
