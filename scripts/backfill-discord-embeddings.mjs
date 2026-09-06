@@ -35,15 +35,38 @@ const EMBEDDING_MODEL = "gemini-embedding-2";
 const EMBEDDING_DIMENSIONS = 768;
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
+// The free tier's embedding quota (confirmed against the live API, not
+// guessed) is EmbedContentRequestsPerDayPerUserPerProjectPerModel-FreeTier
+// = 1000 — a hard DAILY cap, not a per-minute one. That's a fundamentally
+// different failure mode from generateContent's per-minute cap this app
+// hit elsewhere: once it's exhausted, no amount of short-delay retrying
+// helps (it won't reset for hours), so a 429 whose quotaId contains
+// "PerDay" fails the whole run immediately instead of retrying — see
+// isDailyQuotaError below. A first real backfill run hit exactly this: it
+// got through ~1000 rows, then spent ~15 minutes retrying with 27-59s
+// waits before giving up, none of which could have possibly succeeded.
+//
+// At 1000/day, backfilling this table's ~28.6k rows takes ~29 daily runs,
+// not one sitting — see the script's own final log line for what that
+// means for finishing the whole table.
 const BATCH_SIZE = 100; // rows fetched from Supabase per round
-const CONCURRENCY = 5; // simultaneous embedding requests within a batch
+const CONCURRENCY = 1; // sequential, not concurrent — see the header comment above; this endpoint's real constraint is a request COUNT (daily), not a rate, so concurrency doesn't help and only spends the budget faster before you can see it happening
 const MAX_CONTENT_CHARS = 8000; // defensive only — real Discord messages are short
-const MAX_RETRIES = 6;
+const MAX_RETRIES = 3;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+class DailyQuotaExhaustedError extends Error {}
+
+function isDailyQuotaError(body) {
+  const violations = body?.error?.details?.find(
+    (d) => typeof d["@type"] === "string" && d["@type"].includes("QuotaFailure"),
+  )?.violations;
+  return Array.isArray(violations) && violations.some((v) => typeof v.quotaId === "string" && v.quotaId.includes("PerDay"));
 }
 
 async function embedOne(text, attempt = 1) {
@@ -58,10 +81,13 @@ async function embedOne(text, attempt = 1) {
   });
 
   if (res.status === 429) {
+    const body = await res.json().catch(() => null);
+    if (isDailyQuotaError(body)) {
+      throw new DailyQuotaExhaustedError("Daily embedding quota exhausted.");
+    }
     if (attempt > MAX_RETRIES) {
       throw new Error("Gave up after repeated 429s — re-run the script later to resume.");
     }
-    const body = await res.json().catch(() => null);
     const retryInfo = body?.error?.details?.find((d) => typeof d["@type"] === "string" && d["@type"].includes("RetryInfo"));
     const waitMs = retryInfo?.retryDelay ? Math.ceil(parseFloat(retryInfo.retryDelay) * 1000) : attempt * 2000;
     console.log(`  rate limited, waiting ${waitMs}ms (attempt ${attempt}/${MAX_RETRIES})...`);
@@ -98,6 +124,17 @@ async function processBatch(rows) {
   }
 }
 
+async function countRemaining() {
+  const { count, error } = await supabase
+    .from("discord_messages")
+    .select("*", { count: "exact", head: true })
+    .is("embedding", null)
+    .not("content", "is", null)
+    .neq("content", "");
+  if (error) return null;
+  return count;
+}
+
 async function main() {
   let totalDone = 0;
   const startTime = Date.now();
@@ -124,7 +161,21 @@ async function main() {
     }
     if (!rows || rows.length === 0) break;
 
-    await processBatch(rows);
+    try {
+      await processBatch(rows);
+    } catch (err) {
+      if (err instanceof DailyQuotaExhaustedError) {
+        const remaining = await countRemaining();
+        console.log(`Embedded ${totalDone} messages this run before hitting the daily quota (1000 requests/day, free tier).`);
+        console.log(
+          remaining !== null
+            ? `${remaining} messages still need embedding — re-run this same command again after the quota resets (roughly 24h from when you started today's run).`
+            : `Re-run this same command again after the quota resets (roughly 24h from when you started today's run) to continue.`,
+        );
+        return;
+      }
+      throw err;
+    }
     totalDone += rows.length;
     const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(0);
     console.log(`Embedded ${totalDone} messages so far (${elapsedSec}s elapsed)...`);
