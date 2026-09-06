@@ -86,7 +86,7 @@ async function embedOne(text, attempt = 1) {
       throw new DailyQuotaExhaustedError("Daily embedding quota exhausted.");
     }
     if (attempt > MAX_RETRIES) {
-      throw new Error("Gave up after repeated 429s — re-run the script later to resume.");
+      throw new Error("Gave up after repeated 429s - re-run the script later to resume.");
     }
     const retryInfo = body?.error?.details?.find((d) => typeof d["@type"] === "string" && d["@type"].includes("RetryInfo"));
     const waitMs = retryInfo?.retryDelay ? Math.ceil(parseFloat(retryInfo.retryDelay) * 1000) : attempt * 2000;
@@ -169,7 +169,7 @@ async function main() {
         console.log(`Embedded ${totalDone} messages this run before hitting the daily quota (1000 requests/day, free tier).`);
         console.log(
           remaining !== null
-            ? `${remaining} messages still need embedding — re-run this same command again after the quota resets (roughly 24h from when you started today's run).`
+            ? `${remaining} messages still need embedding - re-run this same command again after the quota resets (roughly 24h from when you started today's run).`
             : `Re-run this same command again after the quota resets (roughly 24h from when you started today's run) to continue.`,
         );
         return;

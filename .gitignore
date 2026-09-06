@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local script output (see scripts/run-embedding-backfill-task.ps1)
+scripts/backfill-log.txt
