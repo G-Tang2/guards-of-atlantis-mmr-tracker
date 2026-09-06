@@ -8,6 +8,23 @@ import { ChatTurn } from "@/lib/chat";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
+// Verified directly against the live API (ListModels) rather than
+// guessed — this account's only embedding-capable models are
+// gemini-embedding-001/2/2-preview, none of which follow the
+// "-latest"/dated-id convention GEMINI_MODEL uses above, so there's no
+// stable alias to default to; if this one is retired, re-check
+// ListModels rather than assuming a similarly-named replacement exists.
+// 768 dimensions (truncated from this model's native 3072 via
+// outputDimensionality) keeps vectors well under pgvector's ivfflat index
+// dimension ceiling and is plenty for a group chat's vocabulary. This
+// value and the model id MUST match what
+// scripts/backfill-discord-embeddings.mjs used to populate
+// discord_messages.embedding (see supabase/migrations/0001_discord_message_embeddings.sql) —
+// cosine distance between vectors from different models/dimensions is
+// meaningless.
+const EMBEDDING_MODEL = "gemini-embedding-2";
+export const EMBEDDING_DIMENSIONS = 768;
+
 // Distinguished from a generic failure so the route handler can show the
 // user something actionable ("try again in a minute") instead of a
 // one-size-fits-all error — Gemini returns 429 for both per-minute and
@@ -105,6 +122,44 @@ export async function countTokens(text: string): Promise<number | null> {
     if (!res.ok) return null;
     const data = await res.json();
     return typeof data?.totalTokens === "number" ? data.totalTokens : null;
+  } catch {
+    return null;
+  }
+}
+
+// "RETRIEVAL_QUERY" for embedding the user's question at chat time,
+// "RETRIEVAL_DOCUMENT" for embedding stored Discord messages (used by the
+// backfill script, not this function, but kept here as the source of
+// truth for the value) — these embedding models are asymmetric, trained
+// so a query and the documents it should match don't need to look
+// textually similar, but only when each side is embedded with its own
+// correct task type.
+export type EmbeddingTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT";
+
+// Best-effort only, same reasoning as countTokens — returns null on any
+// failure so semantic search degrades to the existing keyword-only
+// matching in lib/discordContext.ts rather than ever blocking a reply.
+export async function embedText(text: string, taskType: EmbeddingTaskType): Promise<number[] | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || !text.trim()) return null;
+
+  try {
+    const res = await fetch(
+      `${GEMINI_API_BASE}/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: { parts: [{ text }] },
+          taskType,
+          outputDimensionality: EMBEDDING_DIMENSIONS,
+        }),
+      },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const values = data?.embedding?.values;
+    return Array.isArray(values) ? values : null;
   } catch {
     return null;
   }

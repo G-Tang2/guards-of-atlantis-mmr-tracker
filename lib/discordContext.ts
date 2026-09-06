@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { embedText } from "@/lib/gemini";
 
 // Fallback only for a caller that doesn't pass its own budget — the real
 // per-request budget is computed by app/api/chat/route.ts as whatever
@@ -35,6 +36,13 @@ const MATCHED_ROW_LIMIT_PER_KEYWORD = 1000;
 // have more than a handful of meaningful (non-stopword) terms.
 const MAX_QUERY_KEYWORDS = 12;
 
+// Upper bound on how many semantically-similar rows a single request
+// pulls back — generous on purpose, since this is just a ceiling on one
+// already-ranked list (nearest first); the same addUpToBudget trim below
+// decides what actually survives into the prompt, same as the keyword
+// row cap above.
+const SEMANTIC_MATCH_LIMIT = 300;
+
 const STOP_WORDS = new Set([
   "the", "a", "an", "is", "are", "was", "were", "be", "been", "to", "of",
   "and", "or", "in", "on", "at", "for", "with", "about", "what", "who",
@@ -67,10 +75,27 @@ type DiscordMessageRow = {
 
 const SELECT_COLUMNS = "id, channel_name, author_username, content, created_at";
 
-// Sends Gemini a keyword-relevant slice of the Discord history instead of
-// the whole table every time — the table holds the group's full
-// multi-year history (tens of thousands of rows), far more than a given
-// question needs or a single request should transfer.
+// Sends Gemini a relevant slice of the Discord history instead of the
+// whole table every time — the table holds the group's full multi-year
+// history (tens of thousands of rows), far more than a given question
+// needs or a single request should transfer.
+//
+// Two independent relevance signals feed the same budget below: a
+// semantic similarity search (via the match_discord_messages RPC —
+// see supabase/migrations/0001_discord_message_embeddings.sql) against
+// whatever rows have been embedded by
+// scripts/backfill-discord-embeddings.mjs, and the original keyword
+// substring search over ALL rows regardless of embedding status. The
+// semantic search finds relevant messages that don't share the
+// question's exact wording (paraphrases, synonyms); the keyword search
+// is what still covers any message that was never embedded — there is
+// no ongoing embedding sync for newly-arriving rows (a deliberate
+// choice — see the backfill script's header), so the table's embedded
+// coverage only gets staler over time without a re-run. Embedding the
+// question itself is best-effort (embedText returns null on any
+// failure, and a missing/erroring RPC is caught below rather than
+// thrown), so this whole layer degrades to the original keyword-only
+// behavior rather than ever blocking a reply.
 //
 // Keyword filtering happens in Postgres via ILIKE, not by pulling every
 // row over the wire and filtering in JS — the previous version did a
@@ -107,14 +132,49 @@ export async function fetchRelevantDiscordContext(
       .limit(MATCHED_ROW_LIMIT_PER_KEYWORD),
   );
 
-  const [recentResult, ...matchedResults] = await Promise.all([recentPromise, ...matchedPromises]);
+  // Wrapped in its own async function (rather than a plain .then()
+  // returning the RPC call directly) so this resolves to a plain
+  // {data, error} object either way — letting a thenable escape from a
+  // .then() callback makes promise-chaining flatten it, which confuses
+  // Promise.all's tuple inference below when mixed with the spread
+  // matchedPromises array.
+  const semanticPromise: Promise<{ data: DiscordMessageRow[] | null; error: unknown }> = (async () => {
+    const embedding = await embedText(question, "RETRIEVAL_QUERY");
+    if (!embedding) return { data: null, error: null };
+    const { data, error } = await supabaseServer.rpc("match_discord_messages", {
+      query_embedding: embedding,
+      match_count: SEMANTIC_MATCH_LIMIT,
+    });
+    return { data: data as DiscordMessageRow[] | null, error };
+  })();
+
+  const [recentResult, semanticResult, ...matchedResults] = await Promise.all([
+    recentPromise,
+    semanticPromise,
+    ...matchedPromises,
+  ]);
 
   if (recentResult.error) throw recentResult.error;
   for (const r of matchedResults) {
     if (r.error) throw r.error;
   }
+  // Not thrown, unlike the errors above — this RPC is a newer, optional
+  // dependency (it doesn't exist until the migration is run), so a
+  // missing function or any other RPC failure should just mean "no
+  // semantic matches this time," not a broken chat feature.
+  if (semanticResult.error) {
+    console.error("Discord semantic search unavailable:", semanticResult.error);
+  }
+
   const recent = recentResult.data ?? [];
-  if (recent.length === 0 && matchedResults.every((r) => (r.data ?? []).length === 0)) return "";
+  const semantic = semanticResult.data ?? [];
+  if (
+    recent.length === 0 &&
+    semantic.length === 0 &&
+    matchedResults.every((r) => (r.data ?? []).length === 0)
+  ) {
+    return "";
+  }
 
   const toLine = (m: DiscordMessageRow) =>
     `[${m.created_at}] #${m.channel_name} ${m.author_username}: ${m.content}`;
@@ -136,6 +196,14 @@ export async function fetchRelevantDiscordContext(
   // The recent floor is always included first — it's small (150 rows)
   // and its whole purpose is ambient context regardless of relevance.
   addUpToBudget(recent);
+
+  // Semantic matches next — already ranked best-to-worst by similarity
+  // (see the RPC's own `ORDER BY embedding <=> query_embedding`), so
+  // there's no need for the ascending-count fill trick the keyword lists
+  // use below; that's specifically for reconciling several independent,
+  // unranked lists against each other, which doesn't apply to one
+  // pre-ranked list.
+  addUpToBudget(semantic);
 
   // A common English word that isn't a literal stopword ("best", "way",
   // "back") can still match hundreds of messages in a natural-language
