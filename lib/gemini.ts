@@ -78,3 +78,34 @@ export async function generateChatReply({
   }
   return reply;
 }
+
+// Exact token count from Gemini's own tokenizer, used to size the
+// Discord-history budget precisely (see TOTAL_CONTEXT_TOKEN_BUDGET in
+// app/api/chat/route.ts) instead of guessing via a ~4-chars-per-token
+// heuristic. Best-effort only — returns null on any failure (missing key,
+// network error, non-OK response, unexpected shape) rather than throwing,
+// since this is a budgeting optimization, not a requirement: the caller
+// falls back to the char-based heuristic, and a chat reply should never
+// fail just because this side call did.
+export async function countTokens(text: string): Promise<number | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch(
+      `${GEMINI_API_BASE}/models/${GEMINI_MODEL}:countTokens?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text }] }],
+        }),
+      },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data?.totalTokens === "number" ? data.totalTokens : null;
+  } catch {
+    return null;
+  }
+}

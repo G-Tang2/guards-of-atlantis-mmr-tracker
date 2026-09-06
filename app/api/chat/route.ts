@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { requireSharedAuth } from "@/lib/apiAuth";
 import { fetchRelevantDiscordContext } from "@/lib/discordContext";
-import { RULEBOOK_TEXT, wantsRulebookContext } from "@/lib/rulebook";
+import { wantsRulebookContext, fetchRelevantRulebookPages } from "@/lib/rulebook";
 import { fetchRelevantHeroGuides } from "@/lib/heroGuides";
 import { GENERAL_STRATEGY_GUIDES } from "@/lib/generalStrategy";
 import {
@@ -13,7 +13,7 @@ import {
   isCardDetailQuestion,
   wantsHeroCardContext,
 } from "@/lib/heroCardContext";
-import { generateChatReply, GeminiRateLimitError } from "@/lib/gemini";
+import { generateChatReply, countTokens, GeminiRateLimitError } from "@/lib/gemini";
 import { ChatRequestBody, ChatTurn, trimHistoryToBudget } from "@/lib/chat";
 
 const MAX_MESSAGE_LENGTH = 4000;
@@ -100,43 +100,21 @@ export async function POST(request: Request) {
     const generalStrategySection =
       generalStrategyContext &&
       `Community general strategy guides (not hero-specific — how the five card colors function and interact, and how to read the minion wave/push potential):\n${generalStrategyContext}`;
-    const rulebookBlock = `Official rulebook:\n${RULEBOOK_TEXT}`;
-    // The rulebook is ~24k tokens on its own — for a hero/strategy question
-    // (wantsContext), only worth paying that cost when the question itself
-    // also looks rules-flavored (see wantsRulebookContext), since the
-    // priority instructions below already treat card data/guides as that
-    // branch's primary grounding and the rulebook as a rarely-needed
-    // fallback. A general/social/rules question (the other branch) gets it
-    // unconditionally, same as before — that's the branch it serves most
-    // directly, and it isn't the one that was blowing the token budget.
-    const rulebookSection = wantsContext ? (wantsRulebookContext(message) ? rulebookBlock : "") : rulebookBlock;
-
-    // Whatever's left of the total budget after the sections above is what
-    // Discord history gets for this specific request — a plain question
-    // with no hero/rulebook content ends up giving Discord most of the
-    // whole budget, while a heavy multi-hero rules question leaves it the
-    // floor. Either way the combined total stays bounded by
-    // TOTAL_CONTEXT_TOKEN_BUDGET (plus the floor itself, in the rare case
-    // the other sections alone already exceed the total).
-    const nonDiscordChars = cardSection.length + guideSection.length + generalStrategySection.length + rulebookSection.length;
-    const discordTokenBudget = Math.max(
-      MIN_DISCORD_TOKEN_BUDGET,
-      TOTAL_CONTEXT_TOKEN_BUDGET - Math.round(nonDiscordChars / 4),
-    );
-    const discordContext = await fetchRelevantDiscordContext(message, discordTokenBudget);
-    const discordSection = discordContext && `Discord history:\n${discordContext}`;
-
-    // For a card/strategy question, the cards themselves are what actually
-    // answer it — they go first so the model grounds its reasoning in
-    // them, with the strategy guide right after (richer playstyle context
-    // than the raw card JSON alone), then the general strategy guides, and
-    // Discord history following as supplementary color rather than leading
-    // the answer with community banter/opinions in place of concrete
-    // kit-based advice. For anything else (general/social/rules
-    // questions), Discord leads as the group's own primary source.
-    const sections = wantsContext
-      ? [cardSection, guideSection, generalStrategySection, rulebookSection, discordSection].filter(Boolean)
-      : [discordSection, rulebookSection, cardSection, guideSection, generalStrategySection].filter(Boolean);
+    // The rulebook is ~24k tokens in full — fetchRelevantRulebookPages
+    // trims it to the page(s) that actually match the question's keywords
+    // (falling back to the full text if nothing matches, so a miss costs
+    // tokens rather than correctness — see its own comment in
+    // lib/rulebook.ts). For a hero/strategy question (wantsContext), still
+    // only worth fetching at all when the question also looks
+    // rules-flavored (see wantsRulebookContext), since the priority
+    // instructions below already treat card data/guides as that branch's
+    // primary grounding. A general/social/rules question (the other
+    // branch) gets it unconditionally, same as before — that's the branch
+    // it serves most directly.
+    const rulebookText = wantsContext
+      ? (wantsRulebookContext(message) ? fetchRelevantRulebookPages(message) : "")
+      : fetchRelevantRulebookPages(message);
+    const rulebookSection = rulebookText && `Official rulebook:\n${rulebookText}`;
 
     const askedColors = wantsDetail ? extractAskedColors(message) : [];
     const colorFilterNote = askedColors.length
@@ -152,7 +130,40 @@ export async function POST(request: Request) {
       priorityInstruction = " The group's own Discord message history below is your top-priority source for this kind of question — treat it as the primary source for how this group actually plays and talks about the game (house rules, opinions, running jokes, prior rulings), and lead with it over generic knowledge whenever it's relevant. The official rulebook is secondary reference material for official rules. This question doesn't appear to be about a specific hero's cards, so no card data was included below — if the question does turn out to hinge on a card's exact, unstated details and neither Discord nor the rulebook already answers it, say so rather than guessing; but if Discord or the rulebook already contains a clear answer, use it confidently instead of deflecting.";
     }
 
-    const systemInstruction = `You are a helpful assistant for the Guards of Atlantis II board game group.${priorityInstruction} For rules questions specifically: only state a rule, exception, or restriction if it is explicitly written in the rulebook or card text below — do not infer, speculate, or invent an exception based on theme, flavor text, "spirit of the rules", or assumed community consensus. If a general rule (e.g. what a Clear/Attack/Skill action can target) doesn't list an exception for a specific case, the general rule applies as written, even if the specific case sounds narratively special. If something isn't covered by the data below, say so honestly rather than making it up. You do not have access to the group's match history, player stats/MMR, or hero pick/win rates — if asked about those, say so rather than guessing.\n\n${sections.join("\n\n")}`;
+    const promptPreamble = `You are a helpful assistant for the Guards of Atlantis II board game group.${priorityInstruction} For rules questions specifically: only state a rule, exception, or restriction if it is explicitly written in the rulebook or card text below — do not infer, speculate, or invent an exception based on theme, flavor text, "spirit of the rules", or assumed community consensus. If a general rule (e.g. what a Clear/Attack/Skill action can target) doesn't list an exception for a specific case, the general rule applies as written, even if the specific case sounds narratively special. If something isn't covered by the data below, say so honestly rather than making it up. You do not have access to the group's match history, player stats/MMR, or hero pick/win rates — if asked about those, say so rather than guessing.`;
+
+    // Whatever's left of the total budget after the sections above is what
+    // Discord history gets for this specific request — a plain question
+    // with no hero/rulebook content ends up giving Discord most of the
+    // whole budget, while a heavy multi-hero rules question leaves it the
+    // floor. Sized from Gemini's own tokenizer (via countTokens) rather
+    // than the ~4-chars-per-token heuristic used elsewhere, since this is
+    // the one number that directly determines how close a request lands
+    // to the real per-minute cap — countTokens falls back to that same
+    // heuristic on any failure (missing key, network error), so this never
+    // blocks a reply. Order doesn't matter for a token count, so this
+    // doesn't need to match the final section ordering below.
+    const nonDiscordSections = [cardSection, guideSection, generalStrategySection, rulebookSection].filter(Boolean);
+    const nonDiscordSystemInstructionSoFar = `${promptPreamble}\n\n${nonDiscordSections.join("\n\n")}`;
+    const actualNonDiscordTokens = await countTokens(nonDiscordSystemInstructionSoFar);
+    const nonDiscordTokens = actualNonDiscordTokens ?? Math.round(nonDiscordSystemInstructionSoFar.length / 4);
+    const discordTokenBudget = Math.max(MIN_DISCORD_TOKEN_BUDGET, TOTAL_CONTEXT_TOKEN_BUDGET - nonDiscordTokens);
+    const discordContext = await fetchRelevantDiscordContext(message, discordTokenBudget);
+    const discordSection = discordContext && `Discord history:\n${discordContext}`;
+
+    // For a card/strategy question, the cards themselves are what actually
+    // answer it — they go first so the model grounds its reasoning in
+    // them, with the strategy guide right after (richer playstyle context
+    // than the raw card JSON alone), then the general strategy guides, and
+    // Discord history following as supplementary color rather than leading
+    // the answer with community banter/opinions in place of concrete
+    // kit-based advice. For anything else (general/social/rules
+    // questions), Discord leads as the group's own primary source.
+    const sections = wantsContext
+      ? [cardSection, guideSection, generalStrategySection, rulebookSection, discordSection].filter(Boolean)
+      : [discordSection, rulebookSection, cardSection, guideSection, generalStrategySection].filter(Boolean);
+
+    const systemInstruction = `${promptPreamble}\n\n${sections.join("\n\n")}`;
 
     const reply = await generateChatReply({ systemInstruction, history: trimHistoryToBudget(history), message });
     // Computed whenever card context was sent at all (not just wantsDetail)
