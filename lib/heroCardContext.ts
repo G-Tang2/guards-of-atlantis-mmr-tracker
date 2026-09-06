@@ -1,5 +1,6 @@
 import { HEROES } from "@/lib/heroes";
 import { HERO_CARDS, HeroCard } from "@/lib/heroCards";
+import { extractKeywords as extractBaseKeywords } from "@/lib/textKeywords";
 
 // Hard ceiling only — the keyword match below is what normally keeps a
 // request far under this. Estimated via a rough ~4-characters-per-token
@@ -7,13 +8,11 @@ import { HERO_CARDS, HeroCard } from "@/lib/heroCards";
 const CONTEXT_TOKEN_BUDGET = 20_000;
 const CONTEXT_CHAR_BUDGET = CONTEXT_TOKEN_BUDGET * 4;
 
-const STOP_WORDS = new Set([
-  "the", "a", "an", "is", "are", "was", "were", "be", "been", "to", "of",
-  "and", "or", "in", "on", "at", "for", "with", "about", "what", "who",
-  "when", "where", "why", "how", "did", "do", "does", "it", "this", "that",
-  "i", "you", "we", "they", "he", "she", "there", "any", "some", "card",
-  "cards", "hero", "heroes",
-]);
+// On top of the base stopword list — "card"/"hero" themselves are the
+// vocabulary of asking about this data at all, not a signal for which
+// hero/card a question means, so counting them as keywords would make
+// nearly every question "match" nothing distinctive.
+const EXTRA_STOP_WORDS = new Set(["card", "cards", "hero", "heroes"]);
 
 // Splits on anything that isn't a letter/digit — including apostrophes,
 // so a possessive like "Arien's" tokenizes to "arien" instead of a
@@ -21,14 +20,7 @@ const STOP_WORDS = new Set([
 // (this silently dropped a hero's whole card set whenever a question
 // used the possessive form, which is by far the most natural phrasing).
 function extractKeywords(question: string): string[] {
-  return Array.from(
-    new Set(
-      question
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((w) => w.length > 2 && !STOP_WORDS.has(w)),
-    ),
-  );
+  return extractBaseKeywords(question, EXTRA_STOP_WORDS);
 }
 
 // Every full hero name/card name gets tokenized the same way as the

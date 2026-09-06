@@ -1,5 +1,6 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { embedText } from "@/lib/gemini";
+import { extractKeywords } from "@/lib/textKeywords";
 
 // Fallback only for a caller that doesn't pass its own budget — the real
 // per-request budget is computed by app/api/chat/route.ts as whatever
@@ -42,28 +43,6 @@ const MAX_QUERY_KEYWORDS = 12;
 // decides what actually survives into the prompt, same as the keyword
 // row cap above.
 const SEMANTIC_MATCH_LIMIT = 300;
-
-const STOP_WORDS = new Set([
-  "the", "a", "an", "is", "are", "was", "were", "be", "been", "to", "of",
-  "and", "or", "in", "on", "at", "for", "with", "about", "what", "who",
-  "when", "where", "why", "how", "did", "do", "does", "it", "this", "that",
-  "i", "you", "we", "they", "he", "she", "there", "any", "some",
-]);
-
-// Splits on anything that isn't a letter/digit — including apostrophes,
-// so a possessive like "Keith's" tokenizes to "keith" instead of a
-// literal "keith's" that would never substring-match plain "Keith" in a
-// message's content.
-function extractKeywords(question: string): string[] {
-  return Array.from(
-    new Set(
-      question
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((w) => w.length > 2 && !STOP_WORDS.has(w)),
-    ),
-  );
-}
 
 type DiscordMessageRow = {
   id: string;

@@ -1,4 +1,11 @@
 export const runtime = "nodejs";
+// Default serverless function timeout is far too short for this route now
+// that a reply can involve a bounded rate-limit retry (see
+// MAX_AUTO_RETRY_DELAY_MS in lib/gemini.ts) on top of the Discord/rulebook
+// lookups, question-embedding, and token-counting calls that already
+// precede the actual reply generation. 60s is the max Vercel allows
+// without a paid plan's higher ceiling.
+export const maxDuration = 60;
 
 import { requireSharedAuth } from "@/lib/apiAuth";
 import { fetchRelevantDiscordContext } from "@/lib/discordContext";
@@ -13,8 +20,8 @@ import {
   isCardDetailQuestion,
   wantsHeroCardContext,
 } from "@/lib/heroCardContext";
-import { generateChatReply, countTokens, GeminiRateLimitError } from "@/lib/gemini";
-import { ChatRequestBody, ChatTurn, trimHistoryToBudget } from "@/lib/chat";
+import { streamChatReply, countTokens, GeminiRateLimitError } from "@/lib/gemini";
+import { ChatRequestBody, ChatStreamEvent, ChatTurn, trimHistoryToBudget } from "@/lib/chat";
 
 const MAX_MESSAGE_LENGTH = 4000;
 
@@ -164,24 +171,50 @@ export async function POST(request: Request) {
       : [discordSection, rulebookSection, cardSection, guideSection, generalStrategySection].filter(Boolean);
 
     const systemInstruction = `${promptPreamble}\n\n${sections.join("\n\n")}`;
+    const trimmedHistory = trimHistoryToBudget(history);
 
-    const reply = await generateChatReply({ systemInstruction, history: trimHistoryToBudget(history), message });
-    // Computed whenever card context was sent at all (not just wantsDetail)
-    // so a strategy reply's card mentions are still tappable in the UI for
-    // an on-demand detail popout, even though they don't auto-render as
-    // visible blocks — see showCardDetails below for that distinction.
-    const cardReferences = wantsContext
-      ? findMentionedCards(reply, relevantHeroIds, askedColors)
-      : [];
-    return Response.json({ ok: true, reply, cardReferences, showCardDetails: wantsDetail });
+    // From here on, the response is already committed to a 200 stream —
+    // a failure partway through (including the rate-limit case this app
+    // has hit before) can no longer change the HTTP status, so it's
+    // reported as an in-band "error" event instead (see ChatStreamEvent
+    // in lib/chat.ts). Everything above this point can still fail with a
+    // normal non-200 JSON error response, same as before streaming.
+    const encoder = new TextEncoder();
+    const send = (controller: ReadableStreamDefaultController<Uint8Array>, event: ChatStreamEvent) => {
+      controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+    };
+
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let fullReply = "";
+        try {
+          for await (const chunk of streamChatReply({ systemInstruction, history: trimmedHistory, message })) {
+            fullReply += chunk;
+            send(controller, { type: "chunk", text: chunk });
+          }
+          // Computed whenever card context was sent at all (not just
+          // wantsDetail) so a strategy reply's card mentions are still
+          // tappable in the UI for an on-demand detail popout, even
+          // though they don't auto-render as visible blocks — see
+          // showCardDetails for that distinction.
+          const cardReferences = wantsContext ? findMentionedCards(fullReply, relevantHeroIds, askedColors) : [];
+          send(controller, { type: "done", cardReferences, showCardDetails: wantsDetail });
+        } catch (e) {
+          console.error("Chat stream error:", e);
+          const errorMessage =
+            e instanceof GeminiRateLimitError
+              ? "The Oracle is receiving too many questions right now. Please try again in about a minute."
+              : "Failed to get a reply. Please try again.";
+          send(controller, { type: "error", error: errorMessage });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8" } });
   } catch (e) {
     console.error("Chat route error:", e);
-    if (e instanceof GeminiRateLimitError) {
-      return Response.json(
-        { ok: false, error: "The Oracle is receiving too many questions right now. Please try again in about a minute." },
-        { status: 429 },
-      );
-    }
     return Response.json(
       { ok: false, error: "Failed to get a reply. Please try again." },
       { status: 502 },

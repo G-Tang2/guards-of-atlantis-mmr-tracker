@@ -6484,6 +6484,12 @@
     flex-shrink: 0;
     padding: 1rem 1rem 0.6rem;
   }
+  .goa-chat-last-updated {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+    margin-top: 0.15rem;
+  }
   /* A position:fixed bottom nav doesn't reliably stay above an on-screen
      mobile keyboard (iOS Safari keeps the layout viewport full-height and
      only shrinks the visual one, so a `bottom: 0` element can end up
@@ -6842,6 +6848,9 @@
     }
     .goa-chat-page .goa-header {
       padding: 1.2rem 1.2rem 0.7rem;
+    }
+    .goa-chat-last-updated {
+      font-size: 0.8rem;
     }
     .goa-chat-bubble {
       font-size: 1.1rem;

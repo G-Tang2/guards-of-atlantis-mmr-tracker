@@ -23,9 +23,20 @@ export type ChatRequestBody = {
   history: ChatTurn[];
 };
 
-export type ChatResponseBody =
-  | { ok: true; reply: string; cardReferences: CardReference[]; showCardDetails: boolean }
-  | { ok: false; error: string };
+// The success path streams as newline-delimited JSON instead of one
+// final object — each line is one of these, in order: zero or more
+// "chunk" events (the reply's text, incrementally, as Gemini generates
+// it) followed by exactly one "done" (cardReferences/showCardDetails
+// aren't known until the full reply text has been scanned for card
+// mentions — see findMentionedCards) or "error" (a failure once
+// generation had already started, so the response is already committed
+// to a 200 status — see app/api/chat/route.ts). A request that fails
+// before generation starts (bad auth, invalid body, a Discord/rulebook
+// lookup error) still returns a plain non-200 JSON error body, not this.
+export type ChatStreamEvent =
+  | { type: "chunk"; text: string }
+  | { type: "done"; cardReferences: CardReference[]; showCardDetails: boolean }
+  | { type: "error"; error: string };
 
 // The client resends the whole session's messages as history on every turn
 // (see app/chat/page.tsx) — harmless for the sessionStorage copy, but

@@ -1,9 +1,17 @@
 "use client";
 
 import { Fragment, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { CHAT_HISTORY_STORAGE_KEY, ChatTurn } from "@/lib/chat";
+import { CHAT_HISTORY_STORAGE_KEY, ChatStreamEvent, ChatTurn } from "@/lib/chat";
 import { CardReference } from "@/lib/heroCardContext";
 import { MessageCircle, Send, X } from "lucide-react";
+
+// Bump this by hand whenever a meaningful change ships to the Oracle's
+// knowledge or behavior (a new hero guide, a rulebook re-extraction, a
+// change to how it reasons about context) — not on every unrelated code
+// change, and not computed from a build timestamp, since a Vercel
+// redeploy for an unrelated page shouldn't make this look newer than it
+// is. DD/MM/YY to match the group's own date convention.
+const ORACLE_LAST_UPDATED = "07/09/26";
 
 // NEXT_PUBLIC_MATCH_PASSWORD is already inlined into the client bundle —
 // PasswordGate itself reads it the same way to check the unlock form, so
@@ -322,6 +330,11 @@ function ChatPageInner() {
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  // The in-progress reply's text as it streams in — kept separate from
+  // `messages`/sessionStorage until the stream finishes (successfully or
+  // not), so a mid-stream failure or navigation away never leaves a
+  // half-written turn sitting in persisted history.
+  const [streamingReply, setStreamingReply] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardReference | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -369,6 +382,7 @@ function ChatPageInner() {
     persistMessages(nextMessages);
     setInput("");
     setSending(true);
+    setStreamingReply("");
     setError(null);
 
     try {
@@ -377,21 +391,75 @@ function ChatPageInner() {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ message: trimmed, history: historyBeforeSend }),
       });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || "Something went wrong");
-      persistMessages([
-        ...nextMessages,
-        {
-          role: "model",
-          text: data.reply,
-          cardReferences: data.cardReferences,
-          showCardDetails: data.showCardDetails,
-        },
-      ]);
+      if (!res.ok) {
+        // A request that fails before generation starts (bad auth,
+        // invalid body, a Discord/rulebook lookup error) still returns a
+        // plain JSON error with a real HTTP status — only a failure once
+        // generation had already started arrives as an in-band "error"
+        // line in the stream body itself, handled below.
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Something went wrong");
+      }
+      if (!res.body) throw new Error("Something went wrong");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+      let doneEvent: Extract<ChatStreamEvent, { type: "done" }> | null = null;
+      let errorEvent: Extract<ChatStreamEvent, { type: "error" }> | null = null;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+          const line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          if (!line.trim()) continue;
+
+          let event: ChatStreamEvent;
+          try {
+            event = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (event.type === "chunk") {
+            fullText += event.text;
+            setStreamingReply(fullText);
+          } else if (event.type === "done") {
+            doneEvent = event;
+          } else if (event.type === "error") {
+            errorEvent = event;
+          }
+        }
+      }
+
+      // A partial reply (some text streamed before a mid-generation
+      // failure) is still worth keeping — losing an otherwise-useful
+      // partial answer just because the stream cut off would be a worse
+      // experience than showing it with an error noted alongside.
+      if (fullText) {
+        persistMessages([
+          ...nextMessages,
+          {
+            role: "model",
+            text: fullText,
+            cardReferences: doneEvent?.cardReferences,
+            showCardDetails: doneEvent?.showCardDetails,
+          },
+        ]);
+      }
+      if (errorEvent) {
+        setError(errorEvent.error);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setSending(false);
+      setStreamingReply("");
     }
   };
 
@@ -408,6 +476,7 @@ function ChatPageInner() {
           </div>
           <h1 className="goa-title">Ask the Oracle</h1>
           <p className="goa-subtitle">Guards of Atlantis II</p>
+          <p className="goa-chat-last-updated">Last updated: {ORACLE_LAST_UPDATED}</p>
         </header>
 
         {messages.length === 0 && (
@@ -432,7 +501,11 @@ function ChatPageInner() {
             )}
           </Fragment>
         ))}
-        {sending && <div className="goa-chat-bubble model goa-chat-thinking">Thinking…</div>}
+        {sending && (
+          <div className={`goa-chat-bubble model${streamingReply ? "" : " goa-chat-thinking"}`}>
+            {streamingReply ? renderChatText(streamingReply) : "Thinking…"}
+          </div>
+        )}
         {error && <p className="goa-chat-error">{error}</p>}
         <div ref={messagesEndRef} />
       </div>
