@@ -173,7 +173,7 @@ function TeamsVotePageInner() {
           ).length;
           const computedTotalVotes = saved.playerIds.length + baseOwnerCount;
 
-          const computedSplits = rankedBalancedSplits(resolved, 3);
+          const computedSplits = rankedBalancedSplits(resolved, 4);
           setPlayerIds(saved.playerIds);
           setSplits(computedSplits);
           setTotalVotes(computedTotalVotes);
