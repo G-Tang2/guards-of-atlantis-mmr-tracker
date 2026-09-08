@@ -337,6 +337,13 @@ function ChatPageInner() {
   const [streamingReply, setStreamingReply] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardReference | null>(null);
+  // Bumped only when the user submits a question — a dedicated trigger
+  // for the auto-scroll effect below, distinct from `messages`/`sending`
+  // changing again once the reply streams in or finishes. Scrolling on
+  // every reply update/completion would yank the viewport back to the
+  // bottom while someone's still reading an earlier part of a long
+  // answer, or had scrolled up to re-read something while waiting.
+  const [sendCount, setSendCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -349,8 +356,9 @@ function ChatPageInner() {
   }, []);
 
   useEffect(() => {
+    if (sendCount === 0) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+  }, [sendCount]);
 
   // Safety net: if this page unmounts while the textarea still has focus
   // (e.g. a back gesture instead of a normal blur), don't leave the body
@@ -384,6 +392,7 @@ function ChatPageInner() {
     setSending(true);
     setStreamingReply("");
     setError(null);
+    setSendCount((c) => c + 1);
 
     try {
       const res = await fetch("/api/chat", {
