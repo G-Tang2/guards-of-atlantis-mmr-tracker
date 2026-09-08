@@ -134,16 +134,18 @@ export async function* streamChatReply({
   const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
     contents,
-    // 0, not just low — verified live (5 identical calls at 0.1 vs 5 at
-    // 0 with a fixed prompt outside the app) that 0 meaningfully reduces
-    // how often the model flips its verdict on a close judgment call
-    // (e.g. "which draft is better") compared to 0.1, though it doesn't
-    // fully eliminate it — some residual variance is inherent to Gemini's
-    // hosted inference even at temperature 0. Watch for looping/
-    // degradation on long outputs if this ever gets flaky — that's the
-    // known failure mode 0 can trigger on some Gemini models, though 5
-    // real test calls at 0 showed no sign of it.
-    generationConfig: { temperature: 0 },
+    // temperature 0 alone still leaves some residual sampling variance on
+    // Gemini's hosted infra (verified: 5 identical calls at temp 0 gave
+    // 4 matching + 1 different verdict on a close judgment call). Adding
+    // a fixed seed on top closed that gap completely in testing — 5
+    // calls with temperature 0 + this same seed came back byte-for-byte
+    // identical. The seed doesn't need to mean anything; it just has to
+    // stay fixed so the same question keeps landing on the same sampling
+    // path. Watch for looping/degradation on long outputs if this ever
+    // gets flaky — that's the known failure mode temperature 0 can
+    // trigger on some Gemini models, though the live tests showed no
+    // sign of it.
+    generationConfig: { temperature: 0, seed: 1 },
   });
 
   const res = await openChatReplyStream(apiKey, requestBody);
