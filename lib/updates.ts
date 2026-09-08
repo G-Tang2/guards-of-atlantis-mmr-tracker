@@ -23,10 +23,10 @@ export const UPDATES: UpdateEntry[] = [
   {
     date: "Sep 8",
     title: "Ask the Oracle",
-    summary: "A new AI chat assistant for rules, hero strategy, and the Guards of Atlantis Official Discord history — currently in Beta.",
+    summary: "A new AI chat assistant for rule clarifications and hero strategy — currently in Beta.",
     details: [
       {
-        text: "The Oracle is a new chat assistant, available from the home page or directly at /chat.",
+        text: "The Oracle is a new chat assistant, available from the home page.",
       },
       {
         label: "Rules",
@@ -37,8 +37,7 @@ export const UPDATES: UpdateEntry[] = [
         text: "Ask how to play or counter a specific hero, or about general concepts like card colors, the minion wave, and push potential — drawing on community strategy guides written by the Guards of Atlantis community on BoardGameGeek.",
       },
       {
-        label: "Discord History",
-        text: "Ask about house rules, past rulings, or running jokes — the Oracle searches the Guards of Atlantis Official Discord history for relevant context, even messages that don't share the question's exact wording.",
+        text: "For anything the rulebook and guides don't cover, it can also pull relevant context from the official Guards of Atlantis II Discord's history — house rules, past rulings, running jokes.",
       },
       {
         text: "The Oracle doesn't have access to match history, MMR, or player stats — use the rest of the app for those.",
