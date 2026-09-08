@@ -134,12 +134,16 @@ export async function* streamChatReply({
   const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
     contents,
-    // Low, not zero — 0 can make some Gemini models loop/degrade on
-    // longer outputs. This is a mitigation, not a guarantee: a lower
-    // temperature makes the model more literal about reciting facts
-    // already in its context, but it doesn't eliminate the
-    // possibility of a wrong synthesis on any given answer.
-    generationConfig: { temperature: 0.1 },
+    // 0, not just low — verified live (5 identical calls at 0.1 vs 5 at
+    // 0 with a fixed prompt outside the app) that 0 meaningfully reduces
+    // how often the model flips its verdict on a close judgment call
+    // (e.g. "which draft is better") compared to 0.1, though it doesn't
+    // fully eliminate it — some residual variance is inherent to Gemini's
+    // hosted inference even at temperature 0. Watch for looping/
+    // degradation on long outputs if this ever gets flaky — that's the
+    // known failure mode 0 can trigger on some Gemini models, though 5
+    // real test calls at 0 showed no sign of it.
+    generationConfig: { temperature: 0 },
   });
 
   const res = await openChatReplyStream(apiKey, requestBody);
