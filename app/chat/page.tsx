@@ -474,7 +474,9 @@ function ChatPageInner() {
           <div className="goa-crown">
             <MessageCircle size={30} />
           </div>
-          <h1 className="goa-title">Ask the Oracle</h1>
+          <h1 className="goa-title">
+            Ask the Oracle <span className="goa-beta-tag">Beta</span>
+          </h1>
           <p className="goa-subtitle">Guards of Atlantis II</p>
           <p className="goa-chat-last-updated">Last updated: {ORACLE_LAST_UPDATED}</p>
         </header>
