@@ -474,7 +474,7 @@ function ChatPageInner() {
           <div className="goa-crown">
             <MessageCircle size={30} />
           </div>
-          <h1 className="goa-title">
+          <h1 className="goa-title goa-title-with-tag">
             Ask the Oracle <span className="goa-beta-tag">Beta</span>
           </h1>
           <p className="goa-subtitle">Guards of Atlantis II</p>

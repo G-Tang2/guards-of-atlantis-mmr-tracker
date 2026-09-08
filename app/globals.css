@@ -2151,13 +2151,6 @@
     border-color: var(--gold);
     background: rgba(201, 151, 58, 0.12);
   }
-  /* .goa-beta-tag's own `top: -0.3rem` was tuned to sit next to the much
-     larger .goa-title heading on /chat — inside this button, the icon and
-     text are already vertically centered via the button's own flex
-     alignment, so that offset would misalign it here. */
-  .goa-chat-entry .goa-beta-tag {
-    top: 0;
-  }
 
   .goa-hero-wrap {
     padding: 0.3rem 0.55rem 0.45rem;
@@ -6505,22 +6498,33 @@
     opacity: 0.7;
     margin-top: 0.15rem;
   }
+  /* Wraps the title text + tag in a flex row so the tag is vertically
+     centered against the title's actual rendered height — the previous
+     vertical-align + position:relative "nudge" was tuned against one
+     specific render and drifted on other font/device combinations.
+     Flexbox's align-items handles this correctly regardless of font
+     metrics, so there's no magic offset to keep re-tuning. */
+  .goa-title-with-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
   .goa-beta-tag {
-    display: inline-block;
-    vertical-align: middle;
-    position: relative;
-    top: -0.3rem;
-    margin-left: 0.3rem;
+    display: inline-flex;
+    align-items: center;
     font-family: "Cinzel", serif;
     font-size: 0.5rem;
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: var(--gold-light);
-    border: 1px solid var(--gold);
+    /* Deliberately not gold — the rest of this page is gold end to end,
+       so a gold tag reads as just more chrome instead of a distinct
+       "hey, this is new" signal. */
+    color: #4da6ff;
+    border: 1px solid #4da6ff;
     border-radius: 999px;
     padding: 0.15rem 0.45rem;
-    background: rgba(201, 151, 58, 0.15);
+    background: rgba(77, 166, 255, 0.15);
   }
   /* A position:fixed bottom nav doesn't reliably stay above an on-screen
      mobile keyboard (iOS Safari keeps the layout viewport full-height and
