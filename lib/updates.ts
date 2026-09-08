@@ -21,6 +21,31 @@ export type UpdateEntry = {
 
 export const UPDATES: UpdateEntry[] = [
   {
+    date: "Sep 8",
+    title: "Ask the Oracle",
+    summary: "A new AI chat assistant for rules, hero strategy, and the Guards of Atlantis Official Discord history — currently in Beta.",
+    details: [
+      {
+        text: "The Oracle is a new chat assistant, available from the home page or directly at /chat.",
+      },
+      {
+        label: "Rules",
+        text: "Ask about official rules and card interactions — answers are grounded in the official Guards of Atlantis II rulebook (2nd Printing) and each hero's exact action card data.",
+      },
+      {
+        label: "Strategy",
+        text: "Ask how to play or counter a specific hero, or about general concepts like card colors, the minion wave, and push potential — drawing on community strategy guides written by the Guards of Atlantis community on BoardGameGeek.",
+      },
+      {
+        label: "Discord History",
+        text: "Ask about house rules, past rulings, or running jokes — the Oracle searches the Guards of Atlantis Official Discord history for relevant context, even messages that don't share the question's exact wording.",
+      },
+      {
+        text: "The Oracle doesn't have access to match history, MMR, or player stats — use the rest of the app for those.",
+      },
+    ],
+  },
+  {
     date: "Sep 2",
     title: "Badge Rewards",
     summary: "Completing a badge now grants an ongoing perk, not just a one-time celebration.",
