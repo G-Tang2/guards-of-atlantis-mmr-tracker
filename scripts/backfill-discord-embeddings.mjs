@@ -54,7 +54,29 @@ const CONCURRENCY = 1; // sequential, not concurrent — see the header comment 
 const MAX_CONTENT_CHARS = 8000; // defensive only — real Discord messages are short
 const MAX_RETRIES = 3;
 
+// Below this length, a message is almost always a reaction/filler rather
+// than something worth a real embedding — spending one of the day's 1000
+// requests on "lol"/"Oh"/"Yep" doesn't buy any real search value. Chosen
+// by sampling the actual table (not guessed): 12 catches ~5% of all
+// messages (single-word reactions, custom-emoji tags like ":Ursafar:",
+// one-line acknowledgments) while a query-checked pass at 20 already
+// starts cutting genuine game-discussion lines ("tali is great", "It
+// breaks the game", "depends on the comp") — worth explicitly NOT doing,
+// since those are exactly the kind of content semantic search exists for.
+const MIN_CONTENT_LENGTH = 12;
+
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+// A short message isn't the only kind of low-value content — one that's
+// entirely emoji/punctuation with no actual word in it (e.g. "😂😂😂",
+// "???", ":rollingeyes:" once trimmed of any surrounding text) carries
+// the same "pure reaction" character regardless of length.
+function isLowValueMessage(content) {
+  const trimmed = content.trim();
+  if (trimmed.length < MIN_CONTENT_LENGTH) return true;
+  if (!/[a-zA-Z0-9]/.test(trimmed)) return true;
+  return false;
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -155,22 +177,29 @@ async function countRemaining() {
 }
 
 async function main() {
-  let totalDone = 0;
+  let totalEmbedded = 0;
+  let totalSkipped = 0;
   const startTime = Date.now();
 
+  // Advances past every row this run has SEEN (embedded or skipped),
+  // unlike the old "always re-query embedding IS NULL from the top"
+  // approach — a low-value row never gets an embedding, so it always
+  // matches that filter, and without a cursor a batch that happened to be
+  // entirely low-value would re-fetch the exact same rows forever. This
+  // cursor only lives for this one run, though: a fresh run tomorrow
+  // starts back at the top and re-skips the same low-value rows again
+  // (cheap — a handful of extra fetches, zero extra API calls) before
+  // reaching whatever's genuinely new. That's an acceptable, bounded cost
+  // for not needing a schema change to persist a "skip" marker.
+  let cursorId = null;
+
   for (;;) {
-    // Always re-queries the same filter from the top rather than paging
-    // with a growing offset — every row this returns either gets an
-    // embedding (and drops out of the WHERE clause) or the script throws,
-    // so "the next unprocessed batch" is always just whatever this same
-    // query returns next time. That's what makes the script safely
-    // resumable after an interruption or a hard failure.
     // "id::text" (a PostgREST cast), not plain "id" — discord_messages.id
     // is a bigint Discord snowflake that exceeds Number.MAX_SAFE_INTEGER,
     // so deserializing it as a JS number rounds it to a different value.
     // See the matching comment in processBatch for what that silently
     // broke before this was caught.
-    const { data: rows, error } = await supabase
+    let query = supabase
       .from("discord_messages")
       .select("id::text, content")
       .is("embedding", null)
@@ -178,6 +207,9 @@ async function main() {
       .neq("content", "")
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
+    if (cursorId !== null) query = query.gt("id", cursorId);
+
+    const { data: rows, error } = await query;
 
     if (error) {
       console.error("Failed to fetch batch:", error);
@@ -185,27 +217,36 @@ async function main() {
     }
     if (!rows || rows.length === 0) break;
 
+    cursorId = rows[rows.length - 1].id;
+
+    const toEmbed = rows.filter((r) => !isLowValueMessage(r.content));
+    totalSkipped += rows.length - toEmbed.length;
+
     try {
-      await processBatch(rows);
+      await processBatch(toEmbed);
     } catch (err) {
       if (err instanceof DailyQuotaExhaustedError) {
         const remaining = await countRemaining();
-        console.log(`Embedded ${totalDone} messages this run before hitting the daily quota (1000 requests/day, free tier).`);
+        console.log(
+          `Embedded ${totalEmbedded} messages this run (skipped ${totalSkipped} low-value ones) before hitting the daily quota (1000 requests/day, free tier).`,
+        );
         console.log(
           remaining !== null
-            ? `${remaining} messages still need embedding - re-run this same command again after the quota resets (roughly 24h from when you started today's run).`
+            ? `${remaining} messages still show as not-embedded (a portion of those will keep being skipped as low-value, not spend real requests) - re-run this same command again after the quota resets (roughly 24h from when you started today's run).`
             : `Re-run this same command again after the quota resets (roughly 24h from when you started today's run) to continue.`,
         );
         return;
       }
       throw err;
     }
-    totalDone += rows.length;
+    totalEmbedded += toEmbed.length;
     const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(0);
-    console.log(`Embedded ${totalDone} messages so far (${elapsedSec}s elapsed)...`);
+    console.log(`Embedded ${totalEmbedded} messages so far (skipped ${totalSkipped} low-value, ${elapsedSec}s elapsed)...`);
   }
 
-  console.log(`Done. Embedded ${totalDone} messages in ${((Date.now() - startTime) / 1000).toFixed(0)}s.`);
+  console.log(
+    `Done. Embedded ${totalEmbedded} messages (skipped ${totalSkipped} low-value) in ${((Date.now() - startTime) / 1000).toFixed(0)}s.`,
+  );
 }
 
 main().catch((err) => {
