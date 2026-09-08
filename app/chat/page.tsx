@@ -11,7 +11,7 @@ import { MessageCircle, Send, X } from "lucide-react";
 // change, and not computed from a build timestamp, since a Vercel
 // redeploy for an unrelated page shouldn't make this look newer than it
 // is. DD/MM/YY to match the group's own date convention.
-const ORACLE_LAST_UPDATED = "07/09/26";
+const ORACLE_LAST_UPDATED = "09/09/26";
 
 // NEXT_PUBLIC_MATCH_PASSWORD is already inlined into the client bundle —
 // PasswordGate itself reads it the same way to check the unlock form, so
@@ -488,6 +488,9 @@ function ChatPageInner() {
           </h1>
           <p className="goa-subtitle">Guards of Atlantis II</p>
           <p className="goa-chat-last-updated">Last updated: {ORACLE_LAST_UPDATED}</p>
+          <p className="goa-chat-last-updated">
+            <strong>This chat is private — we don&apos;t log or save your conversations.</strong>
+          </p>
         </header>
 
         {messages.length === 0 && (

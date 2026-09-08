@@ -42,6 +42,10 @@ export const UPDATES: UpdateEntry[] = [
       {
         text: "The Oracle doesn't have access to match history, MMR, or player stats — use the rest of the app for those.",
       },
+      {
+        label: "Privacy",
+        text: "This chat is private — we don't log or save your conversations.",
+      },
     ],
   },
   {
