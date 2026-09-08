@@ -50,7 +50,14 @@ const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 // not one sitting — see the script's own final log line for what that
 // means for finishing the whole table.
 const BATCH_SIZE = 100; // rows fetched from Supabase per round
-const CONCURRENCY = 1; // sequential, not concurrent — see the header comment above; this endpoint's real constraint is a request COUNT (daily), not a rate, so concurrency doesn't help and only spends the budget faster before you can see it happening
+// Defaults to sequential — on the free tier, the binding constraint is a
+// daily REQUEST COUNT, not a rate, so concurrency doesn't help there and
+// only spends the day's budget faster before you can see it happening.
+// Once billing is enabled, that specific constraint is gone and the
+// remaining limit is presumably a per-minute rate, which concurrency
+// genuinely helps saturate — override via EMBED_CONCURRENCY=N for a paid
+// run rather than changing the safe default everyone else gets.
+const CONCURRENCY = Number(process.env.EMBED_CONCURRENCY) || 1;
 const MAX_CONTENT_CHARS = 8000; // defensive only — real Discord messages are short
 const MAX_RETRIES = 3;
 
@@ -113,6 +120,22 @@ async function embedOne(text, attempt = 1) {
     const retryInfo = body?.error?.details?.find((d) => typeof d["@type"] === "string" && d["@type"].includes("RetryInfo"));
     const waitMs = retryInfo?.retryDelay ? Math.ceil(parseFloat(retryInfo.retryDelay) * 1000) : attempt * 2000;
     console.log(`  rate limited, waiting ${waitMs}ms (attempt ${attempt}/${MAX_RETRIES})...`);
+    await sleep(waitMs);
+    return embedOne(text, attempt + 1);
+  }
+
+  // Transient infrastructure errors (a real 503 hit mid-backfill, but 500/
+  // 502/504 are the same class) — unlike a 429, there's no quota signal or
+  // suggested delay to read, just "try again shortly." Retrying here is
+  // what makes a multi-thousand-request run resilient to one blip instead
+  // of needing a manual re-run for something that would very likely
+  // succeed a few seconds later.
+  if (res.status >= 500 && res.status < 600) {
+    if (attempt > MAX_RETRIES) {
+      throw new Error(`Gave up after repeated ${res.status}s - re-run the script later to resume.`);
+    }
+    const waitMs = attempt * 2000;
+    console.log(`  Gemini returned ${res.status}, waiting ${waitMs}ms (attempt ${attempt}/${MAX_RETRIES})...`);
     await sleep(waitMs);
     return embedOne(text, attempt + 1);
   }
