@@ -54,14 +54,26 @@ type DiscordMessageRow = {
 
 const SELECT_COLUMNS = "id, channel_name, author_username, content, created_at";
 
-// Sends Gemini a relevant slice of the Discord history instead of the
-// whole table every time — the table holds the group's full multi-year
-// history (tens of thousands of rows), far more than a given question
-// needs or a single request should transfer.
+type DiscordCandidates = {
+  recent: DiscordMessageRow[];
+  semantic: DiscordMessageRow[];
+  // One array per queried keyword, unsorted relative to each other — kept
+  // separate (rather than flattened) because selectDiscordContext fills
+  // from these in ascending-match-count order, not keyword order.
+  matchedByKeyword: DiscordMessageRow[][];
+};
+
+// Fetches the raw candidate rows only — no budget applied yet. Split out
+// from selectDiscordContext (which does the trimming) so a caller can
+// start this alongside other unrelated async work (e.g. the token count
+// that determines the budget in the first place) instead of waiting on
+// that work before these queries even start; see fetchRelevantDiscordContext
+// below for the common sequential case, and app/api/chat/route.ts for the
+// parallel one.
 //
-// Two independent relevance signals feed the same budget below: a
-// semantic similarity search (via the match_discord_messages RPC —
-// see supabase/migrations/0001_discord_message_embeddings.sql) against
+// Two independent relevance signals are gathered here: a semantic
+// similarity search (via the match_discord_messages RPC — see
+// supabase/migrations/0001_discord_message_embeddings.sql) against
 // whatever rows have been embedded by
 // scripts/backfill-discord-embeddings.mjs, and the original keyword
 // substring search over ALL rows regardless of embedding status. The
@@ -89,11 +101,7 @@ const SELECT_COLUMNS = "id, channel_name, author_username, content, created_at";
 // mixed into a shared OR query would otherwise flood the (also
 // row-capped) result with its own recent matches and crowd out a rarer
 // keyword's genuinely old, relevant ones before they're ever seen.
-export async function fetchRelevantDiscordContext(
-  question: string,
-  tokenBudget: number = DEFAULT_CONTEXT_TOKEN_BUDGET,
-): Promise<string> {
-  const charBudget = tokenBudget * 4;
+export async function fetchDiscordCandidates(question: string): Promise<DiscordCandidates> {
   const keywords = extractKeywords(question).slice(0, MAX_QUERY_KEYWORDS);
 
   const recentPromise = supabaseServer
@@ -145,13 +153,25 @@ export async function fetchRelevantDiscordContext(
     console.error("Discord semantic search unavailable:", semanticResult.error);
   }
 
-  const recent = recentResult.data ?? [];
-  const semantic = semanticResult.data ?? [];
-  if (
-    recent.length === 0 &&
-    semantic.length === 0 &&
-    matchedResults.every((r) => (r.data ?? []).length === 0)
-  ) {
+  return {
+    recent: recentResult.data ?? [],
+    semantic: semanticResult.data ?? [],
+    matchedByKeyword: matchedResults.map((r) => r.data ?? []),
+  };
+}
+
+// Trims a set of already-fetched candidates down to whatever fits in
+// tokenBudget — kept separate from fetchDiscordCandidates above so a
+// caller can fetch once the question comes in and decide the budget
+// later (once it knows what else is competing for it), without re-running
+// any of the underlying queries.
+export function selectDiscordContext(
+  candidates: DiscordCandidates,
+  tokenBudget: number = DEFAULT_CONTEXT_TOKEN_BUDGET,
+): string {
+  const charBudget = tokenBudget * 4;
+  const { recent, semantic, matchedByKeyword } = candidates;
+  if (recent.length === 0 && semantic.length === 0 && matchedByKeyword.every((rows) => rows.length === 0)) {
     return "";
   }
 
@@ -186,22 +206,35 @@ export async function fetchRelevantDiscordContext(
 
   // A common English word that isn't a literal stopword ("best", "way",
   // "back") can still match hundreds of messages in a natural-language
-  // question, and with each keyword queried independently (see below),
-  // their combined union regularly overflows the budget well before
-  // covering every keyword — a plain oldest-first trim at that point
-  // would cut exactly the old, specific matches this function exists to
-  // surface. Filling in ascending order of each keyword's own match
-  // count instead means the rarest, most specific terms (a hero name, a
-  // one-off phrase) claim their budget first; only once those are fully
-  // included does a common word get a chance to contribute, so if
-  // something has to be dropped, it's the low-confidence generic
-  // matches, not an arbitrary chronological slice that's just as likely
-  // to cut the single most relevant hit as the least.
-  const byKeyword = matchedResults.map((r) => r.data ?? []).sort((a, b) => a.length - b.length);
+  // question, and with each keyword queried independently (see
+  // fetchDiscordCandidates), their combined union regularly overflows the
+  // budget well before covering every keyword — a plain oldest-first trim
+  // at that point would cut exactly the old, specific matches this
+  // function exists to surface. Filling in ascending order of each
+  // keyword's own match count instead means the rarest, most specific
+  // terms (a hero name, a one-off phrase) claim their budget first; only
+  // once those are fully included does a common word get a chance to
+  // contribute, so if something has to be dropped, it's the
+  // low-confidence generic matches, not an arbitrary chronological slice
+  // that's just as likely to cut the single most relevant hit as the
+  // least.
+  const byKeyword = [...matchedByKeyword].sort((a, b) => a.length - b.length);
   for (const rows of byKeyword) {
     addUpToBudget(rows);
   }
 
   selected.sort((a, b) => a.created_at.localeCompare(b.created_at));
   return selected.map(toLine).join("\n");
+}
+
+// Sequential convenience wrapper for callers that don't need to overlap
+// the fetch with other async work — see app/api/chat/route.ts for the
+// case that does, calling fetchDiscordCandidates/selectDiscordContext
+// directly instead of through this.
+export async function fetchRelevantDiscordContext(
+  question: string,
+  tokenBudget: number = DEFAULT_CONTEXT_TOKEN_BUDGET,
+): Promise<string> {
+  const candidates = await fetchDiscordCandidates(question);
+  return selectDiscordContext(candidates, tokenBudget);
 }

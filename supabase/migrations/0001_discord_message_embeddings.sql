@@ -21,13 +21,13 @@ create extension if not exists vector;
 alter table discord_messages
   add column if not exists embedding vector(768);
 
--- No index (ivfflat/hnsw) for now -- at ~29k rows, a brute-force
--- `ORDER BY embedding <=> query_embedding LIMIT n` scan is fast enough,
--- and an ivfflat index built before the backfill populates any vectors
--- would train on empty data and cluster poorly. If the table grows much
--- larger and this becomes a real latency problem, add one afterward, e.g.:
---   create index discord_messages_embedding_idx on discord_messages
---     using ivfflat (embedding vector_cosine_ops) with (lists = 30);
+-- No index (ivfflat/hnsw) here -- built before the backfill populates any
+-- vectors, an ivfflat index would train on empty data and cluster poorly,
+-- and at the time this migration was written, a brute-force
+-- `ORDER BY embedding <=> query_embedding LIMIT n` scan over ~29k rows
+-- was assumed to be fast enough anyway. It wasn't once the backfill
+-- actually completed -- see 0002_discord_message_embedding_index.sql,
+-- which adds one now that the column is fully populated.
 
 -- RPC wrapper so the app can run a vector similarity search through
 -- supabase-js's .rpc() call -- there's no way to express

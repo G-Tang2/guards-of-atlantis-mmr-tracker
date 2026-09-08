@@ -1,0 +1,29 @@
+-- 0001_discord_message_embeddings.sql deliberately skipped an index,
+-- reasoning that a brute-force `ORDER BY embedding <=> query_embedding`
+-- scan would be fast enough at ~29k rows and that building an ivfflat
+-- index before the backfill populated any vectors would train on empty
+-- data and cluster poorly.
+--
+-- The backfill (scripts/backfill-discord-embeddings.mjs) has since
+-- completed -- all ~27,198 eligible rows are embedded -- and a live
+-- timing check against the full table showed the brute-force scan inside
+-- match_discord_messages taking ~7.4s on its own, dwarfing every other
+-- part of a chat request including the LLM reply generation itself. This
+-- is the "afterward" the original migration's comment anticipated.
+--
+-- HNSW rather than ivfflat: no `lists` parameter to tune against the
+-- table's row count, and pgvector's own docs recommend it over ivfflat
+-- for both build-once-query-many workloads (this table has no ongoing
+-- embedding sync -- see the backfill script's header) and query
+-- speed/recall at this scale. Approximate nearest-neighbor rather than
+-- exact, but this only feeds retrieval context to an LLM chatbot, not a
+-- correctness-sensitive lookup -- occasionally missing the single
+-- closest message out of a 300-row candidate list has no meaningful
+-- effect on answer quality.
+--
+-- Run this once in the Supabase Dashboard's SQL Editor, same as
+-- 0001_discord_message_embeddings.sql. Building the index over ~27k rows
+-- should take a few seconds to at most low tens of seconds -- there's no
+-- concurrent write traffic on this table to worry about blocking.
+create index if not exists discord_messages_embedding_idx on discord_messages
+  using hnsw (embedding vector_cosine_ops);

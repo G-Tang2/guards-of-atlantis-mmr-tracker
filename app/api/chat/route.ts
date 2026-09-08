@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 import { requireSharedAuth } from "@/lib/apiAuth";
-import { fetchRelevantDiscordContext } from "@/lib/discordContext";
+import { fetchDiscordCandidates, selectDiscordContext } from "@/lib/discordContext";
 import { wantsRulebookContext, fetchRelevantRulebookPages } from "@/lib/rulebook";
 import { fetchRelevantHeroGuides } from "@/lib/heroGuides";
 import { GENERAL_STRATEGY_GUIDES } from "@/lib/generalStrategy";
@@ -152,10 +152,17 @@ export async function POST(request: Request) {
     // doesn't need to match the final section ordering below.
     const nonDiscordSections = [cardSection, guideSection, generalStrategySection, rulebookSection].filter(Boolean);
     const nonDiscordSystemInstructionSoFar = `${promptPreamble}\n\n${nonDiscordSections.join("\n\n")}`;
-    const actualNonDiscordTokens = await countTokens(nonDiscordSystemInstructionSoFar);
+    // Run alongside each other rather than one after the other — the
+    // Discord fetch doesn't actually need the token count until the
+    // selectDiscordContext trim step below, so there's no reason to make
+    // it wait on countTokens' own network round trip first.
+    const [actualNonDiscordTokens, discordCandidates] = await Promise.all([
+      countTokens(nonDiscordSystemInstructionSoFar),
+      fetchDiscordCandidates(message),
+    ]);
     const nonDiscordTokens = actualNonDiscordTokens ?? Math.round(nonDiscordSystemInstructionSoFar.length / 4);
     const discordTokenBudget = Math.max(MIN_DISCORD_TOKEN_BUDGET, TOTAL_CONTEXT_TOKEN_BUDGET - nonDiscordTokens);
-    const discordContext = await fetchRelevantDiscordContext(message, discordTokenBudget);
+    const discordContext = selectDiscordContext(discordCandidates, discordTokenBudget);
     const discordSection = discordContext && `Discord history:\n${discordContext}`;
 
     // For a card/strategy question, the cards themselves are what actually
