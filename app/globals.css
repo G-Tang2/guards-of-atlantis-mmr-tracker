@@ -2151,6 +2151,13 @@
     border-color: var(--gold);
     background: rgba(201, 151, 58, 0.12);
   }
+  /* .goa-beta-tag's own `top: -0.3rem` was tuned to sit next to the much
+     larger .goa-title heading on /chat — inside this button, the icon and
+     text are already vertically centered via the button's own flex
+     alignment, so that offset would misalign it here. */
+  .goa-chat-entry .goa-beta-tag {
+    top: 0;
+  }
 
   .goa-hero-wrap {
     padding: 0.3rem 0.55rem 0.45rem;

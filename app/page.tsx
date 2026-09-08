@@ -172,6 +172,7 @@ export default function Home() {
         >
           <MessageCircle size={16} />
           Ask the Oracle
+          <span className="goa-beta-tag">Beta</span>
         </button>
       </div>
 
