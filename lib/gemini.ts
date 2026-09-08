@@ -189,6 +189,21 @@ export async function* streamChatReply({
   }
 }
 
+// Exact-string cache for countTokens results below. The text this app
+// actually passes in (see nonDiscordSystemInstructionSoFar in
+// app/api/chat/route.ts) is built from a small, recurring set of
+// hero-card/guide/rulebook sections, not arbitrary free text — every
+// "how do I play Bain?"-style question produces byte-identical text here
+// regardless of who asks or when. A plain in-memory Map survives across
+// requests on a warm server instance, so most calls become a cache hit
+// and skip the network round trip entirely. Capped and reset wholesale
+// rather than evicted one entry at a time — simplest way to bound memory
+// if something unexpected ever pushes the cardinality higher than
+// expected, without needing real LRU bookkeeping for what's normally a
+// tiny, self-limiting cache.
+const MAX_TOKEN_COUNT_CACHE_ENTRIES = 500;
+const tokenCountCache = new Map<string, number>();
+
 // Exact token count from Gemini's own tokenizer, used to size the
 // Discord-history budget precisely (see TOTAL_CONTEXT_TOKEN_BUDGET in
 // app/api/chat/route.ts) instead of guessing via a ~4-chars-per-token
@@ -198,6 +213,9 @@ export async function* streamChatReply({
 // falls back to the char-based heuristic, and a chat reply should never
 // fail just because this side call did.
 export async function countTokens(text: string): Promise<number | null> {
+  const cached = tokenCountCache.get(text);
+  if (cached !== undefined) return cached;
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
@@ -214,7 +232,12 @@ export async function countTokens(text: string): Promise<number | null> {
     );
     if (!res.ok) return null;
     const data = await res.json();
-    return typeof data?.totalTokens === "number" ? data.totalTokens : null;
+    const totalTokens = typeof data?.totalTokens === "number" ? data.totalTokens : null;
+    if (totalTokens !== null) {
+      if (tokenCountCache.size >= MAX_TOKEN_COUNT_CACHE_ENTRIES) tokenCountCache.clear();
+      tokenCountCache.set(text, totalTokens);
+    }
+    return totalTokens;
   } catch {
     return null;
   }
