@@ -115,9 +115,28 @@ async function processBatch(rows) {
       chunk.map(async (row) => {
         const text = row.content.slice(0, MAX_CONTENT_CHARS);
         const embedding = await embedOne(text);
-        const { error } = await supabase.from("discord_messages").update({ embedding }).eq("id", row.id);
+        // .select("id") + a length check on the result turns a silently
+        // no-op update into a loud failure — discord_messages.id is a
+        // Discord snowflake (a bigint well beyond
+        // Number.MAX_SAFE_INTEGER), and this row's `id` was already
+        // fetched as a precision-safe string (see the `id::text` select
+        // below); without that cast, .eq("id", row.id) would compare
+        // against a JS-rounded id that matches zero real rows, and
+        // .update() reports that as success (no error) rather than a
+        // failure, silently discarding the embedding while still
+        // spending the day's request quota on it. This bug shipped
+        // originally and burned two full days of quota (~2000 requests)
+        // before being caught — only 3 rows had actually persisted.
+        const { data, error } = await supabase
+          .from("discord_messages")
+          .update({ embedding })
+          .eq("id", row.id)
+          .select("id");
         if (error) {
           throw new Error(`Failed to save embedding for row ${row.id}: ${error.message}`);
+        }
+        if (!data || data.length === 0) {
+          throw new Error(`Update matched 0 rows for id ${row.id} — this should be impossible; stopping rather than silently wasting more quota.`);
         }
       }),
     );
@@ -146,9 +165,14 @@ async function main() {
     // so "the next unprocessed batch" is always just whatever this same
     // query returns next time. That's what makes the script safely
     // resumable after an interruption or a hard failure.
+    // "id::text" (a PostgREST cast), not plain "id" — discord_messages.id
+    // is a bigint Discord snowflake that exceeds Number.MAX_SAFE_INTEGER,
+    // so deserializing it as a JS number rounds it to a different value.
+    // See the matching comment in processBatch for what that silently
+    // broke before this was caught.
     const { data: rows, error } = await supabase
       .from("discord_messages")
-      .select("id, content")
+      .select("id::text, content")
       .is("embedding", null)
       .not("content", "is", null)
       .neq("content", "")
