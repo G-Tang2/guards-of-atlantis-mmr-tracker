@@ -70,10 +70,21 @@ function parseRetryDelayMs(body: string): number | null {
 // function-timeout error once that budget runs out.
 const MAX_AUTO_RETRY_DELAY_MS = 40_000;
 
+// Bounds the 5xx retry below — a real "high demand"/transient-outage
+// blip clears within a few seconds, and unlike the 429 case there's no
+// quota signal to read a real wait time from, so this is just enough
+// attempts to smooth over a blip without eating meaningfully into the
+// route's 60s time budget (maxDuration in app/api/chat/route.ts).
+const MAX_5XX_RETRIES = 2;
+
 // Establishes the streaming connection, retrying once on a 429 whose
-// suggested wait is short enough to still fit the route's time budget —
-// this happens before anything is read from the response body, so a
-// retry here never has to un-send partial content to our own client.
+// suggested wait is short enough to still fit the route's time budget,
+// or a bounded few times on a 5xx (transient infra error/high demand —
+// hit live in practice: "This model is currently experiencing high
+// demand", same class this app already retries in
+// scripts/backfill-discord-embeddings.mjs). Both happen before anything
+// is read from the response body, so a retry here never has to un-send
+// partial content to our own client.
 async function openChatReplyStream(apiKey: string, requestBody: string, attempt = 1): Promise<Response> {
   const res = await fetch(
     `${GEMINI_API_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`,
@@ -94,6 +105,10 @@ async function openChatReplyStream(apiKey: string, requestBody: string, attempt 
       return openChatReplyStream(apiKey, requestBody, attempt + 1);
     }
     throw new GeminiRateLimitError(`Gemini API rate limit: ${body}`);
+  }
+  if (res.status >= 500 && res.status < 600 && attempt <= MAX_5XX_RETRIES) {
+    await sleep(attempt * 1500);
+    return openChatReplyStream(apiKey, requestBody, attempt + 1);
   }
   throw new Error(`Gemini API error ${res.status}: ${body}`);
 }
