@@ -2,6 +2,15 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Used by the ported hero-action-card canvas renderer (lib/cardPainter.ts)
+   for card titles/stat numbers — matches the font the source game's own
+   card art uses, not a design choice made here. */
+@font-face {
+  font-family: "Modesto Poster";
+  src: url("/fonts/card/modesto_poster.woff") format("woff");
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -6690,6 +6699,13 @@
     border-left-width: 3px;
     border-radius: 6px;
     padding: 0.55rem 0.7rem;
+  }
+  .goa-card-ref-art {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    margin: 0.3rem auto 0;
+    border-radius: 8px;
   }
   .goa-card-ref-warning {
     margin: 0 0 0.4rem;

@@ -3,6 +3,7 @@
 import { Fragment, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { CHAT_HISTORY_STORAGE_KEY, ChatStreamEvent, ChatTurn } from "@/lib/chat";
 import { CardReference } from "@/lib/heroCardContext";
+import { HeroActionCard, hasCardArt } from "@/components/HeroActionCard";
 import { MessageCircle, Send, X } from "lucide-react";
 
 // Bump this by hand whenever a meaningful change ships to the Oracle's
@@ -259,6 +260,7 @@ function CardStatBlock({ reference }: { reference: CardReference }) {
   const item = asString(card.item);
   const description = asString(card.description) ?? "";
   const accent = CARD_COLOR_ACCENT[color] ?? "var(--border)";
+  const showArt = hasCardArt(reference.heroId);
 
   return (
     <div className="goa-card-ref" style={{ borderColor: accent }}>
@@ -273,33 +275,39 @@ function CardStatBlock({ reference }: { reference: CardReference }) {
         </span>
         <span className="goa-card-ref-hero">{reference.heroName}</span>
       </div>
-      <div className="goa-card-ref-tags">
-        {color && (
-          <span className="goa-card-ref-tag" style={{ borderColor: accent, color: accent }}>
-            {color} · {level ? `Tier ${level}` : "Starting"}
-          </span>
-        )}
-        {initiative !== null && <span className="goa-card-ref-tag">Init {initiative}</span>}
-        {primaryAction && (
-          <span className="goa-card-ref-tag">
-            {primaryAction}
-            {primaryValue !== null ? ` ${primaryValue}` : ""}
-          </span>
-        )}
-        {modifier && modifierValue !== null && (
-          <span className="goa-card-ref-tag">
-            {modifier} {modifierValue}
-          </span>
-        )}
-        {secondaryMovement !== null && (
-          <span className="goa-card-ref-tag">Move {secondaryMovement}</span>
-        )}
-        {secondaryDefense !== null && (
-          <span className="goa-card-ref-tag">Def {secondaryDefense}</span>
-        )}
-        {item && <span className="goa-card-ref-tag">Item: {item}</span>}
-      </div>
-      {description && <div className="goa-card-ref-desc">{renderChatText(description)}</div>}
+      {showArt ? (
+        <HeroActionCard heroId={reference.heroId} card={card} className="goa-card-ref-art" />
+      ) : (
+        <>
+          <div className="goa-card-ref-tags">
+            {color && (
+              <span className="goa-card-ref-tag" style={{ borderColor: accent, color: accent }}>
+                {color} · {level ? `Tier ${level}` : "Starting"}
+              </span>
+            )}
+            {initiative !== null && <span className="goa-card-ref-tag">Init {initiative}</span>}
+            {primaryAction && (
+              <span className="goa-card-ref-tag">
+                {primaryAction}
+                {primaryValue !== null ? ` ${primaryValue}` : ""}
+              </span>
+            )}
+            {modifier && modifierValue !== null && (
+              <span className="goa-card-ref-tag">
+                {modifier} {modifierValue}
+              </span>
+            )}
+            {secondaryMovement !== null && (
+              <span className="goa-card-ref-tag">Move {secondaryMovement}</span>
+            )}
+            {secondaryDefense !== null && (
+              <span className="goa-card-ref-tag">Def {secondaryDefense}</span>
+            )}
+            {item && <span className="goa-card-ref-tag">Item: {item}</span>}
+          </div>
+          {description && <div className="goa-card-ref-desc">{renderChatText(description)}</div>}
+        </>
+      )}
     </div>
   );
 }
