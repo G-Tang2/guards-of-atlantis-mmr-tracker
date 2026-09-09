@@ -49,6 +49,19 @@ function asVariant(v: unknown): { first?: number } | null {
 // Card levels are stored as numbers (1-4) but the source art/frame
 // filenames use lowercase roman numerals — this mapping is the only
 // place that needs to know that.
+// Stops waiting on `promise` once `ms` elapses, resolving to `undefined`
+// instead — doesn't cancel the underlying work. Exists specifically
+// because document.fonts.ready (see paint() below) waits on *every* font
+// used anywhere on the page, not just this component's one font; a slow
+// or blocked unrelated font (e.g. this app's Google Fonts import) can
+// leave it pending far longer than this component should ever wait,
+// which is exactly what happened live: the canvas rendered with correct
+// dimensions but stayed at opacity 0 forever, with no console error at
+// all, because the paint() promise chain never settled.
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return Promise.race([promise, new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), ms))]);
+}
+
 function levelToRoman(level: number | null): string {
   switch (level) {
     case 2: return "ii";
@@ -100,48 +113,69 @@ export function HeroActionCard({ heroId, card, className }: { heroId: string; ca
       const context = canvas.getContext("2d");
       if (!context) return;
 
-      const slug = getBackgroundSlug(
-        {
-          color: card.color,
-          handicapped: asBoolean(card.handicapped),
-          extra: asBoolean(card.extra),
-          level: asNumber(card.level),
-          variant: asVariant(card.variant),
-        },
-        getExtraSlotIndex(heroId, card),
-      );
+      let background = null;
+      try {
+        const slug = getBackgroundSlug(
+          {
+            color: card.color,
+            handicapped: asBoolean(card.handicapped),
+            extra: asBoolean(card.extra),
+            level: asNumber(card.level),
+            variant: asVariant(card.variant),
+          },
+          getExtraSlotIndex(heroId, card),
+        );
 
-      const [background] = await Promise.all([
-        loadCardBackground(heroId, slug),
-        preloadImages(),
-        document.fonts.load('66px "Modesto Poster"'),
-        document.fonts.ready,
-      ]);
+        // Bounded to 4s and font-loading failures swallowed: a slow/failed
+        // asset should degrade this card's visual polish (missing
+        // background art, or the browser's fallback font instead of
+        // Modesto Poster), not leave it invisible forever — see
+        // withTimeout's own comment for the live incident this fixes.
+        const [loadedBackground] = await withTimeout(
+          Promise.all([
+            loadCardBackground(heroId, slug),
+            preloadImages(),
+            document.fonts.load('66px "Modesto Poster"').catch(() => undefined),
+          ]),
+          4000,
+        ) ?? [null];
+        background = loadedBackground ?? null;
+      } catch (e) {
+        console.error("HeroActionCard: failed to load card art assets", e);
+      }
       if (cancelled) return;
 
-      updateCanvas(
-        canvas,
-        context,
-        background,
-        (asString(card.color) as Color) ?? Color.GOLD,
-        asBoolean(card.handicapped),
-        asBoolean(card.extra),
-        asString(card.name) ?? "",
-        asString(card.description) ?? "",
-        levelToRoman(asNumber(card.level)),
-        (asString(card.item) as Item) ?? Item.ATTACK,
-        asNumber(card.initiative) ?? 0,
-        (asString(card.primaryAction) as Type) ?? Type.ATTACK,
-        asNumber(card.primaryValue) ?? 0,
-        (asString(card.primaryValueSign) as ValueSign) ?? ValueSign.NONE,
-        (asString(card.modifier) as Modifier) ?? Modifier.NONE,
-        asNumber(card.modifierValue) ?? 0,
-        (asString(card.modifierValueSign) as ValueSign) ?? ValueSign.NONE,
-        asNumber(card.secondaryMovement) ?? 0,
-        asNumber(card.secondaryDefense) ?? 0,
-        asNumber(card.secondaryAttack),
-      );
-      setReady(true);
+      try {
+        updateCanvas(
+          canvas,
+          context,
+          background,
+          (asString(card.color) as Color) ?? Color.GOLD,
+          asBoolean(card.handicapped),
+          asBoolean(card.extra),
+          asString(card.name) ?? "",
+          asString(card.description) ?? "",
+          levelToRoman(asNumber(card.level)),
+          (asString(card.item) as Item) ?? Item.ATTACK,
+          asNumber(card.initiative) ?? 0,
+          (asString(card.primaryAction) as Type) ?? Type.ATTACK,
+          asNumber(card.primaryValue) ?? 0,
+          (asString(card.primaryValueSign) as ValueSign) ?? ValueSign.NONE,
+          (asString(card.modifier) as Modifier) ?? Modifier.NONE,
+          asNumber(card.modifierValue) ?? 0,
+          (asString(card.modifierValueSign) as ValueSign) ?? ValueSign.NONE,
+          asNumber(card.secondaryMovement) ?? 0,
+          asNumber(card.secondaryDefense) ?? 0,
+          asNumber(card.secondaryAttack),
+        );
+      } catch (e) {
+        console.error("HeroActionCard: failed to draw card", e);
+      } finally {
+        // Always reveal the canvas, even after a caught failure above —
+        // whatever updateCanvas managed to draw (or the blank canvas, in
+        // the worst case) beats leaving it invisible with no explanation.
+        if (!cancelled) setReady(true);
+      }
     }
 
     void paint();
