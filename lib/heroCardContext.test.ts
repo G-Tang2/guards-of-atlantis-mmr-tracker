@@ -265,6 +265,25 @@ describe("getRelevantHeroIds — structural false-positive fixes", () => {
   });
 });
 
+describe("multi-word card names are matched as a phrase, not word-by-word", () => {
+  it("requires every word of the name, not just one of them", () => {
+    // Widget's "All Aboard" only matches when both "all" and "aboard"
+    // are present — a bare "all" floating in an unrelated question (the
+    // live incident this guards against) is not enough.
+    expect(getRelevantHeroIds("list all heroes gold damage")).toEqual([]);
+    expect(getRelevantHeroIds("tell me about all aboard")).toContain("widget");
+  });
+
+  it("still matches a genuine multi-word name even when one of its words is an ordinary stopword", () => {
+    // Bain's "Dead or Alive" contains "or", which extractKeywords strips
+    // as noise from the question — phrase matching checks raw question
+    // words instead of the stopword-filtered set for exactly this reason,
+    // so a name containing a connector word isn't accidentally
+    // unmatchable via its own full name.
+    expect(getRelevantHeroIds("how does dead or alive work")).toContain("bain");
+  });
+});
+
 describe("keyword collision audit", () => {
   // Proactive version of the fixes above: rather than waiting for a user
   // to hit the next movement/green/tier-style collision, this scans
@@ -283,7 +302,12 @@ describe("keyword collision audit", () => {
   // Card names have no such runtime gate (a title is always capitalized
   // regardless of whether the underlying word is generic), so this is
   // the one category where "found by the audit" must mean "fix it now,"
-  // not "already handled elsewhere."
+  // not "already handled elsewhere." Note that a multi-word name (most of
+  // them) isn't in this index at all any more — see CARD_NAME_PHRASES —
+  // so what's left here is only ever a single-word name in its entirety
+  // (e.g. "Cleave"), where the word being "generic-looking" doesn't
+  // matter: it IS the whole name, so matching on it is correct by
+  // definition, same as the hero-name match above it.
   it("has no unreviewed generic-looking words in card names", () => {
     const suspicious = auditDistinctiveKeywords().filter((e) => e.source === "name" && !e.everCapitalized);
     expect(suspicious).toEqual([]);

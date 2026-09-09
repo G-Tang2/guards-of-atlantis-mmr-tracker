@@ -117,13 +117,13 @@ type KeywordIndexEntry = { heroIds: Set<string>; everCapitalized: boolean };
 
 // everCapitalized is computed once here (not just for the audit below)
 // because it's used as a real runtime requirement for description-index
-// matches, not just a report to review later — see requireCapitalized on
-// buildKeywordIndex and its own comment on why.
-function buildKeywordIndex(getText: (card: HeroCard) => string): Map<string, KeywordIndexEntry> {
+// matches, not just a report to review later — see the capitalization
+// check in getRelevantHeroIds below.
+function buildDescriptionKeywordIndex(): Map<string, KeywordIndexEntry> {
   const index = new Map<string, KeywordIndexEntry>();
   for (const heroId of Object.keys(HERO_CARDS)) {
     for (const card of HERO_CARDS[heroId]) {
-      const rawText = getText(card);
+      const rawText = stripIconTokens(typeof card.description === "string" ? card.description : "");
       for (const rawWord of rawText.split(/[^a-zA-Z0-9]+/)) {
         const word = rawWord.toLowerCase();
         if (word.length <= 2) continue;
@@ -137,10 +137,53 @@ function buildKeywordIndex(getText: (card: HeroCard) => string): Map<string, Key
   return index;
 }
 
-const CARD_NAME_KEYWORD_INDEX = buildKeywordIndex((card) => (typeof card.name === "string" ? card.name : ""));
-const DESCRIPTION_KEYWORD_INDEX = buildKeywordIndex((card) =>
-  stripIconTokens(typeof card.description === "string" ? card.description : ""),
-);
+// Single-word card names only (e.g. "Cleave", "Dodge") — where the whole
+// name IS the one word, so unigram + distinctiveness is the right (and
+// only possible) check, same as before. A multi-word name is matched as
+// a whole phrase instead (see CARD_NAME_PHRASES below), not word-by-word,
+// so it's deliberately excluded here rather than contributing its
+// individual words to this index too.
+function buildSingleWordCardNameIndex(): Map<string, KeywordIndexEntry> {
+  const index = new Map<string, KeywordIndexEntry>();
+  for (const heroId of Object.keys(HERO_CARDS)) {
+    for (const card of HERO_CARDS[heroId]) {
+      if (typeof card.name !== "string") continue;
+      const words = nameKeywords(card.name);
+      if (words.length !== 1) continue;
+      const entry = index.get(words[0]) ?? { heroIds: new Set<string>(), everCapitalized: true };
+      entry.heroIds.add(heroId);
+      index.set(words[0], entry);
+    }
+  }
+  return index;
+}
+
+type CardNamePhrase = { heroId: string; words: string[] };
+
+// Multi-word card names, matched as a whole rather than word-by-word:
+// every one of the name's own significant words has to show up
+// somewhere in the question, not just one of them landing on an
+// unrelated word that happens to also appear in a title. This is what
+// closes the whole bug class the connector-word entries in
+// EXTRA_STOP_WORDS and the quantifiers added to BASE_STOP_WORDS were
+// each a one-word patch for — "movement" alone matching Sabina's "Troop
+// Movement", "for"/"with"/"like" as leftover connector words, "all"
+// alone matching Widget's "All Aboard" — by requiring the *whole* name,
+// not just a word from it, this doesn't need a distinctiveness cap the
+// way the single-word indexes do: requiring every word of a multi-word
+// title to co-occur is already a far more specific signal than any one
+// rare word could be on its own.
+const CARD_NAME_PHRASES: CardNamePhrase[] = [];
+for (const heroId of Object.keys(HERO_CARDS)) {
+  for (const card of HERO_CARDS[heroId]) {
+    if (typeof card.name !== "string") continue;
+    const words = nameKeywords(card.name);
+    if (words.length >= 2) CARD_NAME_PHRASES.push({ heroId, words });
+  }
+}
+
+const CARD_NAME_KEYWORD_INDEX = buildSingleWordCardNameIndex();
+const DESCRIPTION_KEYWORD_INDEX = buildDescriptionKeywordIndex();
 
 export type KeywordAuditEntry = {
   word: string;
@@ -199,6 +242,21 @@ export function getRelevantHeroIds(question: string): string[] {
       matched.add(id);
     }
   });
+
+  // Raw words, not `keywords` above — a multi-word card name can itself
+  // contain a word extractKeywords would otherwise treat as noise (e.g.
+  // "for" in "Brace for Impact"), and the safety of this check comes
+  // from requiring every one of the name's words to be present, not from
+  // any single word being rare or non-generic.
+  const rawQuestionWords = new Set(
+    question
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 2),
+  );
+  for (const { heroId, words } of CARD_NAME_PHRASES) {
+    if (words.every((w) => rawQuestionWords.has(w))) matched.add(heroId);
+  }
 
   for (const kw of keywords) {
     const nameEntry = CARD_NAME_KEYWORD_INDEX.get(kw);
