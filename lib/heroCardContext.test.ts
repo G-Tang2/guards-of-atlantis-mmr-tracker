@@ -13,6 +13,8 @@ import {
   computeStatExtremes,
   extractAskedLevel,
   detectTopN,
+  detectOrdinalRank,
+  ordinalRankWord,
   detectNamedHeroStatComparison,
   computeStatBreakdown,
   wantsCrossHeroStatSummary,
@@ -152,6 +154,60 @@ describe("detectTopN", () => {
 
   it("caps at 10 to bound worst-case output size", () => {
     expect(detectTopN("top 500 lowest initiative")).toBe(10);
+  });
+});
+
+describe("detectOrdinalRank", () => {
+  it("parses ordinal words and numeric suffixes, min 2", () => {
+    expect(detectOrdinalRank("second highest attack")).toBe(2);
+    expect(detectOrdinalRank("2nd highest attack")).toBe(2);
+    expect(detectOrdinalRank("third lowest initiative")).toBe(3);
+    expect(detectOrdinalRank("3rd-lowest initiative")).toBe(3);
+  });
+
+  it("returns null for the plain highest/lowest case and for top-N phrasing", () => {
+    expect(detectOrdinalRank("highest attack")).toBeNull();
+    expect(detectOrdinalRank("top 3 highest attack")).toBeNull();
+  });
+});
+
+describe("ordinalRankWord", () => {
+  it("spells out known ranks and falls back to a numeric suffix beyond that", () => {
+    expect(ordinalRankWord(2)).toBe("second");
+    expect(ordinalRankWord(10)).toBe("tenth");
+    expect(ordinalRankWord(11)).toBe("11th");
+  });
+});
+
+describe("computeStatExtremes — narrowing to one ordinal rank", () => {
+  it("resolves 'second highest attack for tier 1 red cards' to the real second-place value (6), not the reported wrong answer (7)", () => {
+    // Hit live: the model answered "7" for this exact question — a value
+    // that appears nowhere in this data — because nothing upstream told
+    // it which value was actually second place, so it guessed from the
+    // raw card table. Ground truth: 9 is first place (Emmitt alone), 6 is
+    // second place (a 4-way tie), 5 is third.
+    const rank = detectOrdinalRank("second highest attack for tier 1 red cards");
+    expect(rank).toBe(2);
+    const groups = computeStatExtremes("attack", "max", ["RED"], [], 1, rank!);
+    expect(groups).not.toBeNull();
+    expect(groups!).toHaveLength(2);
+    expect(groups![0].value).toBe(9);
+    const secondPlace = groups!.slice(rank! - 1, rank!);
+    expect(secondPlace).toHaveLength(1);
+    expect(secondPlace[0].value).toBe(6);
+    expect(secondPlace[0].matches.map((m) => m.heroName).sort()).toEqual(
+      [
+        "Arien the Tidemaster",
+        "Brogan the Destroyer",
+        "Mortimer the Awakener",
+        "Mrak the Rockshaper",
+      ].sort(),
+    );
+  });
+
+  it("returns no groups past the last real rank (narrows to empty)", () => {
+    const groups = computeStatExtremes("range", "max", [], [], 99, 2);
+    expect(groups).toBeNull();
   });
 });
 

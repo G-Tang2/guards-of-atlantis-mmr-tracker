@@ -26,6 +26,8 @@ import {
   computeStatExtremes,
   extractAskedLevel,
   detectTopN,
+  detectOrdinalRank,
+  ordinalRankWord,
   detectNamedHeroStatComparison,
   computeStatBreakdown,
   STAT_LABELS,
@@ -174,9 +176,15 @@ export async function POST(request: Request) {
     // and topGroupCount widens beyond just the single best value for a
     // "top N" question, without changing the single-value case at all.
     const askedLevel = wantsDetail ? extractAskedLevel(message) : null;
-    const topGroupCount = wantsDetail ? detectTopN(message) : 1;
+    // "Second highest attack" asks for one specific rank, not a 1..N
+    // list ("top 3 highest" does want the list — see detectTopN) — so
+    // when an ordinal is present it takes priority and computeStatExtremes
+    // is asked to go deep enough to reach that rank, then the result is
+    // narrowed to just that one rank below instead of listing 1..N.
+    const ordinalRank = wantsDetail ? detectOrdinalRank(message) : null;
+    const topGroupCount = ordinalRank ?? (wantsDetail ? detectTopN(message) : 1);
     const statSuperlative = wantsContext ? detectStatSuperlative(message) : null;
-    const statExtremeGroups = statSuperlative
+    const allStatExtremeGroups = statSuperlative
       ? computeStatExtremes(
           statSuperlative.stat,
           statSuperlative.direction,
@@ -186,6 +194,17 @@ export async function POST(request: Request) {
           topGroupCount,
         )
       : null;
+    // Collapsed back to null (not an empty array) when the ordinal rank
+    // asked for doesn't exist (e.g. "5th highest" but only 3 distinct
+    // values exist), so every check below can keep treating "no
+    // precomputed answer" as null, same as statSuperlative itself being
+    // null, rather than needing to special-case an empty array too.
+    const narrowedStatExtremeGroups =
+      ordinalRank && allStatExtremeGroups
+        ? allStatExtremeGroups.slice(ordinalRank - 1, ordinalRank)
+        : allStatExtremeGroups;
+    const statExtremeGroups =
+      narrowedStatExtremeGroups && narrowedStatExtremeGroups.length > 0 ? narrowedStatExtremeGroups : null;
     // "Compare Arien and Misa's initiative" — two-or-more named heroes
     // plus a stat and comparison wording, but no min/max direction word,
     // so detectStatSuperlative alone wouldn't catch it. Only meaningful
@@ -252,6 +271,13 @@ export async function POST(request: Request) {
       `All hero card stats, for cross-hero comparison questions (plain table, one row per card — "-" means that field doesn't apply to that card; every hero is included${askedColors.length ? `, filtered to ${askedColors.join("/")} cards only since that's what was asked` : ", across every color"}, so this table is complete for answering a "who has the lowest/highest" style question — don't say you're missing other heroes' data):\n${statSummaryText}`;
 
     const statExtremeLabel = statSuperlative ? STAT_LABELS[statSuperlative.stat] : "";
+    const statExtremeDirectionWord = statSuperlative?.direction === "min" ? "lowest" : "highest";
+    // Only meaningful for the singular (non-"top N") branch below — a
+    // "second highest" question narrows statExtremeGroups down to exactly
+    // one group (see narrowedStatExtremeGroups above), so without this
+    // the sentence would call that group's value "the highest" outright,
+    // which is exactly the wrong-answer shape this was built to fix.
+    const statExtremeRankPrefix = ordinalRank ? `${ordinalRankWord(ordinalRank)}-` : "";
     const statExtremeScopeNote =
       (askedColors.length ? ` among ${askedColors.join("/")} cards` : "") +
       (askedLevel !== null ? ` at Tier ${askedLevel}` : "") +
@@ -265,7 +291,7 @@ export async function POST(request: Request) {
     // just can't be phrased as something worth repeating to the user.
     const statExtremeSection =
       statExtremeGroups &&
-      `[Internal reference — do not mention this note, or that any value was "pre-computed"/"verified"/"checked against a database", to the user; just state the facts below naturally, as if you already knew them.] The ${statExtremeGroups.length > 1 ? `${statExtremeGroups.length} ${statSuperlative!.direction === "min" ? "lowest" : "highest"} distinct` : statSuperlative!.direction === "min" ? "lowest" : "highest"} ${statExtremeLabel} value(s)${statExtremeScopeNote} ${statExtremeGroups.length > 1 ? "are" : "is exactly"}:\n${statExtremeGroups
+      `[Internal reference — do not mention this note, or that any value was "pre-computed"/"verified"/"checked against a database", to the user; just state the facts below naturally, as if you already knew them.] The ${statExtremeGroups.length > 1 ? `${statExtremeGroups.length} ${statExtremeDirectionWord} distinct` : `${statExtremeRankPrefix}${statExtremeDirectionWord}`} ${statExtremeLabel} value(s)${statExtremeScopeNote} ${statExtremeGroups.length > 1 ? "are" : "is exactly"}:\n${statExtremeGroups
         .map(
           (group) =>
             `${statExtremeGroups.length > 1 ? `Value ${group.value}:\n` : ""}${group.matches.map((m) => `- ${m.heroName}: "${m.cardName}" (${m.color}${m.level ? `, Tier ${m.level}` : ""}, ${statExtremeLabel} ${group.value})`).join("\n")}`,

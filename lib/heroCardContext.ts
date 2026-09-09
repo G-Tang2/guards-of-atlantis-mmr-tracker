@@ -481,6 +481,47 @@ export function detectTopN(question: string): number {
   return Number.isFinite(n) && n > 0 ? Math.min(n, 10) : 1;
 }
 
+const ORDINAL_RANK_WORDS: Record<number, string> = {
+  2: "second",
+  3: "third",
+  4: "fourth",
+  5: "fifth",
+  6: "sixth",
+  7: "seventh",
+  8: "eighth",
+  9: "ninth",
+  10: "tenth",
+};
+const ORDINAL_RANK_LOOKUP: Record<string, number> = Object.fromEntries(
+  Object.entries(ORDINAL_RANK_WORDS).map(([rank, word]) => [word, Number(rank)]),
+);
+
+// Word for a rank in prose ("second", "third", ... falling back to
+// "11th" past the words above, though detectOrdinalRank never returns
+// past 10 anyway).
+export function ordinalRankWord(rank: number): string {
+  return ORDINAL_RANK_WORDS[rank] ?? `${rank}th`;
+}
+
+// "second highest attack", "2nd-lowest initiative" — a request for ONE
+// specific rank, not a 1..N list (contrast detectTopN's "top 3", which
+// wants every rank up to 3 listed out). Returns null for the plain
+// "highest"/"lowest" case (rank 1), which already works without this.
+// Hit live: asked "second highest attack for tier 1 red card", got back
+// a value (7) that doesn't exist anywhere in that data at all, because
+// nothing pre-computed anything past rank 1 and the model was left to
+// guess the rest from the raw card table — same failure mode
+// computeStatExtremes exists to avoid for the plain case. Capped at 10
+// to match detectTopN's cap.
+export function detectOrdinalRank(question: string): number | null {
+  const lower = question.toLowerCase();
+  const wordMatch = lower.match(/\b(second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/);
+  if (wordMatch) return ORDINAL_RANK_LOOKUP[wordMatch[1]];
+  const digitMatch = lower.match(/\b([2-9]|10)(?:st|nd|rd|th)\b/);
+  if (digitMatch) return parseInt(digitMatch[1], 10);
+  return null;
+}
+
 export type StatExtremeMatch = { heroName: string; cardName: string; color: string; level: number | null };
 export type StatExtremeGroup = { value: number; matches: StatExtremeMatch[] };
 
