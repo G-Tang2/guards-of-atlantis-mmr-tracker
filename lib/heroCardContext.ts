@@ -342,49 +342,134 @@ export function detectStatSuperlative(question: string): { stat: StatKind; direc
   return null;
 }
 
+// "tier 1", "level 2", "tier iii" — an additional filter dimension
+// alongside color for a stat superlative question. Roman numerals
+// accepted since that's how levels 1-3 are printed on the physical
+// cards (see cardPainter.ts's own level_i/ii/iii/iv assets); Arabic
+// digits also accepted since that's how players actually talk.
+export function extractAskedLevel(question: string): number | null {
+  const match = question.toLowerCase().match(/\b(?:tier|level)\s*(iv|iii|ii|i|[1-4])\b/);
+  if (!match) return null;
+  const raw = match[1];
+  if (raw === "i") return 1;
+  if (raw === "ii") return 2;
+  if (raw === "iii") return 3;
+  if (raw === "iv") return 4;
+  return parseInt(raw, 10);
+}
+
+// "top 3 lowest initiative cards" — how many distinct values (not cards)
+// to include, so ties within a value don't quietly cut the list short.
+// Defaults to 1 (today's plain "the lowest/highest" behavior) wherever
+// no explicit count is asked for.
+export function detectTopN(question: string): number {
+  const match = question.toLowerCase().match(/\btop\s+(\d+)\b/);
+  const n = match ? parseInt(match[1], 10) : 1;
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 10) : 1;
+}
+
 export type StatExtremeMatch = { heroName: string; cardName: string; color: string; level: number | null };
+export type StatExtremeGroup = { value: number; matches: StatExtremeMatch[] };
+
+function cardMatchesFilters(card: HeroCard, colors: string[], level: number | null): boolean {
+  const color = typeof card.color === "string" ? card.color : "";
+  if (colors.length > 0 && !colors.includes(color)) return false;
+  if (level !== null && card.level !== level) return false;
+  return true;
+}
 
 // heroIds restricts the comparison to specific heroes' own cards (e.g.
 // "Arien's highest initiative card" should only compare Arien's cards,
 // not the whole roster) — empty means every hero, for a true cross-hero
-// comparison ("who has the highest attack in the game").
+// comparison ("who has the highest attack in the game"). groupCount > 1
+// returns that many distinct values worth of groups instead of just the
+// single best (see detectTopN) — e.g. groupCount 3 on "min" returns the
+// 3 lowest distinct values found, each with every card at that value.
 export function computeStatExtremes(
   stat: StatKind,
   direction: "min" | "max",
   colors: string[],
   heroIds: string[] = [],
-): { value: number; matches: StatExtremeMatch[] } | null {
+  level: number | null = null,
+  groupCount: number = 1,
+): StatExtremeGroup[] | null {
   const scopeIds = heroIds.length > 0 ? heroIds : Object.keys(HERO_CARDS);
 
-  let best: number | null = null;
+  const distinctValues = new Set<number>();
   for (const heroId of scopeIds) {
     for (const card of HERO_CARDS[heroId] ?? []) {
-      const color = typeof card.color === "string" ? card.color : "";
-      if (colors.length > 0 && !colors.includes(color)) continue;
+      if (!cardMatchesFilters(card, colors, level)) continue;
       const value = resolveStatValue(card, stat);
-      if (value === null) continue;
-      if (best === null || (direction === "min" ? value < best : value > best)) best = value;
+      if (value !== null) distinctValues.add(value);
     }
   }
-  if (best === null) return null;
+  if (distinctValues.size === 0) return null;
 
-  const matches: StatExtremeMatch[] = [];
-  for (const heroId of scopeIds) {
-    const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
-    for (const card of HERO_CARDS[heroId] ?? []) {
-      const color = typeof card.color === "string" ? card.color : "";
-      if (colors.length > 0 && !colors.includes(color)) continue;
-      if (resolveStatValue(card, stat) === best) {
-        matches.push({
-          heroName,
-          cardName: typeof card.name === "string" ? card.name : "",
-          color,
-          level: typeof card.level === "number" ? card.level : null,
-        });
+  const orderedValues = [...distinctValues].sort((a, b) => (direction === "min" ? a - b : b - a));
+  const targetValues = orderedValues.slice(0, groupCount);
+
+  return targetValues.map((targetValue) => {
+    const matches: StatExtremeMatch[] = [];
+    for (const heroId of scopeIds) {
+      const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
+      for (const card of HERO_CARDS[heroId] ?? []) {
+        if (!cardMatchesFilters(card, colors, level)) continue;
+        if (resolveStatValue(card, stat) === targetValue) {
+          matches.push({
+            heroName,
+            cardName: typeof card.name === "string" ? card.name : "",
+            color: typeof card.color === "string" ? card.color : "",
+            level: typeof card.level === "number" ? card.level : null,
+          });
+        }
       }
     }
-  }
-  return { value: best, matches };
+    return { value: targetValue, matches };
+  });
+}
+
+// "Compare Arien and Misa's initiative" — two or more named heroes plus
+// a stat and comparison wording, but no explicit min/max direction word.
+// Distinct from computeStatExtremes above: there's no single "winner" to
+// find, just each named hero's own values laid out precisely so the
+// model doesn't have to (mis)read them off raw card JSON itself.
+const COMPARISON_WORD_PATTERN = /\bcompar(e|ison)\b|\bvs\.?\b|\bversus\b/;
+
+export function detectNamedHeroStatComparison(question: string, relevantHeroIds: string[]): StatKind | null {
+  if (relevantHeroIds.length < 2) return null;
+  const lower = question.toLowerCase();
+  if (!COMPARISON_WORD_PATTERN.test(lower)) return null;
+  const statMatch = STAT_KEYWORD_PATTERNS.find(({ pattern }) => pattern.test(lower));
+  return statMatch?.stat ?? null;
+}
+
+export type HeroStatBreakdown = {
+  heroName: string;
+  cards: { cardName: string; color: string; level: number | null; value: number }[];
+};
+
+export function computeStatBreakdown(
+  stat: StatKind,
+  heroIds: string[],
+  colors: string[],
+  level: number | null = null,
+): HeroStatBreakdown[] {
+  return heroIds.map((heroId) => {
+    const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
+    const cards: HeroStatBreakdown["cards"] = [];
+    for (const card of HERO_CARDS[heroId] ?? []) {
+      if (!cardMatchesFilters(card, colors, level)) continue;
+      const value = resolveStatValue(card, stat);
+      if (value === null) continue;
+      cards.push({
+        cardName: typeof card.name === "string" ? card.name : "",
+        color: typeof card.color === "string" ? card.color : "",
+        level: typeof card.level === "number" ? card.level : null,
+        value,
+      });
+    }
+    return { heroName, cards };
+  });
 }
 
 // One compact line per card across every hero (not per-hero JSON, which

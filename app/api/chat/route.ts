@@ -24,6 +24,10 @@ import {
   buildAllHeroStatSummary,
   detectStatSuperlative,
   computeStatExtremes,
+  extractAskedLevel,
+  detectTopN,
+  detectNamedHeroStatComparison,
+  computeStatBreakdown,
   STAT_LABELS,
 } from "@/lib/heroCardContext";
 import { streamChatReply, countTokens, GeminiRateLimitError, GeminiTimeoutError } from "@/lib/gemini";
@@ -165,26 +169,53 @@ export async function POST(request: Request) {
     // field-resolution details. Scoped to relevantHeroIds when a specific
     // hero is already in view ("Arien's highest initiative card" should
     // only compare Arien's own cards), and to every hero otherwise (a
-    // true cross-hero comparison, "who has the highest attack").
+    // true cross-hero comparison, "who has the highest attack"). askedLevel
+    // is an extra filter dimension alongside color ("tier 1 red cards"),
+    // and topGroupCount widens beyond just the single best value for a
+    // "top N" question, without changing the single-value case at all.
+    const askedLevel = wantsDetail ? extractAskedLevel(message) : null;
+    const topGroupCount = wantsDetail ? detectTopN(message) : 1;
     const statSuperlative = wantsContext ? detectStatSuperlative(message) : null;
-    const statExtreme = statSuperlative
-      ? computeStatExtremes(statSuperlative.stat, statSuperlative.direction, askedColors, relevantHeroIds)
+    const statExtremeGroups = statSuperlative
+      ? computeStatExtremes(
+          statSuperlative.stat,
+          statSuperlative.direction,
+          askedColors,
+          relevantHeroIds,
+          askedLevel,
+          topGroupCount,
+        )
       : null;
-    // Skip building the general stat table when the precise answer
-    // already covers the question — presenting both risks the model
-    // re-deriving (and re-flubbing) its own answer from the raw table
-    // instead of just using the verified one.
+    // "Compare Arien and Misa's initiative" — two-or-more named heroes
+    // plus a stat and comparison wording, but no min/max direction word,
+    // so detectStatSuperlative alone wouldn't catch it. Only meaningful
+    // when a superlative computation isn't already answering the
+    // question, and only once real heroes are already in scope (this
+    // never applies to the whole-roster case — comparing "the whole
+    // roster" isn't a comparison, that's what the superlative/stat-table
+    // paths are for).
+    const comparisonStat =
+      wantsContext && !statExtremeGroups ? detectNamedHeroStatComparison(message, relevantHeroIds) : null;
+    const statBreakdown = comparisonStat
+      ? computeStatBreakdown(comparisonStat, relevantHeroIds, askedColors, askedLevel)
+      : null;
+    // Skip building the general stat table when either precise answer
+    // already covers the question — presenting any of these together
+    // risks the model re-deriving (and re-flubbing) its own answer from
+    // the raw table instead of just using the verified one.
     const useCrossHeroStatSummary =
-      wantsContext && !statExtreme && wantsCrossHeroStatSummary(message, relevantHeroIds);
+      wantsContext && !statExtremeGroups && !statBreakdown && wantsCrossHeroStatSummary(message, relevantHeroIds);
     const statSummaryText = useCrossHeroStatSummary ? buildAllHeroStatSummary(askedColors) : "";
     // A precise stat answer only gets "cross-hero comparison" priority-
     // instruction treatment when it's actually comparing across the
     // whole roster (relevantHeroIds empty) — a single-hero superlative
     // ("Arien's highest initiative card") is still just a question about
     // that hero's own kit, already well served by the normal wantsDetail
-    // instructions below.
+    // instructions below. A named-hero comparison gets its own separate
+    // note instead (see comparisonNote below), since it's neither a
+    // whole-roster comparison nor a single hero's own kit.
     const isCrossHeroComparison =
-      useCrossHeroStatSummary || (statExtreme !== null && relevantHeroIds.length === 0);
+      useCrossHeroStatSummary || (statExtremeGroups !== null && relevantHeroIds.length === 0);
     // Not hero-specific (card-color roles, push potential/minion advantage,
     // statline & item matchups) — sent alongside hero context on any
     // strategy-flavored question, not just ones naming a hero, since these
@@ -221,19 +252,40 @@ export async function POST(request: Request) {
       `All hero card stats, for cross-hero comparison questions (plain table, one row per card — "-" means that field doesn't apply to that card; every hero is included${askedColors.length ? `, filtered to ${askedColors.join("/")} cards only since that's what was asked` : ", across every color"}, so this table is complete for answering a "who has the lowest/highest" style question — don't say you're missing other heroes' data):\n${statSummaryText}`;
 
     const statExtremeLabel = statSuperlative ? STAT_LABELS[statSuperlative.stat] : "";
+    const statExtremeScopeNote =
+      (askedColors.length ? ` among ${askedColors.join("/")} cards` : "") +
+      (askedLevel !== null ? ` at Tier ${askedLevel}` : "") +
+      (relevantHeroIds.length > 0 ? ` among ${relevantHeroIds.length === 1 ? "this hero's" : "these heroes'"} own cards` : "");
     const statExtremeSection =
-      statExtreme &&
-      `Pre-computed, verified-correct answer (do not recompute this yourself — every value below was checked directly against the card database, not derived from any table shown elsewhere in this prompt): the ${statSuperlative!.direction === "min" ? "lowest" : "highest"} ${statExtremeLabel} value${askedColors.length ? ` among ${askedColors.join("/")} cards` : ""}${relevantHeroIds.length > 0 ? ` among ${relevantHeroIds.length === 1 ? "this hero's" : "these heroes'"} own cards` : ""} is exactly ${statExtreme.value}. Every card at that value (and no others) is:\n${statExtreme.matches.map((m) => `- ${m.heroName}: "${m.cardName}" (${m.color}${m.level ? `, Tier ${m.level}` : ""})`).join("\n")}\nPresent exactly this list — do not add a card that isn't listed here, drop one that is, or restate a different ${statExtremeLabel} value for any of them, even if a stat table elsewhere in this prompt seems to suggest otherwise.`;
+      statExtremeGroups &&
+      `Pre-computed, verified-correct answer (do not recompute this yourself — every value below was checked directly against the card database, not derived from any table shown elsewhere in this prompt): the ${statExtremeGroups.length > 1 ? `${statExtremeGroups.length} ${statSuperlative!.direction === "min" ? "lowest" : "highest"} distinct` : statSuperlative!.direction === "min" ? "lowest" : "highest"} ${statExtremeLabel} value(s)${statExtremeScopeNote} ${statExtremeGroups.length > 1 ? "are" : "is exactly"}:\n${statExtremeGroups
+        .map(
+          (group) =>
+            `${statExtremeGroups.length > 1 ? `Value ${group.value}:\n` : ""}${group.matches.map((m) => `- ${m.heroName}: "${m.cardName}" (${m.color}${m.level ? `, Tier ${m.level}` : ""}, ${statExtremeLabel} ${group.value})`).join("\n")}`,
+        )
+        .join("\n")}\nPresent exactly this list — do not add a card that isn't listed here, drop one that is, or restate a different ${statExtremeLabel} value for any of them, even if a stat table elsewhere in this prompt seems to suggest otherwise.`;
+
+    const statBreakdownLabel = comparisonStat ? STAT_LABELS[comparisonStat] : "";
+    const statBreakdownSection =
+      statBreakdown &&
+      `Pre-computed, verified-correct ${statBreakdownLabel} breakdown for this comparison (do not recompute this yourself — every value below was checked directly against the card database):\n${statBreakdown
+        .map(
+          (hero) =>
+            `${hero.heroName}:\n${hero.cards.length > 0 ? hero.cards.map((c) => `- "${c.cardName}" (${c.color}${c.level ? `, Tier ${c.level}` : ""}): ${statBreakdownLabel} ${c.value}`).join("\n") : `- (no card has a ${statBreakdownLabel} value${askedColors.length ? ` among ${askedColors.join("/")} cards` : ""}${askedLevel !== null ? ` at Tier ${askedLevel}` : ""})`}`,
+        )
+        .join("\n\n")}`;
 
     const colorFilterNote = askedColors.length
       ? ` The question specifically asks about ${askedColors.join("/")} card(s) — before including any card in your answer, check that card's own "color" field and silently exclude it if it does not match ${askedColors.join(" or ")}, even if it's otherwise a similar level/initiative to the cards that do match. Do not present an off-color card as if it were one of the requested-color options.`
       : "";
 
-    const crossHeroNote = isCrossHeroComparison
-      ? statExtreme
-        ? " This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies. A pre-computed, already-verified answer is included below (labeled as such); present that list exactly as given rather than trying to re-derive it yourself, and state the actual value in your answer — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time."
-        : ` This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies; instead, use the all-heroes stat table (also below) to actually work out the answer (e.g. scan its Initiative column for the lowest value among matching rows). Unlike a single-hero card question, here you should state the winning hero/card's name and its actual value directly in your answer — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time. That table already covers every hero, so do not say you're missing other heroes' data.`
-      : " If the question is about a hero whose cards aren't included below, say you don't have that hero's card details in this message rather than guessing.";
+    const crossHeroNote = statBreakdown
+      ? " This question is comparing specific named heroes against each other on one stat, not asking about one hero's own kit in isolation. A pre-computed, already-verified breakdown of that stat for each hero is included below (labeled as such) — use it directly rather than reading the values off any raw card data also included, and state the actual values for each hero in your answer."
+      : isCrossHeroComparison
+        ? statExtremeGroups
+          ? " This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies. A pre-computed, already-verified answer is included below (labeled as such); present that list exactly as given rather than trying to re-derive it yourself, and state the actual value in your answer — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time."
+          : ` This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies; instead, use the all-heroes stat table (also below) to actually work out the answer (e.g. scan its Initiative column for the lowest value among matching rows). Unlike a single-hero card question, here you should state the winning hero/card's name and its actual value directly in your answer — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time. That table already covers every hero, so do not say you're missing other heroes' data.`
+        : " If the question is about a hero whose cards aren't included below, say you don't have that hero's card details in this message rather than guessing.";
     let priorityInstruction: string;
     if (wantsDetail) {
       priorityInstruction = ` This question is asking about a hero's action cards' own facts — ground your answer primarily in that hero's actual card data below, since it's the source of truth. Don't lead with Discord opinions or banter in place of concrete card facts; only bring in Discord history or that hero's strategy guide (if included below) where it adds real, specific insight (e.g. a known strong line of play, a house-rule ruling on that hero), treated as supporting color, not the main answer. When you name a specific action card, refer to it by its exact name and focus on explaining/comparing it in prose — do not restate its exact color, level, initiative, or numeric values yourself, since the app automatically shows that card's exact data (sourced directly from the database, not from you) right alongside your answer.${colorFilterNote}${crossHeroNote}`;
@@ -266,7 +318,7 @@ export async function POST(request: Request) {
     // heuristic on any failure (missing key, network error), so this never
     // blocks a reply. Order doesn't matter for a token count, so this
     // doesn't need to match the final section ordering below.
-    const nonDiscordSections = [cardSection, statExtremeSection, statSummarySection, guideSection, generalStrategySection, rulebookSection].filter(Boolean);
+    const nonDiscordSections = [cardSection, statExtremeSection, statBreakdownSection, statSummarySection, guideSection, generalStrategySection, rulebookSection].filter(Boolean);
     const nonDiscordSystemInstructionSoFar = `${promptPreamble}\n\n${nonDiscordSections.join("\n\n")}`;
     // Run alongside each other rather than one after the other — the
     // Discord fetch doesn't actually need the token count until the
@@ -297,8 +349,8 @@ export async function POST(request: Request) {
     // kit-based advice. For anything else (general/social/rules
     // questions), Discord leads as the group's own primary source.
     const sections = wantsContext
-      ? [cardSection, statExtremeSection, statSummarySection, guideSection, generalStrategySection, rulebookSection, discordSection].filter(Boolean)
-      : [discordSection, rulebookSection, cardSection, statExtremeSection, statSummarySection, guideSection, generalStrategySection].filter(Boolean);
+      ? [cardSection, statExtremeSection, statBreakdownSection, statSummarySection, guideSection, generalStrategySection, rulebookSection, discordSection].filter(Boolean)
+      : [discordSection, rulebookSection, cardSection, statExtremeSection, statBreakdownSection, statSummarySection, guideSection, generalStrategySection].filter(Boolean);
 
     const systemInstruction = `${promptPreamble}\n\n${sections.join("\n\n")}`;
     const trimmedHistory = trimHistoryToBudget(history);
