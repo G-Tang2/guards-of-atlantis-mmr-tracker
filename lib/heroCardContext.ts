@@ -217,6 +217,7 @@ const STRATEGY_INTENT_PATTERNS = [
 const CROSS_HERO_COMPARISON_PATTERNS = [
   /\blowest\b/, /\bhighest\b/, /\bmost\b/, /\bleast\b/, /\bfewest\b/,
   /\bbest\b/, /\bworst\b/, /\bstrongest\b/, /\bweakest\b/,
+  /\bfastest\b/, /\bslowest\b/,
   /\bwho has\b/, /\bwhich hero(es)?\b/, /\bwhat hero(es)?\b/, /\bany hero(es)?\b/,
   /\ball heroes\b/, /\bevery hero\b/, /\bcompare\b/, /\bcomparison\b/,
   /\brank(ed|ing)?\b/,

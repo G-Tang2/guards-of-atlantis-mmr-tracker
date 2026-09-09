@@ -203,7 +203,17 @@ export async function POST(request: Request) {
       priorityInstruction = " The group's own Discord message history below is your top-priority source for this kind of question — treat it as the primary source for how this group actually plays and talks about the game (house rules, opinions, running jokes, prior rulings), and lead with it over generic knowledge whenever it's relevant. The official rulebook is secondary reference material for official rules. This question doesn't appear to be about a specific hero's cards, so no card data was included below — if the question does turn out to hinge on a card's exact, unstated details and neither Discord nor the rulebook already answers it, say so rather than guessing; but if Discord or the rulebook already contains a clear answer, use it confidently instead of deflecting.";
     }
 
-    const promptPreamble = `You are a helpful assistant for the Guards of Atlantis II board game group.${priorityInstruction} For rules questions specifically: only state a rule, exception, or restriction if it is explicitly written in the rulebook or card text below — do not infer, speculate, or invent an exception based on theme, flavor text, "spirit of the rules", or assumed community consensus. If a general rule (e.g. what a Clear/Attack/Skill action can target) doesn't list an exception for a specific case, the general rule applies as written, even if the specific case sounds narratively special. If something isn't covered by the data below, say so honestly rather than making it up. You do not have access to the group's match history, player stats/MMR, or hero pick/win rates — if asked about those, say so rather than guessing.`;
+    // Hit live: asked "who has the slowest red initiative", the model
+    // picked the *highest* initiative value in the data (the card that
+    // actually acts first/fastest) and called it "slowest" — an intuitive
+    // but backwards guess (treating a bigger number as "slower", like a
+    // time cost) rather than applying this game's actual turn-order rule.
+    // Stated explicitly here since it's load-bearing for any
+    // initiative-related question, not just cross-hero comparisons.
+    const initiativeDirectionNote =
+      " Initiative note: actions resolve in initiative order from HIGHEST to LOWEST each turn — a card with a HIGHER initiative number acts earlier (faster/first), and a LOWER initiative number acts later (slower/last). So \"fastest\"/\"acts first\" means the highest initiative value, and \"slowest\"/\"acts last\" means the lowest initiative value — the opposite of treating initiative like a time cost.";
+
+    const promptPreamble = `You are a helpful assistant for the Guards of Atlantis II board game group.${priorityInstruction}${initiativeDirectionNote} For rules questions specifically: only state a rule, exception, or restriction if it is explicitly written in the rulebook or card text below — do not infer, speculate, or invent an exception based on theme, flavor text, "spirit of the rules", or assumed community consensus. If a general rule (e.g. what a Clear/Attack/Skill action can target) doesn't list an exception for a specific case, the general rule applies as written, even if the specific case sounds narratively special. If something isn't covered by the data below, say so honestly rather than making it up. You do not have access to the group's match history, player stats/MMR, or hero pick/win rates — if asked about those, say so rather than guessing.`;
 
     // Whatever's left of the total budget after the sections above is what
     // Discord history gets for this specific request — a plain question
