@@ -548,13 +548,26 @@ function ChatPageInner() {
                 ? renderChatText(m.text, m.cardReferences ?? [], setSelectedCard)
                 : m.text}
             </div>
-            {m.role === "model" && m.showCardDetails && m.cardReferences && m.cardReferences.length > 0 && (
-              <div className="goa-card-ref-list">
-                {m.cardReferences.map((ref, j) => (
-                  <CardStatBlock key={j} reference={ref} />
-                ))}
-              </div>
-            )}
+            {m.role === "model" &&
+              m.showCardDetails &&
+              m.cardReferences &&
+              m.cardReferences.length > 0 &&
+              (m.cardReferences.length > 1 ? (
+                <details className="goa-card-ref-details">
+                  <summary className="goa-card-ref-summary">
+                    Show {m.cardReferences.length} cards
+                  </summary>
+                  <div className="goa-card-ref-list">
+                    {m.cardReferences.map((ref, j) => (
+                      <CardStatBlock key={j} reference={ref} />
+                    ))}
+                  </div>
+                </details>
+              ) : (
+                <div className="goa-card-ref-list">
+                  <CardStatBlock reference={m.cardReferences[0]} />
+                </div>
+              ))}
           </Fragment>
         ))}
         {sending && (

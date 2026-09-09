@@ -6693,6 +6693,23 @@
     flex-direction: column;
     gap: 0.5rem;
   }
+  .goa-card-ref-details {
+    align-self: flex-start;
+    max-width: 90%;
+  }
+  .goa-card-ref-details .goa-card-ref-list {
+    max-width: none;
+    margin-top: 0.5rem;
+  }
+  .goa-card-ref-summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--muted);
+    user-select: none;
+  }
+  .goa-card-ref-summary:hover {
+    color: var(--foreground);
+  }
   .goa-card-ref {
     background: rgba(28, 26, 20, 0.75);
     border: 1px solid var(--border);
