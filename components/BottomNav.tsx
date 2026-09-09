@@ -8,6 +8,8 @@ import {
   ScrollText,
   Trophy,
   BookUser,
+  MessageCircle,
+  Map,
 } from "lucide-react";
 
 const TABS = [
@@ -21,6 +23,15 @@ const TABS = [
       (p.startsWith("/matches/") &&
         !p.startsWith("/matches/new") &&
         !p.startsWith("/matches/timer")),
+  },
+  {
+    // Renamed from "Board" now that /board is its own, differently-named
+    // feature (the hex battle map below) — keeping both labeled "Board"
+    // would make this tab ambiguous.
+    href: "/leaderboard",
+    label: "Ranks",
+    icon: Trophy,
+    match: (p: string) => p.startsWith("/leaderboard"),
   },
   {
     // Main entry point for building a match: assemble teams on /teams,
@@ -37,16 +48,22 @@ const TABS = [
     center: true,
   },
   {
-    href: "/leaderboard",
-    label: "Board",
-    icon: Trophy,
-    match: (p: string) => p.startsWith("/leaderboard"),
-  },
-  {
     href: "/heroes",
     label: "Heroes",
     icon: BookUser,
     match: (p: string) => p.startsWith("/heroes"),
+  },
+  {
+    href: "/chat",
+    label: "Oracle",
+    icon: MessageCircle,
+    match: (p: string) => p.startsWith("/chat"),
+  },
+  {
+    href: "/board",
+    label: "Map",
+    icon: Map,
+    match: (p: string) => p.startsWith("/board"),
   },
 ];
 

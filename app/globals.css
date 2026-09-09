@@ -6971,27 +6971,64 @@
     padding: 0 1rem 2rem;
     gap: 0.6rem;
   }
+  /* One combined icon toolbar (board controls + layout controls) —
+     replaces what used to be two separate rows of text buttons. */
   .goa-board-toolbar {
     display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
     width: 100%;
     max-width: 480px;
   }
-  .goa-board-clear-btn {
-    font-family: "Cinzel", serif;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--gold-light);
-    background: rgba(122, 88, 26, 0.25);
-    border: 1px solid var(--border);
+  .goa-board-icon-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
     border-radius: 6px;
-    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--border);
+    background: rgba(122, 88, 26, 0.2);
+    color: var(--gold-light);
     cursor: pointer;
   }
-  .goa-board-clear-btn:hover {
+  .goa-board-icon-btn:hover {
     border-color: var(--border-bright);
+  }
+  .goa-board-icon-btn.active {
+    background: rgba(201, 151, 58, 0.35);
+    border-color: var(--gold);
+  }
+  .goa-board-icon-btn-danger {
+    color: var(--loss);
+  }
+  .goa-board-toolbar-divider {
+    flex-shrink: 0;
+    width: 1px;
+    align-self: stretch;
+    background: var(--border);
+    margin: 0 0.1rem;
+  }
+  .goa-board-layout-select {
+    flex: 1;
+    min-width: 90px;
+    font-family: "Crimson Pro", serif;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    background: rgba(28, 26, 20, 0.85);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+  }
+  .goa-board-tip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
   }
   .goa-board-wrap {
     position: relative;
@@ -7063,14 +7100,25 @@
     cursor: grab;
     touch-action: none;
   }
-  .goa-board-token-img {
-    width: 100%;
-    height: 100%;
+  .goa-piece-thumb {
     border-radius: 50%;
+    pointer-events: none;
+    display: block;
+  }
+  .goa-minion-thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-family: "Cinzel", serif;
+    font-weight: 700;
+    line-height: 1;
+    user-select: none;
+  }
+  .goa-board-token-img {
     border: 1px solid var(--gold);
     background: var(--stone);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-    pointer-events: none;
   }
   .goa-board-hint {
     font-size: 0.75rem;
@@ -7080,8 +7128,76 @@
     max-width: 480px;
     margin: 0;
   }
+  .goa-board-section-label {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+    max-width: 480px;
+    background: none;
+    border: none;
+    padding: 0.2rem;
+    cursor: pointer;
+    font-family: "Cinzel", serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0.2rem 0 -0.3rem;
+  }
+  .goa-board-section-chevron {
+    flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+  .goa-board-section-chevron.collapsed {
+    transform: rotate(-90deg);
+  }
+  .goa-board-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.15rem 0.7rem;
+    width: 100%;
+    max-width: 480px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+  .goa-board-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .goa-board-legend-item strong {
+    color: var(--gold-light);
+  }
+  .goa-board-hero-search {
+    width: 100%;
+    max-width: 480px;
+    background: rgba(28, 26, 20, 0.85);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+    color: var(--text-primary);
+    font-family: "Crimson Pro", serif;
+    /* iOS Safari auto-zooms on focus for inputs under 16px — see the
+       same note on .goa-chat-textarea. */
+    font-size: 16px;
+  }
+  .goa-board-hero-search:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+  .goa-board-hero-empty {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding: 0.4rem 0.2rem;
+    margin: 0;
+  }
   .goa-board-palette {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
     overflow-x: auto;
     width: 100%;
@@ -7089,22 +7205,34 @@
     padding: 0.4rem 0.2rem;
     -webkit-overflow-scrolling: touch;
   }
+  .goa-board-palette-group {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .goa-board-palette-divider {
+    flex-shrink: 0;
+    width: 1px;
+    align-self: stretch;
+    background: var(--border);
+  }
   .goa-board-palette-item {
     flex-shrink: 0;
     width: 40px;
     height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 50%;
     border: 2px solid var(--border);
     background: var(--stone-mid);
     padding: 0;
     cursor: grab;
+    /* Drag now starts immediately on pointerdown (see startDragNew's own
+       comment) — this stops the browser trying to also treat the same
+       gesture as a native scroll/pan of the strip. */
+    touch-action: none;
     transition: border-color 0.15s, transform 0.15s;
-  }
-  .goa-board-palette-item img {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    pointer-events: none;
   }
   .goa-board-palette-item.active {
     border-color: var(--gold-light);
@@ -7118,8 +7246,98 @@
     opacity: 0.85;
     filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
   }
-  .goa-board-drag-ghost img {
-    border-radius: 50%;
+  .goa-board-drag-ghost .goa-piece-thumb {
     border: 2px solid var(--gold-light);
+  }
+
+  /* Hero card drawer — opened by tapping a placed hero piece. Anchored
+     at the same "56px + safe-area" offset .app-root itself reserves for
+     BottomNav (see .app-root above), so it sits flush just above the
+     nav rather than overlapping or floating with a gap. */
+  @keyframes goa-board-drawer-in {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  .goa-board-drawer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    z-index: 55;
+    max-height: 65vh;
+    display: flex;
+    flex-direction: column;
+    background: rgba(20, 18, 14, 0.97);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+    animation: goa-board-drawer-in 0.2s ease-out;
+  }
+  .goa-board-drawer-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-shrink: 0;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .goa-board-drawer-title {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: "Cinzel", serif;
+    font-size: 0.95rem;
+    color: var(--gold-light);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .goa-board-drawer-team-buttons {
+    display: flex;
+    gap: 0.4rem;
+    margin-left: auto;
+  }
+  .goa-board-team-btn {
+    --team-color: var(--border);
+    flex-shrink: 0;
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--team-color);
+    border-radius: 999px;
+    padding: 0.25rem 0.55rem;
+    cursor: pointer;
+  }
+  .goa-board-team-btn.active {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--team-color) 30%, transparent);
+  }
+  .goa-board-drawer-close {
+    display: flex;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.2rem;
+  }
+  .goa-board-drawer-close:hover {
+    color: var(--text-primary);
+  }
+  .goa-board-drawer-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    -webkit-overflow-scrolling: touch;
   }
 }
