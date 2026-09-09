@@ -499,6 +499,9 @@ function ChatPageInner() {
           <p className="goa-chat-last-updated">
             <strong>This chat is private — we don&apos;t log or save your conversations.</strong>
           </p>
+          <p className="goa-chat-last-updated">
+            The Oracle runs on a free AI model, so replies can take up to 45 seconds.
+          </p>
         </header>
 
         {messages.length === 0 && (

@@ -46,6 +46,10 @@ export const UPDATES: UpdateEntry[] = [
         label: "Privacy",
         text: "This chat is private — we don't log or save your conversations.",
       },
+      {
+        label: "Speed",
+        text: "The Oracle runs on a free AI model, so replies can take up to 45 seconds.",
+      },
     ],
   },
   {
