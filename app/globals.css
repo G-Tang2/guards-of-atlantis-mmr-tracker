@@ -2161,6 +2161,16 @@
     background: rgba(201, 151, 58, 0.12);
   }
 
+  .goa-hero-entry-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem;
+  }
+  .goa-hero-entry-row .goa-chat-entry {
+    margin-top: 1rem;
+  }
+
   .goa-hero-wrap {
     padding: 0.3rem 0.55rem 0.45rem;
   }
@@ -6951,5 +6961,165 @@
       font-size: 1.1rem;
       max-height: 280px;
     }
+  }
+
+  /* ── Battle Board (app/board) — hex-grid piece placement sandbox ── */
+  .goa-board-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 1rem 2rem;
+    gap: 0.6rem;
+  }
+  .goa-board-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 480px;
+  }
+  .goa-board-clear-btn {
+    font-family: "Cinzel", serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    background: rgba(122, 88, 26, 0.25);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+  }
+  .goa-board-clear-btn:hover {
+    border-color: var(--border-bright);
+  }
+  .goa-board-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    /* aspect-ratio is set inline from the source photo's own pixel
+       dimensions (IMAGE_WIDTH / IMAGE_HEIGHT) so it's never cropped —
+       see IMAGE_WIDTH's own comment in lib/hexGrid.ts. */
+    touch-action: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  /* The 2px margin between the border and the photo itself — see
+     HexBoard's own comment on why this can't just be padding on
+     .goa-board-wrap (the image inside uses `fill`, which ignores a
+     parent's padding value for its own inset). */
+  .goa-board-frame {
+    position: absolute;
+    inset: 2px;
+  }
+  /* A second, independently-adjustable inset for the grid + token
+     overlay only — lets the grid be nudged relative to the photo
+     without moving the photo itself. All of the board's pixel math
+     (hit-testing, token placement) is anchored to this element. */
+  .goa-board-grid-frame {
+    position: absolute;
+    /* top right bottom left */
+    inset: 1px 5px 3px 3px;
+  }
+  .goa-board-bg-img {
+    /* "contain" guarantees the photo is never cropped, even if its
+       dimensions ever drift from the .goa-board-wrap box below (which is
+       sized to match it exactly via IMAGE_WIDTH/IMAGE_HEIGHT) — a no-op
+       when they do match, a safe fallback (a hairline letterbox instead
+       of a crop) if they ever don't. */
+    object-fit: contain;
+    object-position: center;
+    z-index: 0;
+  }
+  .goa-board-svg {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  /* Outline-only overlay — deliberately no solid fill (beyond a faint
+     tint for tap/hit-area affordance) so the board's own photo shows
+     through instead of being covered by it. */
+  .goa-board-hex {
+    fill: rgba(255, 255, 255, 0.03);
+    stroke: rgba(232, 200, 106, 0.55);
+    stroke-width: 1.5;
+  }
+  .goa-board-token {
+    position: absolute;
+    /* Above .goa-board-svg's own z-index: 1 — without this, the grid
+       overlay's stacking context sits on top of the tokens despite
+       coming first in DOM order, silently swallowing the pointerdown
+       that's supposed to pick a placed piece back up. */
+    z-index: 2;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    cursor: grab;
+    touch-action: none;
+  }
+  .goa-board-token-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 1px solid var(--gold);
+    background: var(--stone);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+  }
+  .goa-board-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    opacity: 0.8;
+    text-align: center;
+    max-width: 480px;
+    margin: 0;
+  }
+  .goa-board-palette {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    width: 100%;
+    max-width: 480px;
+    padding: 0.4rem 0.2rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  .goa-board-palette-item {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--stone-mid);
+    padding: 0;
+    cursor: grab;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .goa-board-palette-item img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .goa-board-palette-item.active {
+    border-color: var(--gold-light);
+    transform: scale(1.1);
+  }
+  .goa-board-drag-ghost {
+    position: fixed;
+    z-index: 60;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    opacity: 0.85;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
+  }
+  .goa-board-drag-ghost img {
+    border-radius: 50%;
+    border: 2px solid var(--gold-light);
   }
 }

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { forwardRef, useLayoutEffect, useRef, useState } from "react";
-import { Sparkles, ChevronDown, MessageCircle } from "lucide-react";
+import { Sparkles, ChevronDown, MessageCircle, Map } from "lucide-react";
 import { UPDATES, UpdateEntry, UpdateDetailItem } from "@/lib/updates";
 
 const PAGE_SIZE = 3;
@@ -165,15 +165,25 @@ export default function Home() {
           />
         </div>
         <p className="goa-hero-sub">MMR Tracker</p>
-        <button
-          type="button"
-          className="goa-chat-entry"
-          onClick={() => router.push("/chat")}
-        >
-          <MessageCircle size={16} />
-          Ask the Oracle
-          <span className="goa-beta-tag">Beta</span>
-        </button>
+        <div className="goa-hero-entry-row">
+          <button
+            type="button"
+            className="goa-chat-entry"
+            onClick={() => router.push("/chat")}
+          >
+            <MessageCircle size={16} />
+            Ask the Oracle
+            <span className="goa-beta-tag">Beta</span>
+          </button>
+          <button
+            type="button"
+            className="goa-chat-entry"
+            onClick={() => router.push("/board")}
+          >
+            <Map size={16} />
+            Battle Board
+          </button>
+        </div>
       </div>
 
       {/* What's New */}
