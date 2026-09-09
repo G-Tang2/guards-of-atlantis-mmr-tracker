@@ -10,12 +10,18 @@ const CONTEXT_CHAR_BUDGET = CONTEXT_TOKEN_BUDGET * 4;
 
 const CARD_COLORS = ["RED", "BLUE", "GREEN", "GOLD", "PURPLE", "SILVER"];
 
-// On top of the base stopword list — "card"/"hero" themselves are the
-// vocabulary of asking about this data at all, not a signal for which
-// hero/card a question means, so counting them as keywords would make
-// nearly every question "match" nothing distinctive. The stat names and
-// color names are the same kind of vocabulary-not-signal word, and
-// excluding them fixes two real false positives found live:
+// On top of the base stopword list. The general principle: any word this
+// app's own question-parsing already treats as a structured filter or
+// meta-vocabulary — a stat name, a color, a tier/level word, "card"/
+// "hero" itself — is never a legitimate signal that a *specific hero* is
+// being asked about, no matter how it happens to intersect with the card
+// database. If it were, asking about "the lowest initiative" or "tier 1
+// cards" in general could accidentally get scoped to whichever one or
+// two heroes happen to have that word in their own card text, instead of
+// staying a whole-roster question. Three real, separate incidents found
+// this way live, each initially patched one word at a time before this
+// comment (and the matching card-name distinctiveness index below) made
+// it a standing principle instead of a growing ad hoc list:
 //   - Sabina has a card literally named "Troop Movement", so "What's
 //     Arien's highest movement card?" matched her in too via the shared
 //     word "movement".
@@ -23,14 +29,20 @@ const CARD_COLORS = ["RED", "BLUE", "GREEN", "GOLD", "PURPLE", "SILVER"];
 //     so "the green cards with the lowest initiative" matched him in via
 //     the word "green" extracted from inside that token — even though
 //     the card isn't "about" green as a subject, just referencing a
-//     colored stat icon.
-// Both leaked an unrelated hero into what should have been either a
-// hero-scoped or whole-roster comparison. A genuinely hero-specific
-// question still works fine without these — it matches on the hero's
-// own name/id instead, which isn't affected by this list.
+//     colored stat icon (see stripIconTokens below for the structural
+//     half of that fix).
+//   - Min and Snorri's own card text happens to use the word "Tier" (as
+//     in "a Tier II card"), so "tier 1 blue cards with the highest
+//     initiative" — a whole-roster question — matched Min in via the
+//     word "tier", which extractAskedLevel already consumes as a filter
+//     and was never meant to also be a hero signal.
+// A genuinely hero-specific question still works fine without these —
+// it matches on the hero's own name/id instead, which isn't affected by
+// this list.
 const EXTRA_STOP_WORDS = new Set([
   "card", "cards", "hero", "heroes",
   "initiative", "movement", "defense", "defence", "attack", "range", "area",
+  "tier", "level", "top",
   ...CARD_COLORS.map((c) => c.toLowerCase()),
 ]);
 
@@ -54,19 +66,50 @@ function nameKeywords(name: string): string[] {
     .filter((w) => w.length > 2);
 }
 
-// A word → which heroes' card descriptions it appears in, built once at
-// module load (the data is static) rather than per-request. Lets a
-// question find a hero via a distinctive term that's only in a card's
-// rules text, not its name — e.g. "Pyro" (Widget's companion token) never
-// appears in any card *name*, so without this a question like "can you
-// clear Pyro?" would match nothing and the bot would (correctly, but
-// unhelpfully) say it has no data, instead of finding Widget's kit.
-const DESCRIPTION_KEYWORD_INDEX: Map<string, Set<string>> = (() => {
+// Card description text uses "::icon_name::" markup for inline stat/
+// token icons (e.g. "::movement_green::", "::marker_bounty::") — this is
+// rules-text *formatting*, not prose about to be searched for meaning.
+// Left in place, a token like "::movement_green::" tokenizes (via
+// nameKeywords' split on non-alphanumerics, which includes "_") into
+// "movement" and "green" as if the card's text were actually about
+// movement or the color green. Hit live: Bain's cards use this exact
+// icon, and "green" leaking out of it got him matched into "the green
+// cards with the lowest initiative" — a whole-roster query that should
+// never have matched a specific hero at all. Stripped before indexing
+// (and before any other keyword extraction over description text) so no
+// future icon name can leak the same way, rather than reacting to each
+// one individually as it's discovered.
+function stripIconTokens(text: string): string {
+  return text.replace(/::[a-zA-Z0-9_]+::/g, " ");
+}
+
+// A word → which heroes' card names/descriptions it appears in, built
+// once at module load (the data is static) rather than per-request.
+// Built the same way for both: a word only counts as identifying a hero
+// if it's distinctive — appearing in few heroes' kits (like a unique
+// companion name, or one hero's one-off card title) rather than common
+// vocabulary that would otherwise match nearly every hero and defeat the
+// point of filtering at all. Description-side, this lets a question find
+// a hero via a distinctive term that's only in a card's rules text, not
+// its name — e.g. "Pyro" (Widget's companion token) never appears in any
+// card *name*, so without this a question like "can you clear Pyro?"
+// would match nothing and the bot would (correctly, but unhelpfully) say
+// it has no data, instead of finding Widget's kit. Name-side, this is
+// what stops a card's own name from over-matching: hit live, Sabina has
+// a card literally named "Troop Movement", and before this had the same
+// distinctiveness check the description index already did, the bare
+// word "movement" alone was enough to pull her into an unrelated,
+// whole-roster movement comparison. Two separate indexes (not one
+// merged one) since a name hit and a description hit warrant slightly
+// different confidence in principle, even though both use the same
+// threshold today.
+const DISTINCTIVE_HERO_COUNT = 3;
+
+function buildKeywordIndex(getText: (card: HeroCard) => string): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
   for (const heroId of Object.keys(HERO_CARDS)) {
     for (const card of HERO_CARDS[heroId]) {
-      const description = typeof card.description === "string" ? card.description : "";
-      for (const word of nameKeywords(description)) {
+      for (const word of nameKeywords(getText(card))) {
         const heroes = index.get(word) ?? new Set<string>();
         heroes.add(heroId);
         index.set(word, heroes);
@@ -74,17 +117,15 @@ const DESCRIPTION_KEYWORD_INDEX: Map<string, Set<string>> = (() => {
     }
   }
   return index;
-})();
+}
 
-// A description keyword only counts as identifying a hero if it's
-// distinctive — appearing in few heroes' kits (like a unique companion
-// name) rather than common game vocabulary ("attack", "target", "move")
-// that would otherwise match nearly every hero and defeat the point of
-// filtering at all.
-const DISTINCTIVE_HERO_COUNT = 3;
+const CARD_NAME_KEYWORD_INDEX = buildKeywordIndex((card) => (typeof card.name === "string" ? card.name : ""));
+const DESCRIPTION_KEYWORD_INDEX = buildKeywordIndex((card) =>
+  stripIconTokens(typeof card.description === "string" ? card.description : ""),
+);
 
-// Which heroes a question appears to be about, by hero name, card name, or
-// a distinctive term from a card's rules text — shared by
+// Which heroes a question appears to be about, by hero name, or a
+// distinctive term from a card's own name or its rules text — shared by
 // fetchRelevantHeroCards (what to send Gemini) and findMentionedCards
 // (what to trust-verify in its reply), so both always agree on the same
 // hero scope for a given question.
@@ -102,21 +143,15 @@ export function getRelevantHeroIds(question: string): string[] {
     ]);
     if (keywords.some((kw) => heroNameWords.has(kw))) {
       matched.add(id);
-      return;
     }
-
-    const cardNameMatch = HERO_CARDS[id].some((card) => {
-      const cardName = typeof card.name === "string" ? card.name : "";
-      const cardWords = new Set(nameKeywords(cardName));
-      return keywords.some((kw) => cardWords.has(kw));
-    });
-    if (cardNameMatch) matched.add(id);
   });
 
   for (const kw of keywords) {
-    const heroesForWord = DESCRIPTION_KEYWORD_INDEX.get(kw);
-    if (heroesForWord && heroesForWord.size <= DISTINCTIVE_HERO_COUNT) {
-      heroesForWord.forEach((id) => matched.add(id));
+    for (const index of [CARD_NAME_KEYWORD_INDEX, DESCRIPTION_KEYWORD_INDEX]) {
+      const heroesForWord = index.get(kw);
+      if (heroesForWord && heroesForWord.size <= DISTINCTIVE_HERO_COUNT) {
+        heroesForWord.forEach((id) => matched.add(id));
+      }
     }
   }
 

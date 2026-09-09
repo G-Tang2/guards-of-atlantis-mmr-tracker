@@ -176,6 +176,38 @@ describe("named-hero stat comparison", () => {
   });
 });
 
+describe("getRelevantHeroIds — structural false-positive fixes", () => {
+  // These guard the underlying mechanism, not just the two specific
+  // words already covered by EXTRA_STOP_WORDS — the goal is that a
+  // *future* generic word landing in some hero's card name/description
+  // doesn't need its own one-off patch to avoid the same bug.
+
+  it("never matches a whole-roster question naming no hero", () => {
+    expect(getRelevantHeroIds("show me the green cards with the lowest initiative")).toEqual([]);
+    expect(getRelevantHeroIds("who has the lowest red initiative")).toEqual([]);
+    // Hit live: Min and Snorri's own card text uses the word "Tier" (as
+    // in "a Tier II card"), so this whole-roster question — naming no
+    // hero at all — matched Min in via that shared word, and the
+    // precise stat computation never ran at all (relevantHeroIds wasn't
+    // empty), producing an incomplete single-hero answer instead of a
+    // real cross-hero one.
+    expect(getRelevantHeroIds("show me tier 1 blue cards with the highest initiative")).toEqual([]);
+  });
+
+  it("still matches via a genuinely distinctive term from a card's own rules text", () => {
+    // "Pyro" never appears in any card *name*, only in Widget's own kit's
+    // description text — this is the positive case the description-
+    // keyword index exists for; it must keep working.
+    expect(getRelevantHeroIds("does clearing Pyro do anything special")).toContain("widget");
+  });
+
+  it("still matches a hero via a distinctive word unique to one of their card's own names", () => {
+    // Sabina's "Troop Movement" is a real card; a question naming it
+    // directly (not just the generic word "movement") should still work.
+    expect(getRelevantHeroIds("what does troop movement do")).toContain("sabina");
+  });
+});
+
 describe("wantsCrossHeroStatSummary", () => {
   it("triggers for a cross-hero comparison with no hero already in scope", () => {
     expect(wantsCrossHeroStatSummary("who has the lowest red initiative", [])).toBe(true);
