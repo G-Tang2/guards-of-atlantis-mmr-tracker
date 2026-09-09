@@ -298,6 +298,10 @@ export function wantsHeroCardContext(question: string): boolean {
 // positives from short/generic card names that happen to be ordinary
 // English words (e.g. "Focus", "Control") showing up incidentally in the
 // model's prose about a completely different hero.
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function findMentionedCards(
   replyText: string,
   heroIds: string[],
@@ -319,29 +323,56 @@ export function findMentionedCards(
     if (heroName) searchText = searchText.split(heroName).join(" ".repeat(heroName.length));
   }
 
-  const found: CardReference[] = [];
-  const seen = new Set<string>();
-
+  type Candidate = { heroId: string; card: HeroCard; name: string };
+  const candidates: Candidate[] = [];
   for (const heroId of heroIds) {
-    const hero = HEROES.find((h) => h.id === heroId);
-    const cards = HERO_CARDS[heroId] ?? [];
-    for (const card of cards) {
+    for (const card of HERO_CARDS[heroId] ?? []) {
       const name = typeof card.name === "string" ? card.name : "";
       // Short names (e.g. a 2-3 letter card) risk false-positive
       // substring matches against ordinary prose — this game's card
       // names are distinctive multi-word phrases, so requiring a
       // reasonable minimum length costs nothing in practice.
       if (name.length < 4) continue;
-      const key = `${heroId}::${name}`;
-      if (seen.has(key)) continue;
-      if (searchText.includes(name.toLowerCase())) {
-        const cardColor = typeof card.color === "string" ? card.color : null;
-        const colorMismatch =
-          askedColors.length > 0 && cardColor !== null && !askedColors.includes(cardColor);
-        found.push({ heroId, heroName: hero?.name ?? heroId, card, colorMismatch });
-        seen.add(key);
-      }
+      candidates.push({ heroId, card, name });
     }
+  }
+  if (candidates.length === 0) return [];
+
+  // Real, distinct cards can have one name sitting as a literal prefix
+  // of another's — e.g. Brogan's "Shield" vs. his own "Shield Bash",
+  // Xargatha's "Control" vs. Razzle's "Crowd Control". Checking each
+  // name independently (the previous approach) meant a reply naming only
+  // the longer card also mis-flagged the shorter one as mentioned,
+  // purely because its letters happen to appear at the start of the
+  // longer name. Matching via one combined regex, longest names first,
+  // resolves this the same way app/chat/page.tsx's own wrapCardMentions
+  // already does for highlighting: at a given position the engine commits
+  // to the first alternative that matches, so "Shield Bash" (tried first)
+  // wins over "Shield" wherever both could otherwise match, while
+  // "Shield" mentioned entirely on its own elsewhere still matches fine.
+  // No \b word-boundary anchors: some real card names end in punctuation
+  // (e.g. Mortimer's "Braains...!"), where a trailing \b would fail to
+  // match at all (both the "!" and whatever follows it are non-word
+  // characters, so there's no word/non-word boundary there) — that would
+  // silently stop that card from ever being detected. Plain alternation,
+  // longest names first, is exactly what wrapCardMentions already uses
+  // client-side for the same reason.
+  const sortedNames = [...new Set(candidates.map((c) => c.name))].sort((a, b) => b.length - a.length);
+  const pattern = new RegExp(`(?:${sortedNames.map(escapeRegExp).join("|")})`, "gi");
+  const matchedNames = new Set(searchText.match(pattern)?.map((m) => m.toLowerCase()) ?? []);
+  if (matchedNames.size === 0) return [];
+
+  const found: CardReference[] = [];
+  const seen = new Set<string>();
+  for (const { heroId, card, name } of candidates) {
+    if (!matchedNames.has(name.toLowerCase())) continue;
+    const key = `${heroId}::${name}`;
+    if (seen.has(key)) continue;
+    const hero = HEROES.find((h) => h.id === heroId);
+    const cardColor = typeof card.color === "string" ? card.color : null;
+    const colorMismatch = askedColors.length > 0 && cardColor !== null && !askedColors.includes(cardColor);
+    found.push({ heroId, heroName: hero?.name ?? heroId, card, colorMismatch });
+    seen.add(key);
   }
   return found;
 }
