@@ -34,8 +34,9 @@ const MAX_MESSAGE_LENGTH = 4000;
 // lib/chat.ts) and the user's own message (up to MAX_MESSAGE_LENGTH chars)
 // ride alongside it and count against the same Gemini free-tier
 // input-token quota, so the real worst case is roughly this plus ~21k
-// tokens (20k history + ~1k message). The hero-card and hero-guide
-// sections each carry their own hard ceiling already (see
+// tokens (20k history + ~1k message) — 80k here plus that ~21k lands
+// right around 100k total. The hero-card and hero-guide sections each
+// carry their own hard ceiling already (see
 // fetchRelevantHeroCards/fetchRelevantHeroGuides), and the rulebook is
 // gated on/off rather than sized, so this budget is really about Discord
 // history: rather than a flat cap that either wastes headroom on a simple
@@ -43,22 +44,24 @@ const MAX_MESSAGE_LENGTH = 4000;
 // leaves over once the other sections are known for this specific request
 // (see discordTokenBudget below).
 //
-// Sized assuming at most one heavy (max card/guide match, rules-flavored,
-// full rulebook, full conversation history) question lands in any given
-// 60-second window — not several in a row — so 200k (worst case ~221k
-// with history/message) still leaves ~29k tokens of margin under Gemini's
-// 250k-tokens/minute free-tier cap for token-estimate slop (this budget is
-// enforced via a ~4-chars-per-token heuristic, not a real tokenizer) plus
-// room for an incidental smaller message in the same window. If that
-// assumption stops holding — e.g. multiple group members firing heavy
-// questions back-to-back — lower this rather than the per-section caps.
-const TOTAL_CONTEXT_TOKEN_BUDGET = 200_000;
+// Lowered from 200k to 80k -- worst case ~221k was sized for headroom
+// under Gemini's paid-tier throughput; on the free tier's much tighter
+// per-minute cap (and its generally slower, less predictable latency —
+// see FIRST_CHUNK_DEADLINE_MS), a smaller worst case matters more than
+// the extra context a rarely-needed 200k budget bought. Still sized
+// assuming at most one heavy (max card/guide match, rules-flavored, full
+// rulebook, full conversation history) question lands in any given
+// 60-second window, not several in a row.
+const TOTAL_CONTEXT_TOKEN_BUDGET = 80_000;
 // Discord history still gets at least this much even when the other
 // sections are maxed out, so a heavy multi-hero rules question doesn't
-// squeeze it out entirely — in practice unreachable today since the other
-// sections' own hard ceilings can't add up to enough to push Discord below
-// this, but kept as a defensive floor in case those caps grow later.
-const MIN_DISCORD_TOKEN_BUDGET = 20_000;
+// squeeze it out entirely. Scaled down along with TOTAL_CONTEXT_TOKEN_BUDGET
+// above (same ratio: was 20k against a 200k total) -- keeping the old 20k
+// floor against this smaller 80k total would let the heaviest realistic
+// question (hero cards + guides + rulebook, all near their own ceilings,
+// summing to ~71k) push the real total past the ~100k worst case this is
+// meant to guarantee, defeating the point of lowering the total at all.
+const MIN_DISCORD_TOKEN_BUDGET = 8_000;
 
 // The reply must start streaming within this window or the request gives
 // up and reports a clear timeout instead of continuing to wait — a real
