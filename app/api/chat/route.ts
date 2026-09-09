@@ -23,7 +23,7 @@ import {
   wantsCrossHeroStatSummary,
   buildAllHeroStatSummary,
 } from "@/lib/heroCardContext";
-import { streamChatReply, countTokens, GeminiRateLimitError } from "@/lib/gemini";
+import { streamChatReply, countTokens, GeminiRateLimitError, GeminiTimeoutError } from "@/lib/gemini";
 import { ChatRequestBody, ChatStreamEvent, ChatTurn, trimHistoryToBudget } from "@/lib/chat";
 
 const MAX_MESSAGE_LENGTH = 4000;
@@ -60,7 +60,52 @@ const TOTAL_CONTEXT_TOKEN_BUDGET = 200_000;
 // this, but kept as a defensive floor in case those caps grow later.
 const MIN_DISCORD_TOKEN_BUDGET = 20_000;
 
+// The reply must start streaming within this window or the request gives
+// up and reports a clear timeout instead of continuing to wait — a real
+// live incident (Gemini's own "high demand" 503s) once left a user
+// staring at "Thinking…" for 158 seconds with nothing bounding the wait.
+// Applies to time-to-first-chunk only, not the full reply: a streaming
+// UI already feels responsive once tokens start arriving, and capping
+// total generation time would mean cutting a thorough answer short (see
+// buildAllHeroStatSummary's cross-hero comparisons, which can legitimately
+// run long) purely to hit a clock, trading quality for a number no user
+// asked for.
+//
+// Originally 15s, tuned against paid-tier latency (~4-5s typical). Raised
+// to 30s after observing the free tier alone regularly needs ~14s for an
+// ordinary question, then to 45s after a live test on free tier ("how to
+// play arien") got no response at all within 30s -- free tier isn't just
+// worse quota/data-terms, it's measurably slower and far less predictable
+// per request too. 45s leaves a 15s margin under the route's 60s
+// maxDuration for the actual reply to stream out once the first chunk
+// does arrive, since a raw platform timeout there would be an uglier
+// failure than this deadline's own clean error message. This is a
+// mitigation, not a fix -- staying on free tier means some questions
+// will keep timing out outright; only moving back to the paid tier
+// actually resolves that. Revisit downward if back on paid.
+const FIRST_CHUNK_DEADLINE_MS = 45_000;
+
+// Stops waiting on `promise` once `deadlineAt` passes, resolving to
+// `fallback` instead — doesn't cancel the underlying work (it may still
+// resolve later, its result just goes unused), which is fine here since
+// every caller already treats its own result as best-effort (countTokens
+// falls back to a heuristic, Discord context degrades to "none" — see
+// their own comments) rather than something a reply strictly requires.
+function withDeadline<T>(promise: Promise<T>, deadlineAt: number, fallback: T): Promise<T> {
+  const remainingMs = deadlineAt - Date.now();
+  if (remainingMs <= 0) return Promise.resolve(fallback);
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), remainingMs)),
+  ]);
+}
+
 export async function POST(request: Request) {
+  // Set as early as possible so it covers the whole request, not just
+  // the Gemini generation call — the Discord/token-count work below eats
+  // into the same 15s window.
+  const firstChunkDeadlineAt = Date.now() + FIRST_CHUNK_DEADLINE_MS;
+
   const unauthorized = requireSharedAuth(request);
   if (unauthorized) return unauthorized;
 
@@ -176,11 +221,18 @@ export async function POST(request: Request) {
     // Run alongside each other rather than one after the other — the
     // Discord fetch doesn't actually need the token count until the
     // selectDiscordContext trim step below, so there's no reason to make
-    // it wait on countTokens' own network round trip first.
-    const [actualNonDiscordTokens, discordCandidates] = await Promise.all([
-      countTokens(nonDiscordSystemInstructionSoFar),
-      fetchDiscordCandidates(message),
-    ]);
+    // it wait on countTokens' own network round trip first. Also wrapped
+    // in withDeadline: both already degrade gracefully on their own
+    // (countTokens falls back to the char heuristic, empty Discord
+    // candidates just means no Discord section), so if either is still
+    // running when the 15s first-chunk deadline is close, better to
+    // start generation with what's on hand than let this phase alone eat
+    // the whole budget.
+    const [actualNonDiscordTokens, discordCandidates] = await withDeadline(
+      Promise.all([countTokens(nonDiscordSystemInstructionSoFar), fetchDiscordCandidates(message)]),
+      firstChunkDeadlineAt,
+      [null, { recent: [], semantic: [], matchedByKeyword: [] }] as const,
+    );
     const nonDiscordTokens = actualNonDiscordTokens ?? Math.round(nonDiscordSystemInstructionSoFar.length / 4);
     const discordTokenBudget = Math.max(MIN_DISCORD_TOKEN_BUDGET, TOTAL_CONTEXT_TOKEN_BUDGET - nonDiscordTokens);
     const discordContext = selectDiscordContext(discordCandidates, discordTokenBudget);
@@ -216,7 +268,12 @@ export async function POST(request: Request) {
       async start(controller) {
         let fullReply = "";
         try {
-          for await (const chunk of streamChatReply({ systemInstruction, history: trimmedHistory, message })) {
+          for await (const chunk of streamChatReply({
+            systemInstruction,
+            history: trimmedHistory,
+            message,
+            firstChunkDeadlineAt,
+          })) {
             fullReply += chunk;
             send(controller, { type: "chunk", text: chunk });
           }
@@ -237,7 +294,9 @@ export async function POST(request: Request) {
           const errorMessage =
             e instanceof GeminiRateLimitError
               ? "The Oracle is receiving too many questions right now. Please try again in about a minute."
-              : "Failed to get a reply. Please try again.";
+              : e instanceof GeminiTimeoutError
+                ? "The Oracle is responding slowly right now. Please try again in a moment."
+                : "Failed to get a reply. Please try again.";
           send(controller, { type: "error", error: errorMessage });
         } finally {
           controller.close();

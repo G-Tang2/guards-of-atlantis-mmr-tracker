@@ -36,6 +36,19 @@ export class GeminiRateLimitError extends Error {
   }
 }
 
+// Distinguished from GeminiRateLimitError/a generic failure so the route
+// handler can tell the user the honest reason nothing arrived in time —
+// "the Oracle is slow right now" rather than "rate limited" or a bare
+// failure, since the underlying cause here is specifically that
+// firstChunkDeadlineAt (see streamChatReply) passed before a connection
+// was established, not that the request was ever rejected outright.
+export class GeminiTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GeminiTimeoutError";
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -85,30 +98,71 @@ const MAX_5XX_RETRIES = 2;
 // scripts/backfill-discord-embeddings.mjs). Both happen before anything
 // is read from the response body, so a retry here never has to un-send
 // partial content to our own client.
-async function openChatReplyStream(apiKey: string, requestBody: string, attempt = 1): Promise<Response> {
-  const res = await fetch(
-    `${GEMINI_API_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: requestBody,
-    },
-  );
+//
+// firstChunkDeadlineAt (an absolute Date.now()-style timestamp, set once
+// at the start of the whole chat request — see app/api/chat/route.ts)
+// bounds every attempt and every retry wait here: this app promises the
+// UI a reply starts streaming within a fixed window, not "eventually" —
+// a real 158-second wait was observed live during a Gemini high-demand
+// spike before this existed, with nothing stopping the retries from
+// chasing it that long. Once the deadline would be blown by either the
+// connection attempt itself or the next retry's wait, this gives up with
+// GeminiTimeoutError instead of continuing to wait.
+async function openChatReplyStream(
+  apiKey: string,
+  requestBody: string,
+  firstChunkDeadlineAt: number,
+  attempt = 1,
+): Promise<Response> {
+  const remainingMs = firstChunkDeadlineAt - Date.now();
+  if (remainingMs <= 0) {
+    throw new GeminiTimeoutError("Timed out waiting for the Oracle to start responding.");
+  }
+
+  const abortController = new AbortController();
+  const abortTimer = setTimeout(() => abortController.abort(), remainingMs);
+  let res: Response;
+  try {
+    res = await fetch(
+      `${GEMINI_API_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody,
+        signal: abortController.signal,
+      },
+    );
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new GeminiTimeoutError("Timed out waiting for the Oracle to start responding.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(abortTimer);
+  }
 
   if (res.ok) return res;
 
   const body = await res.text();
   if (res.status === 429) {
     const retryDelayMs = attempt === 1 ? parseRetryDelayMs(body) : null;
-    if (retryDelayMs !== null && retryDelayMs <= MAX_AUTO_RETRY_DELAY_MS) {
+    if (
+      retryDelayMs !== null &&
+      retryDelayMs <= MAX_AUTO_RETRY_DELAY_MS &&
+      Date.now() + retryDelayMs < firstChunkDeadlineAt
+    ) {
       await sleep(retryDelayMs);
-      return openChatReplyStream(apiKey, requestBody, attempt + 1);
+      return openChatReplyStream(apiKey, requestBody, firstChunkDeadlineAt, attempt + 1);
     }
     throw new GeminiRateLimitError(`Gemini API rate limit: ${body}`);
   }
   if (res.status >= 500 && res.status < 600 && attempt <= MAX_5XX_RETRIES) {
-    await sleep(attempt * 1500);
-    return openChatReplyStream(apiKey, requestBody, attempt + 1);
+    const retryDelayMs = attempt * 1500;
+    if (Date.now() + retryDelayMs < firstChunkDeadlineAt) {
+      await sleep(retryDelayMs);
+      return openChatReplyStream(apiKey, requestBody, firstChunkDeadlineAt, attempt + 1);
+    }
+    throw new GeminiTimeoutError(`Gemini API error ${res.status}, no time left to retry: ${body}`);
   }
   throw new Error(`Gemini API error ${res.status}: ${body}`);
 }
@@ -128,10 +182,14 @@ export async function* streamChatReply({
   systemInstruction,
   history,
   message,
+  firstChunkDeadlineAt,
 }: {
   systemInstruction: string;
   history: ChatTurn[];
   message: string;
+  // Absolute Date.now()-style deadline for the reply to start streaming
+  // by — see openChatReplyStream's own comment for why this exists.
+  firstChunkDeadlineAt: number;
 }): AsyncGenerator<string, void, unknown> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -163,7 +221,7 @@ export async function* streamChatReply({
     generationConfig: { temperature: 0, seed: 1 },
   });
 
-  const res = await openChatReplyStream(apiKey, requestBody);
+  const res = await openChatReplyStream(apiKey, requestBody, firstChunkDeadlineAt);
   if (!res.body) {
     throw new Error("Gemini API returned no response body");
   }
