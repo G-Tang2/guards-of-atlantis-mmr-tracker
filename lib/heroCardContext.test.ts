@@ -19,6 +19,7 @@ import {
   extractAskedColors,
   getRelevantHeroIds,
   findMentionedCards,
+  auditDistinctiveKeywords,
 } from "./heroCardContext";
 
 describe("detectStatSuperlative", () => {
@@ -205,6 +206,41 @@ describe("getRelevantHeroIds — structural false-positive fixes", () => {
     // Sabina's "Troop Movement" is a real card; a question naming it
     // directly (not just the generic word "movement") should still work.
     expect(getRelevantHeroIds("what does troop movement do")).toContain("sabina");
+  });
+});
+
+describe("keyword collision audit", () => {
+  // Proactive version of the fixes above: rather than waiting for a user
+  // to hit the next movement/green/tier-style collision, this scans
+  // every "distinctive" word (the kind getRelevantHeroIds trusts as a
+  // hero-identifying signal) not already excluded by EXTRA_STOP_WORDS,
+  // and fails if any of them looks like an ordinary word rather than a
+  // genuine proper noun/game term — see auditDistinctiveKeywords' own
+  // comment for the capitalization heuristic this relies on.
+  //
+  // Only card-NAME-source words are asserted against here: description-
+  // source words get the same capitalization check applied live, at
+  // runtime, in getRelevantHeroIds itself (an uncapitalized description
+  // word can never match at all, regardless of distinctiveness — see its
+  // own comment) — verified directly below — so they're not a live risk
+  // even though they still show up in the raw audit for visibility.
+  // Card names have no such runtime gate (a title is always capitalized
+  // regardless of whether the underlying word is generic), so this is
+  // the one category where "found by the audit" must mean "fix it now,"
+  // not "already handled elsewhere."
+  it("has no unreviewed generic-looking words in card names", () => {
+    const suspicious = auditDistinctiveKeywords().filter((e) => e.source === "name" && !e.everCapitalized);
+    expect(suspicious).toEqual([]);
+  });
+
+  it("never lets an uncapitalized description word become a hero-matching signal", () => {
+    // A live, previously-undetected instance of exactly the bug class
+    // this whole mechanism exists to prevent: "except" is genuinely
+    // distinctive (appears in only Arien's and Razzle's card text) but
+    // is ordinary lowercase prose in both, not a real identifying term.
+    const auditedAsRisky = auditDistinctiveKeywords().find((e) => e.word === "except" && e.source === "description");
+    expect(auditedAsRisky?.everCapitalized).toBe(false);
+    expect(getRelevantHeroIds("what happens except when a hero blocks")).toEqual([]);
   });
 });
 

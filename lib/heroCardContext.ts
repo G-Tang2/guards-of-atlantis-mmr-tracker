@@ -44,6 +44,14 @@ const EXTRA_STOP_WORDS = new Set([
   "initiative", "movement", "defense", "defence", "attack", "range", "area",
   "tier", "level", "top",
   ...CARD_COLORS.map((c) => c.toLowerCase()),
+  // Plain connector words that happen to sit inside a multi-word card
+  // title ("Brace for Impact", "Playing with Fire", "Sting like a Bee")
+  // — found via auditDistinctiveKeywords, not a live incident like the
+  // words above: no legitimate question would ever rely on a bare "for"/
+  // "with"/"like" to identify a specific hero, so these are excluded
+  // pre-emptively rather than waiting for one to actually cause a wrong
+  // answer.
+  "here", "for", "with", "blows", "from", "like",
 ]);
 
 // Splits on anything that isn't a letter/digit — including apostrophes,
@@ -105,14 +113,24 @@ function stripIconTokens(text: string): string {
 // threshold today.
 const DISTINCTIVE_HERO_COUNT = 3;
 
-function buildKeywordIndex(getText: (card: HeroCard) => string): Map<string, Set<string>> {
-  const index = new Map<string, Set<string>>();
+type KeywordIndexEntry = { heroIds: Set<string>; everCapitalized: boolean };
+
+// everCapitalized is computed once here (not just for the audit below)
+// because it's used as a real runtime requirement for description-index
+// matches, not just a report to review later — see requireCapitalized on
+// buildKeywordIndex and its own comment on why.
+function buildKeywordIndex(getText: (card: HeroCard) => string): Map<string, KeywordIndexEntry> {
+  const index = new Map<string, KeywordIndexEntry>();
   for (const heroId of Object.keys(HERO_CARDS)) {
     for (const card of HERO_CARDS[heroId]) {
-      for (const word of nameKeywords(getText(card))) {
-        const heroes = index.get(word) ?? new Set<string>();
-        heroes.add(heroId);
-        index.set(word, heroes);
+      const rawText = getText(card);
+      for (const rawWord of rawText.split(/[^a-zA-Z0-9]+/)) {
+        const word = rawWord.toLowerCase();
+        if (word.length <= 2) continue;
+        const entry = index.get(word) ?? { heroIds: new Set<string>(), everCapitalized: false };
+        entry.heroIds.add(heroId);
+        if (/^[A-Z]/.test(rawWord)) entry.everCapitalized = true;
+        index.set(word, entry);
       }
     }
   }
@@ -123,6 +141,42 @@ const CARD_NAME_KEYWORD_INDEX = buildKeywordIndex((card) => (typeof card.name ==
 const DESCRIPTION_KEYWORD_INDEX = buildKeywordIndex((card) =>
   stripIconTokens(typeof card.description === "string" ? card.description : ""),
 );
+
+export type KeywordAuditEntry = {
+  word: string;
+  source: "name" | "description";
+  heroIds: string[];
+  everCapitalized: boolean;
+};
+
+// Surfaces every "distinctive" word — the exact kind getRelevantHeroIds
+// treats as a hero-identifying signal — that isn't already excluded via
+// EXTRA_STOP_WORDS or (for description words) filtered out by the
+// capitalization requirement below, so a future collision like the
+// movement/green/tier incidents can be caught by review before a live
+// question ever hits it, instead of after. See
+// lib/heroCardContext.test.ts's "keyword collision audit" for how this
+// is actually used (a maintained, reviewed allowlist checked against
+// this list, not a fully automatic pass/fail) — this exists because the
+// capitalization requirement only meaningfully filters description text
+// (a card's own NAME is always capitalized as a title regardless of
+// whether the word itself is generic, e.g. "Shield" as a card name), so
+// name-index words still need this separate, manually-reviewed check.
+export function auditDistinctiveKeywords(): KeywordAuditEntry[] {
+  const sources: { source: "name" | "description"; index: Map<string, KeywordIndexEntry> }[] = [
+    { source: "name", index: CARD_NAME_KEYWORD_INDEX },
+    { source: "description", index: DESCRIPTION_KEYWORD_INDEX },
+  ];
+
+  const entries: KeywordAuditEntry[] = [];
+  for (const { source, index } of sources) {
+    for (const [word, entry] of index) {
+      if (entry.heroIds.size > DISTINCTIVE_HERO_COUNT || EXTRA_STOP_WORDS.has(word)) continue;
+      entries.push({ word, source, heroIds: [...entry.heroIds], everCapitalized: entry.everCapitalized });
+    }
+  }
+  return entries;
+}
 
 // Which heroes a question appears to be about, by hero name, or a
 // distinctive term from a card's own name or its rules text — shared by
@@ -147,11 +201,28 @@ export function getRelevantHeroIds(question: string): string[] {
   });
 
   for (const kw of keywords) {
-    for (const index of [CARD_NAME_KEYWORD_INDEX, DESCRIPTION_KEYWORD_INDEX]) {
-      const heroesForWord = index.get(kw);
-      if (heroesForWord && heroesForWord.size <= DISTINCTIVE_HERO_COUNT) {
-        heroesForWord.forEach((id) => matched.add(id));
-      }
+    const nameEntry = CARD_NAME_KEYWORD_INDEX.get(kw);
+    if (nameEntry && nameEntry.heroIds.size <= DISTINCTIVE_HERO_COUNT) {
+      nameEntry.heroIds.forEach((id) => matched.add(id));
+    }
+
+    // Description matches additionally require the word to appear
+    // capitalized somewhere in its source occurrences — an audit run
+    // against the live database found 249 of 333 otherwise-"distinctive"
+    // description words were ordinary lowercase prose (rare purely by
+    // the coincidence of which few heroes' rules text happens to use
+    // that particular word), not genuine identifying terms like "Pyro".
+    // Without this, each one is a latent version of the exact
+    // movement/green/tier bug class waiting for the right question to
+    // surface it. A card's own title doesn't have this problem (see
+    // auditDistinctiveKeywords' comment), so this only applies here.
+    const descriptionEntry = DESCRIPTION_KEYWORD_INDEX.get(kw);
+    if (
+      descriptionEntry &&
+      descriptionEntry.heroIds.size <= DISTINCTIVE_HERO_COUNT &&
+      descriptionEntry.everCapitalized
+    ) {
+      descriptionEntry.heroIds.forEach((id) => matched.add(id));
     }
   }
 
