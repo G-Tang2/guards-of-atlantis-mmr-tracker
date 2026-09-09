@@ -8,21 +8,30 @@ import { extractKeywords as extractBaseKeywords } from "@/lib/textKeywords";
 const CONTEXT_TOKEN_BUDGET = 20_000;
 const CONTEXT_CHAR_BUDGET = CONTEXT_TOKEN_BUDGET * 4;
 
+const CARD_COLORS = ["RED", "BLUE", "GREEN", "GOLD", "PURPLE", "SILVER"];
+
 // On top of the base stopword list — "card"/"hero" themselves are the
 // vocabulary of asking about this data at all, not a signal for which
 // hero/card a question means, so counting them as keywords would make
-// nearly every question "match" nothing distinctive. The stat names are
-// the same kind of vocabulary-not-signal word, and excluding them fixes
-// a real false positive found live: Sabina has a card literally named
-// "Troop Movement", so "What's Arien's highest movement card?" matched
-// her in too via the shared word "movement" in getRelevantHeroIds' card-
-// name check below, contaminating a hero-scoped stat query with an
-// unrelated hero's cards. A genuinely hero-specific question still works
-// fine without these — it matches on the hero's own name/id instead,
-// which isn't affected by this list.
+// nearly every question "match" nothing distinctive. The stat names and
+// color names are the same kind of vocabulary-not-signal word, and
+// excluding them fixes two real false positives found live:
+//   - Sabina has a card literally named "Troop Movement", so "What's
+//     Arien's highest movement card?" matched her in too via the shared
+//     word "movement".
+//   - Bain's card text contains icon tokens like "::movement_green::",
+//     so "the green cards with the lowest initiative" matched him in via
+//     the word "green" extracted from inside that token — even though
+//     the card isn't "about" green as a subject, just referencing a
+//     colored stat icon.
+// Both leaked an unrelated hero into what should have been either a
+// hero-scoped or whole-roster comparison. A genuinely hero-specific
+// question still works fine without these — it matches on the hero's
+// own name/id instead, which isn't affected by this list.
 const EXTRA_STOP_WORDS = new Set([
   "card", "cards", "hero", "heroes",
   "initiative", "movement", "defense", "defence", "attack", "range", "area",
+  ...CARD_COLORS.map((c) => c.toLowerCase()),
 ]);
 
 // Splits on anything that isn't a letter/digit — including apostrophes,
@@ -157,8 +166,6 @@ export type CardReference = {
   // impossible to miss rather than relying on the model not to make it.
   colorMismatch?: boolean;
 };
-
-const CARD_COLORS = ["RED", "BLUE", "GREEN", "GOLD", "PURPLE", "SILVER"];
 
 // Which card colors (if any) the question itself named, e.g. "red" in
 // "which tier 2 red card should I upgrade to".

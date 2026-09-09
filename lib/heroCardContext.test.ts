@@ -59,6 +59,18 @@ describe("computeStatExtremes — initiative", () => {
     );
   });
 
+  it("keeps a cross-hero color-filtered query scoped to the whole roster", () => {
+    // Hit live: "Show me the green cards with the lowest initiative"
+    // came back scoped to only Bain, because his card text contains the
+    // icon token "::movement_green::" and "green" got extracted as a
+    // standalone keyword from inside it — see the EXTRA_STOP_WORDS fix.
+    const heroIds = getRelevantHeroIds("Show me the green cards with the lowest initiative");
+    expect(heroIds).toEqual([]);
+    const groups = computeStatExtremes("initiative", "min", ["GREEN"], heroIds);
+    expect(groups).not.toBeNull();
+    expect(new Set(groups![0].matches.map((m) => m.heroName)).size).toBeGreaterThan(1);
+  });
+
   it("scopes to only the named hero's own cards, not the whole roster", () => {
     // Hit live: Sabina's "Troop Movement" card leaked her into an
     // Arien-only movement query via a shared word — see the
