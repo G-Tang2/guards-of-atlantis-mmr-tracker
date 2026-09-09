@@ -11,8 +11,19 @@ const CONTEXT_CHAR_BUDGET = CONTEXT_TOKEN_BUDGET * 4;
 // On top of the base stopword list — "card"/"hero" themselves are the
 // vocabulary of asking about this data at all, not a signal for which
 // hero/card a question means, so counting them as keywords would make
-// nearly every question "match" nothing distinctive.
-const EXTRA_STOP_WORDS = new Set(["card", "cards", "hero", "heroes"]);
+// nearly every question "match" nothing distinctive. The stat names are
+// the same kind of vocabulary-not-signal word, and excluding them fixes
+// a real false positive found live: Sabina has a card literally named
+// "Troop Movement", so "What's Arien's highest movement card?" matched
+// her in too via the shared word "movement" in getRelevantHeroIds' card-
+// name check below, contaminating a hero-scoped stat query with an
+// unrelated hero's cards. A genuinely hero-specific question still works
+// fine without these — it matches on the hero's own name/id instead,
+// which isn't affected by this list.
+const EXTRA_STOP_WORDS = new Set([
+  "card", "cards", "hero", "heroes",
+  "initiative", "movement", "defense", "defence", "attack", "range", "area",
+]);
 
 // Splits on anything that isn't a letter/digit — including apostrophes,
 // so a possessive like "Arien's" tokenizes to "arien" instead of a
@@ -242,52 +253,128 @@ export function wantsCrossHeroStatSummary(question: string, relevantHeroIds: str
 // alongside the real 7s. Scanning a long table for an exact numeric tie
 // is exactly the kind of arithmetic/transcription task LLMs are
 // unreliable at, independent of whether the underlying data they were
-// given is correct. Initiative specifically gets a precise, code-computed
-// answer instead of asking the model to derive it — see
-// computeInitiativeExtremes below — the same "don't trust the model's
-// own arithmetic on data it already has" principle findMentionedCards
-// already applies per-card, just applied here at the aggregate level.
-// Not generalized to attack/defense/movement yet: those are split across
-// primaryValue/secondaryX depending on a card's primaryAction, and
-// "attack" is ambiguous between primaryValue and secondaryAttack, so
-// reliably detecting which column a question means is a harder, separate
-// problem from initiative's single unambiguous field.
-const INITIATIVE_MIN_PATTERNS = [/\blowest\b/, /\bslowest\b/, /\bleast\b/, /\bminimum\b/, /\bsmallest\b/];
-const INITIATIVE_MAX_PATTERNS = [/\bhighest\b/, /\bfastest\b/, /\bmost\b/, /\bmaximum\b/, /\bbiggest\b/, /\blargest\b/];
+// given is correct. These stats get a precise, code-computed answer
+// instead of asking the model to derive it — see computeStatExtremes
+// below — the same "don't trust the model's own arithmetic on data it
+// already has" principle findMentionedCards already applies per-card,
+// just applied here at the aggregate level.
+export type StatKind = "initiative" | "movement" | "defense" | "attack" | "range" | "area";
 
-export function detectInitiativeSuperlative(question: string): "min" | "max" | null {
+export const STAT_LABELS: Record<StatKind, string> = {
+  initiative: "Initiative",
+  movement: "Movement",
+  defense: "Defense",
+  attack: "Attack",
+  range: "Range",
+  area: "Area",
+};
+
+// Resolves the one number a "lowest/highest X" question about `stat`
+// actually means for a given card. Several of these aren't a single
+// column: a card's "movement value" is its primaryValue when Movement is
+// that card's own primary action, and secondaryMovement otherwise (same
+// primary/secondary split for defense and attack — see cardPainter.ts's
+// placeSecondary, which resolves this exact ambiguity to decide what to
+// draw), while range/area only exist at all on cards that carry that
+// specific modifier. Returns null when the stat doesn't apply to this
+// card at all, so that card is correctly excluded from the comparison
+// rather than treated as a false 0.
+function resolveStatValue(card: HeroCard, stat: StatKind): number | null {
+  switch (stat) {
+    case "initiative":
+      return typeof card.initiative === "number" ? card.initiative : null;
+    case "movement":
+      // Silver cards' secondary action is never Movement, and the rules
+      // don't give them a movement value at all (see cardPainter.ts's
+      // own hasSecondaryMovement check) — excluded rather than reading a
+      // stray 0 as a real value.
+      if (card.color === "SILVER") return null;
+      if (card.primaryAction === "MOVEMENT") {
+        return typeof card.primaryValue === "number" ? card.primaryValue : null;
+      }
+      return typeof card.secondaryMovement === "number" && card.secondaryMovement !== 0
+        ? card.secondaryMovement
+        : null;
+    case "defense":
+      if (card.primaryAction === "DEFENSE" || card.primaryAction === "DEFENSE_SKILL") {
+        return typeof card.primaryValue === "number" ? card.primaryValue : null;
+      }
+      return typeof card.secondaryDefense === "number" ? card.secondaryDefense : null;
+    case "attack":
+      if (card.primaryAction === "ATTACK") {
+        return typeof card.primaryValue === "number" ? card.primaryValue : null;
+      }
+      return typeof card.secondaryAttack === "number" ? card.secondaryAttack : null;
+    case "range":
+      return card.modifier === "RANGE" && typeof card.modifierValue === "number" ? card.modifierValue : null;
+    case "area":
+      return card.modifier === "AREA" && typeof card.modifierValue === "number" ? card.modifierValue : null;
+    default:
+      return null;
+  }
+}
+
+const STAT_KEYWORD_PATTERNS: { stat: StatKind; pattern: RegExp }[] = [
+  { stat: "initiative", pattern: /\binitiative\b/ },
+  { stat: "movement", pattern: /\bmovement\b/ },
+  { stat: "defense", pattern: /\bdefen[cs]e\b/ },
+  { stat: "attack", pattern: /\battack\b/ },
+  { stat: "range", pattern: /\brange\b/ },
+  { stat: "area", pattern: /\barea\b/ },
+];
+
+// Shared across every stat, not just initiative — "fastest"/"slowest"
+// naturally map to max/min for movement too ("fastest" = moves the most
+// spaces), and there's no stat here where high-vs-low intuition actually
+// inverts (initiative's own "highest acts first" rule still means
+// "fastest" = highest number, same direction as every other stat).
+const STAT_MIN_PATTERNS = [/\blowest\b/, /\bslowest\b/, /\bleast\b/, /\bminimum\b/, /\bsmallest\b/, /\bshortest\b/];
+const STAT_MAX_PATTERNS = [
+  /\bhighest\b/, /\bfastest\b/, /\bmost\b/, /\bmaximum\b/, /\bbiggest\b/, /\blargest\b/, /\blongest\b/,
+];
+
+export function detectStatSuperlative(question: string): { stat: StatKind; direction: "min" | "max" } | null {
   const lower = question.toLowerCase();
-  if (!/\binitiative\b/.test(lower)) return null;
-  if (INITIATIVE_MIN_PATTERNS.some((re) => re.test(lower))) return "min";
-  if (INITIATIVE_MAX_PATTERNS.some((re) => re.test(lower))) return "max";
+  const statMatch = STAT_KEYWORD_PATTERNS.find(({ pattern }) => pattern.test(lower));
+  if (!statMatch) return null;
+  if (STAT_MIN_PATTERNS.some((re) => re.test(lower))) return { stat: statMatch.stat, direction: "min" };
+  if (STAT_MAX_PATTERNS.some((re) => re.test(lower))) return { stat: statMatch.stat, direction: "max" };
   return null;
 }
 
-export type InitiativeExtremeMatch = { heroName: string; cardName: string; color: string; level: number | null };
+export type StatExtremeMatch = { heroName: string; cardName: string; color: string; level: number | null };
 
-export function computeInitiativeExtremes(
+// heroIds restricts the comparison to specific heroes' own cards (e.g.
+// "Arien's highest initiative card" should only compare Arien's cards,
+// not the whole roster) — empty means every hero, for a true cross-hero
+// comparison ("who has the highest attack in the game").
+export function computeStatExtremes(
+  stat: StatKind,
   direction: "min" | "max",
   colors: string[],
-): { value: number; matches: InitiativeExtremeMatch[] } | null {
+  heroIds: string[] = [],
+): { value: number; matches: StatExtremeMatch[] } | null {
+  const scopeIds = heroIds.length > 0 ? heroIds : Object.keys(HERO_CARDS);
+
   let best: number | null = null;
-  for (const heroId of Object.keys(HERO_CARDS)) {
-    for (const card of HERO_CARDS[heroId]) {
+  for (const heroId of scopeIds) {
+    for (const card of HERO_CARDS[heroId] ?? []) {
       const color = typeof card.color === "string" ? card.color : "";
       if (colors.length > 0 && !colors.includes(color)) continue;
-      const initiative = typeof card.initiative === "number" ? card.initiative : null;
-      if (initiative === null) continue;
-      if (best === null || (direction === "min" ? initiative < best : initiative > best)) best = initiative;
+      const value = resolveStatValue(card, stat);
+      if (value === null) continue;
+      if (best === null || (direction === "min" ? value < best : value > best)) best = value;
     }
   }
   if (best === null) return null;
 
-  const matches: InitiativeExtremeMatch[] = [];
-  for (const heroId of Object.keys(HERO_CARDS)) {
+  const matches: StatExtremeMatch[] = [];
+  for (const heroId of scopeIds) {
     const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
-    for (const card of HERO_CARDS[heroId]) {
+    for (const card of HERO_CARDS[heroId] ?? []) {
       const color = typeof card.color === "string" ? card.color : "";
       if (colors.length > 0 && !colors.includes(color)) continue;
-      if (card.initiative === best) {
+      if (resolveStatValue(card, stat) === best) {
         matches.push({
           heroName,
           cardName: typeof card.name === "string" ? card.name : "",
