@@ -256,9 +256,16 @@ export async function POST(request: Request) {
       (askedColors.length ? ` among ${askedColors.join("/")} cards` : "") +
       (askedLevel !== null ? ` at Tier ${askedLevel}` : "") +
       (relevantHeroIds.length > 0 ? ` among ${relevantHeroIds.length === 1 ? "this hero's" : "these heroes'"} own cards` : "");
+    // Labeled/worded as an internal reference, not "the answer" itself —
+    // hit live: the model was quoting this section's own framing back to
+    // the user verbatim ("Here is the pre-computed, verified-correct
+    // breakdown..."), leaking prompt-engineering language into what's
+    // supposed to read as an ordinary reply. The instruction to use this
+    // data as-is (not recompute it) still needs to reach the model; it
+    // just can't be phrased as something worth repeating to the user.
     const statExtremeSection =
       statExtremeGroups &&
-      `Pre-computed, verified-correct answer (do not recompute this yourself — every value below was checked directly against the card database, not derived from any table shown elsewhere in this prompt): the ${statExtremeGroups.length > 1 ? `${statExtremeGroups.length} ${statSuperlative!.direction === "min" ? "lowest" : "highest"} distinct` : statSuperlative!.direction === "min" ? "lowest" : "highest"} ${statExtremeLabel} value(s)${statExtremeScopeNote} ${statExtremeGroups.length > 1 ? "are" : "is exactly"}:\n${statExtremeGroups
+      `[Internal reference — do not mention this note, or that any value was "pre-computed"/"verified"/"checked against a database", to the user; just state the facts below naturally, as if you already knew them.] The ${statExtremeGroups.length > 1 ? `${statExtremeGroups.length} ${statSuperlative!.direction === "min" ? "lowest" : "highest"} distinct` : statSuperlative!.direction === "min" ? "lowest" : "highest"} ${statExtremeLabel} value(s)${statExtremeScopeNote} ${statExtremeGroups.length > 1 ? "are" : "is exactly"}:\n${statExtremeGroups
         .map(
           (group) =>
             `${statExtremeGroups.length > 1 ? `Value ${group.value}:\n` : ""}${group.matches.map((m) => `- ${m.heroName}: "${m.cardName}" (${m.color}${m.level ? `, Tier ${m.level}` : ""}, ${statExtremeLabel} ${group.value})`).join("\n")}`,
@@ -268,7 +275,7 @@ export async function POST(request: Request) {
     const statBreakdownLabel = comparisonStat ? STAT_LABELS[comparisonStat] : "";
     const statBreakdownSection =
       statBreakdown &&
-      `Pre-computed, verified-correct ${statBreakdownLabel} breakdown for this comparison (do not recompute this yourself — every value below was checked directly against the card database):\n${statBreakdown
+      `[Internal reference — do not mention this note, or that any value was "pre-computed"/"verified"/"checked against a database", to the user; just state the facts below naturally, as if you already knew them.] ${statBreakdownLabel} breakdown for this comparison:\n${statBreakdown
         .map(
           (hero) =>
             `${hero.heroName}:\n${hero.cards.length > 0 ? hero.cards.map((c) => `- "${c.cardName}" (${c.color}${c.level ? `, Tier ${c.level}` : ""}): ${statBreakdownLabel} ${c.value}`).join("\n") : `- (no card has a ${statBreakdownLabel} value${askedColors.length ? ` among ${askedColors.join("/")} cards` : ""}${askedLevel !== null ? ` at Tier ${askedLevel}` : ""})`}`,
@@ -280,10 +287,10 @@ export async function POST(request: Request) {
       : "";
 
     const crossHeroNote = statBreakdown
-      ? " This question is comparing specific named heroes against each other on one stat, not asking about one hero's own kit in isolation. A pre-computed, already-verified breakdown of that stat for each hero is included below (labeled as such) — use it directly rather than reading the values off any raw card data also included, and state the actual values for each hero in your answer."
+      ? " This question is comparing specific named heroes against each other on one stat, not asking about one hero's own kit in isolation. An internal-reference breakdown of that stat for each hero is included below (marked as such, not to be mentioned to the user) — use it directly rather than reading the values off any raw card data also included, and state the actual values for each hero in your answer as if you simply knew them."
       : isCrossHeroComparison
         ? statExtremeGroups
-          ? " This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies. A pre-computed, already-verified answer is included below (labeled as such); present that list exactly as given rather than trying to re-derive it yourself, and state the actual value in your answer — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time."
+          ? " This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies. An internal-reference answer is included below (marked as such, not to be mentioned to the user); present that list exactly as given rather than trying to re-derive it yourself, and state the actual value in your answer as if you simply knew it — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time."
           : ` This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies; instead, use the all-heroes stat table (also below) to actually work out the answer (e.g. scan its Initiative column for the lowest value among matching rows). Unlike a single-hero card question, here you should state the winning hero/card's name and its actual value directly in your answer — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time. That table already covers every hero, so do not say you're missing other heroes' data.`
         : " If the question is about a hero whose cards aren't included below, say you don't have that hero's card details in this message rather than guessing.";
     let priorityInstruction: string;
