@@ -22,6 +22,10 @@ import {
   getRelevantHeroIds,
   findMentionedCards,
   auditDistinctiveKeywords,
+  wantsFullSortedList,
+  detectSortDirection,
+  detectStatKeyword,
+  computeSortedStatList,
 } from "./heroCardContext";
 
 describe("detectStatSuperlative", () => {
@@ -208,6 +212,63 @@ describe("computeStatExtremes — narrowing to one ordinal rank", () => {
   it("returns no groups past the last real rank (narrows to empty)", () => {
     const groups = computeStatExtremes("range", "max", [], [], 99, 2);
     expect(groups).toBeNull();
+  });
+});
+
+describe("detectStatKeyword", () => {
+  it("recognizes 'damage' as an alias for the attack stat", () => {
+    // Hit live twice before this: "gold damage" and "gold attack damage"
+    // both needed the color/list-detection fix, but "damage" itself was
+    // never recognized as a stat at all until this.
+    expect(detectStatKeyword("what's the highest gold damage")).toBe("attack");
+    expect(detectStatKeyword("attack values")).toBe("attack");
+  });
+});
+
+describe("full sorted list detection", () => {
+  it("recognizes sort/rank/order wording and 'from X to Y' range phrasing", () => {
+    expect(wantsFullSortedList("sort heroes by initiative")).toBe(true);
+    expect(wantsFullSortedList("rank blue cards by defense")).toBe(true);
+    expect(wantsFullSortedList("show tier 1 cards in ascending order")).toBe(true);
+    expect(wantsFullSortedList("list all hero tier 1 red from most damage to least")).toBe(true);
+    expect(wantsFullSortedList("how do I play Bain")).toBe(false);
+    expect(wantsFullSortedList("what's the highest red initiative")).toBe(false);
+  });
+
+  it("defaults to descending, including for 'most ... to least' phrasing", () => {
+    // "most damage to least" contains both a max word ("most") and a min
+    // word ("least") — must not be misread as ascending because of the
+    // trailing "least".
+    expect(detectSortDirection("list all hero tier 1 red from most damage to least")).toBe("desc");
+    expect(detectSortDirection("sort heroes by initiative")).toBe("desc");
+  });
+
+  it("recognizes explicit ascending cues", () => {
+    expect(detectSortDirection("show tier 1 cards in ascending order")).toBe("asc");
+    expect(detectSortDirection("rank blue cards from lowest to highest defense")).toBe("asc");
+  });
+});
+
+describe("computeSortedStatList", () => {
+  it("resolves 'list all hero tier 1 red from most damage to least' to the true full ranking", () => {
+    // Hit live: this question returned the cards "in not any order" —
+    // buildAllHeroStatSummary sent the raw table but nothing actually
+    // sorted it or told the model which stat to sort by, so the reply
+    // just followed the table's arbitrary row order. Ground truth
+    // (attack, RED, tier 1): 9 (Emmitt alone), then a 4-way tie at 6,
+    // then a 10-way tie at 5, ordered strictly descending throughout.
+    const entries = computeSortedStatList("attack", "desc", ["RED"], [], 1);
+    expect(entries).not.toBeNull();
+    const values = entries!.map((e) => e.value);
+    expect(values).toEqual([...values].sort((a, b) => b - a));
+    expect(values[0]).toBe(9);
+    expect(entries![0].heroName).toBe("Emmitt the Traveller");
+    expect(values.filter((v) => v === 6)).toHaveLength(4);
+    expect(values.filter((v) => v === 5)).toHaveLength(10);
+  });
+
+  it("returns null when nothing matches the filters", () => {
+    expect(computeSortedStatList("range", "desc", [], [], 99)).toBeNull();
   });
 });
 

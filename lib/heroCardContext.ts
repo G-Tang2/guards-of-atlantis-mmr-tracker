@@ -488,10 +488,20 @@ const STAT_KEYWORD_PATTERNS: { stat: StatKind; pattern: RegExp }[] = [
   { stat: "initiative", pattern: /\binitiative\b/ },
   { stat: "movement", pattern: /\bmovement\b/ },
   { stat: "defense", pattern: /\bdefen[cs]e\b/ },
-  { stat: "attack", pattern: /\battack\b/ },
+  // "damage" is how players actually ask about this stat at least as
+  // often as the card's own field name "attack" — hit live twice
+  // ("gold damage", "gold attack damage") before this, both from
+  // questions that otherwise worked fine once the word was recognized.
+  { stat: "attack", pattern: /\b(attack|damage)\b/ },
   { stat: "range", pattern: /\brange\b/ },
   { stat: "area", pattern: /\barea\b/ },
 ];
+
+export function detectStatKeyword(question: string): StatKind | null {
+  const lower = question.toLowerCase();
+  const statMatch = STAT_KEYWORD_PATTERNS.find(({ pattern }) => pattern.test(lower));
+  return statMatch?.stat ?? null;
+}
 
 // Shared across every stat, not just initiative — "fastest"/"slowest"
 // naturally map to max/min for movement too ("fastest" = moves the most
@@ -505,10 +515,10 @@ const STAT_MAX_PATTERNS = [
 
 export function detectStatSuperlative(question: string): { stat: StatKind; direction: "min" | "max" } | null {
   const lower = question.toLowerCase();
-  const statMatch = STAT_KEYWORD_PATTERNS.find(({ pattern }) => pattern.test(lower));
-  if (!statMatch) return null;
-  if (STAT_MIN_PATTERNS.some((re) => re.test(lower))) return { stat: statMatch.stat, direction: "min" };
-  if (STAT_MAX_PATTERNS.some((re) => re.test(lower))) return { stat: statMatch.stat, direction: "max" };
+  const stat = detectStatKeyword(question);
+  if (!stat) return null;
+  if (STAT_MIN_PATTERNS.some((re) => re.test(lower))) return { stat, direction: "min" };
+  if (STAT_MAX_PATTERNS.some((re) => re.test(lower))) return { stat, direction: "max" };
   return null;
 }
 
@@ -639,6 +649,84 @@ export function computeStatExtremes(
   });
 }
 
+// "List all hero tier 1 red from most damage to least", "sort heroes by
+// initiative", "rank the blue cards by defense" — the user wants every
+// matching card laid out in order, not just the extreme value(s)
+// computeStatExtremes returns. Distinct from "top N" (detectTopN), which
+// still only wants the N best distinct values, not literally everything.
+const FULL_SORTED_LIST_PATTERNS = [
+  /\bsort(ed|ing)?\b/,
+  /\brank(ed|ing)?\b/,
+  /\border(ed|ing)?\b/,
+  // Covers "from most to least"/"from highest to lowest" and the
+  // reverse — deliberately not requiring the two direction words to be
+  // adjacent to "from"/"to", since real phrasing puts the stat name in
+  // between ("from most damage to least").
+  /\b(most|highest|least|lowest).*\bto\b.*(most|highest|least|lowest)\b/,
+];
+
+export function wantsFullSortedList(question: string): boolean {
+  const lower = question.toLowerCase();
+  return FULL_SORTED_LIST_PATTERNS.some((re) => re.test(lower));
+}
+
+// Which way the full list should read top-to-bottom. "Ascending"/"least
+// to most"/"lowest to highest" is the only explicit way to ask for
+// smallest-first; everything else — including the common "most X to
+// least" phrasing, which contains both a max word ("most") and a min
+// word ("least") — defaults to descending, since that's what a bare
+// "sort"/"rank"/"in order" naturally means without an ascending cue.
+export function detectSortDirection(question: string): "asc" | "desc" {
+  const lower = question.toLowerCase();
+  if (/\bascending\b/.test(lower)) return "asc";
+  if (/\bdescending\b/.test(lower)) return "desc";
+  if (/\b(least|lowest|smallest|worst)\b.*\bto\b.*\b(most|highest|largest|best)\b/.test(lower)) return "asc";
+  return "desc";
+}
+
+export type SortedStatEntry = {
+  heroName: string;
+  cardName: string;
+  color: string;
+  level: number | null;
+  value: number;
+};
+
+// Every matching card's value for `stat`, sorted — the full-list
+// counterpart to computeStatExtremes' "just the extreme(s)". Same
+// filters, same field-resolution rules (see resolveStatValue), so a card
+// the stat doesn't apply to (e.g. Range on a card with no Range
+// modifier) is excluded rather than showing as a false 0, same as
+// everywhere else in this file.
+export function computeSortedStatList(
+  stat: StatKind,
+  direction: "asc" | "desc",
+  colors: string[],
+  heroIds: string[] = [],
+  level: number | null = null,
+): SortedStatEntry[] | null {
+  const scopeIds = heroIds.length > 0 ? heroIds : Object.keys(HERO_CARDS);
+  const entries: SortedStatEntry[] = [];
+  for (const heroId of scopeIds) {
+    const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
+    for (const card of HERO_CARDS[heroId] ?? []) {
+      if (!cardMatchesFilters(card, colors, level)) continue;
+      const value = resolveStatValue(card, stat);
+      if (value === null) continue;
+      entries.push({
+        heroName,
+        cardName: typeof card.name === "string" ? card.name : "",
+        color: typeof card.color === "string" ? card.color : "",
+        level: typeof card.level === "number" ? card.level : null,
+        value,
+      });
+    }
+  }
+  if (entries.length === 0) return null;
+  entries.sort((a, b) => (direction === "asc" ? a.value - b.value : b.value - a.value));
+  return entries;
+}
+
 // "Compare Arien and Misa's initiative" — two or more named heroes plus
 // a stat and comparison wording, but no explicit min/max direction word.
 // Distinct from computeStatExtremes above: there's no single "winner" to
@@ -650,8 +738,7 @@ export function detectNamedHeroStatComparison(question: string, relevantHeroIds:
   if (relevantHeroIds.length < 2) return null;
   const lower = question.toLowerCase();
   if (!COMPARISON_WORD_PATTERN.test(lower)) return null;
-  const statMatch = STAT_KEYWORD_PATTERNS.find(({ pattern }) => pattern.test(lower));
-  return statMatch?.stat ?? null;
+  return detectStatKeyword(question);
 }
 
 export type HeroStatBreakdown = {
