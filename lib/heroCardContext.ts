@@ -234,6 +234,72 @@ export function wantsCrossHeroStatSummary(question: string, relevantHeroIds: str
   return CROSS_HERO_COMPARISON_PATTERNS.some((re) => re.test(lower));
 }
 
+// Even with the full, correct data in front of it (see
+// buildAllHeroStatSummary below), the model can still misread a 578-row
+// text table when asked to find every card tied at some extreme value —
+// hit live: asked for "the red cards with the lowest initiative", it
+// correctly said "value of 7" but then also listed some actual-8 cards
+// alongside the real 7s. Scanning a long table for an exact numeric tie
+// is exactly the kind of arithmetic/transcription task LLMs are
+// unreliable at, independent of whether the underlying data they were
+// given is correct. Initiative specifically gets a precise, code-computed
+// answer instead of asking the model to derive it — see
+// computeInitiativeExtremes below — the same "don't trust the model's
+// own arithmetic on data it already has" principle findMentionedCards
+// already applies per-card, just applied here at the aggregate level.
+// Not generalized to attack/defense/movement yet: those are split across
+// primaryValue/secondaryX depending on a card's primaryAction, and
+// "attack" is ambiguous between primaryValue and secondaryAttack, so
+// reliably detecting which column a question means is a harder, separate
+// problem from initiative's single unambiguous field.
+const INITIATIVE_MIN_PATTERNS = [/\blowest\b/, /\bslowest\b/, /\bleast\b/, /\bminimum\b/, /\bsmallest\b/];
+const INITIATIVE_MAX_PATTERNS = [/\bhighest\b/, /\bfastest\b/, /\bmost\b/, /\bmaximum\b/, /\bbiggest\b/, /\blargest\b/];
+
+export function detectInitiativeSuperlative(question: string): "min" | "max" | null {
+  const lower = question.toLowerCase();
+  if (!/\binitiative\b/.test(lower)) return null;
+  if (INITIATIVE_MIN_PATTERNS.some((re) => re.test(lower))) return "min";
+  if (INITIATIVE_MAX_PATTERNS.some((re) => re.test(lower))) return "max";
+  return null;
+}
+
+export type InitiativeExtremeMatch = { heroName: string; cardName: string; color: string; level: number | null };
+
+export function computeInitiativeExtremes(
+  direction: "min" | "max",
+  colors: string[],
+): { value: number; matches: InitiativeExtremeMatch[] } | null {
+  let best: number | null = null;
+  for (const heroId of Object.keys(HERO_CARDS)) {
+    for (const card of HERO_CARDS[heroId]) {
+      const color = typeof card.color === "string" ? card.color : "";
+      if (colors.length > 0 && !colors.includes(color)) continue;
+      const initiative = typeof card.initiative === "number" ? card.initiative : null;
+      if (initiative === null) continue;
+      if (best === null || (direction === "min" ? initiative < best : initiative > best)) best = initiative;
+    }
+  }
+  if (best === null) return null;
+
+  const matches: InitiativeExtremeMatch[] = [];
+  for (const heroId of Object.keys(HERO_CARDS)) {
+    const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
+    for (const card of HERO_CARDS[heroId]) {
+      const color = typeof card.color === "string" ? card.color : "";
+      if (colors.length > 0 && !colors.includes(color)) continue;
+      if (card.initiative === best) {
+        matches.push({
+          heroName,
+          cardName: typeof card.name === "string" ? card.name : "",
+          color,
+          level: typeof card.level === "number" ? card.level : null,
+        });
+      }
+    }
+  }
+  return { value: best, matches };
+}
+
 // One compact line per card across every hero (not per-hero JSON, which
 // at 32 heroes/~600 cards would run well over budget once every field is
 // repeated card after card) — just the numeric/categorical fields a stat
