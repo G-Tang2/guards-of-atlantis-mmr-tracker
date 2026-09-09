@@ -304,6 +304,21 @@ export function findMentionedCards(
   askedColors: string[] = [],
 ): CardReference[] {
   const lowerReply = replyText.toLowerCase();
+
+  // A card name can coincidentally be a substring of a hero's own
+  // display name — e.g. Gydion's ultimate is literally named "The
+  // Archwizard", and his full display name is "Gydion the Archwizard".
+  // Blanking out every in-scope hero's full name before the substring
+  // scan below stops an ordinary mention of the hero (by name/title)
+  // from being misattributed as a mention of that specific card, while
+  // still catching a genuine standalone reference to the card elsewhere
+  // in the text.
+  let searchText = lowerReply;
+  for (const heroId of heroIds) {
+    const heroName = HEROES.find((h) => h.id === heroId)?.name.toLowerCase();
+    if (heroName) searchText = searchText.split(heroName).join(" ".repeat(heroName.length));
+  }
+
   const found: CardReference[] = [];
   const seen = new Set<string>();
 
@@ -319,7 +334,7 @@ export function findMentionedCards(
       if (name.length < 4) continue;
       const key = `${heroId}::${name}`;
       if (seen.has(key)) continue;
-      if (lowerReply.includes(name.toLowerCase())) {
+      if (searchText.includes(name.toLowerCase())) {
         const cardColor = typeof card.color === "string" ? card.color : null;
         const colorMismatch =
           askedColors.length > 0 && cardColor !== null && !askedColors.includes(cardColor);
