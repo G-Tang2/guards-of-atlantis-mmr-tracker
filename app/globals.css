@@ -6704,11 +6704,23 @@
   .goa-card-ref-summary {
     cursor: pointer;
     font-size: 0.85rem;
-    color: var(--muted);
+    font-weight: 600;
+    /* --gold/--gold-light are this app's own fixed theme colors (see
+       .goa-root above), not the generic --muted/--foreground tokens this
+       used before — those flip between near-black and near-white
+       depending on the *system's* light/dark setting, independent of
+       this page's own always-dark theme, so tapping (which triggers
+       :hover, then :active, on touch) could land on light-mode
+       --foreground's near-black value on a device set to light mode. */
+    color: var(--gold);
+    -webkit-tap-highlight-color: transparent;
     user-select: none;
   }
-  .goa-card-ref-summary:hover {
-    color: var(--foreground);
+  .goa-card-ref-summary:hover,
+  .goa-card-ref-summary:focus,
+  .goa-card-ref-summary:focus-visible,
+  .goa-card-ref-summary:active {
+    color: var(--gold-light);
   }
   .goa-card-ref {
     background: rgba(28, 26, 20, 0.75);
@@ -6865,7 +6877,8 @@
   .goa-chat-textarea {
     flex: 1;
     resize: none;
-    max-height: 120px;
+    max-height: 200px;
+    overflow-y: auto;
     background: rgba(28, 26, 20, 0.85);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -6936,6 +6949,7 @@
     }
     .goa-chat-textarea {
       font-size: 1.1rem;
+      max-height: 280px;
     }
   }
 }

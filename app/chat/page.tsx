@@ -385,6 +385,20 @@ function ChatPageInner() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [sendCount]);
 
+  // rows={1} on the textarea only sets its *initial* height — without
+  // this, a pasted or multi-line message just scrolled inside that
+  // single visible line instead of growing the box to show it. Resetting
+  // to "auto" before reading scrollHeight is what lets the box shrink
+  // back down too (e.g. after deleting text or sending), not just grow;
+  // the CSS max-height on .goa-chat-textarea still caps how tall this can
+  // get before it scrolls internally.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
+
   // Safety net: if this page unmounts while the textarea still has focus
   // (e.g. a back gesture instead of a normal blur), don't leave the body
   // stuck in the "keyboard open" state for whatever page loads next.
