@@ -298,6 +298,20 @@ describe("keyword collision audit", () => {
     expect(auditedAsRisky?.everCapitalized).toBe(false);
     expect(getRelevantHeroIds("what happens except when a hero blocks")).toEqual([]);
   });
+
+  it("doesn't let a generic quantifier at the start of a card title become a hero-matching signal", () => {
+    // Hit live: "list all heroes gold damage" only ever showed Widget,
+    // because Widget's card "All Aboard" makes "all" a distinctive
+    // card-name-index word (heroIds.size 1) — and unlike a description
+    // word, its capitalization (it's the leading word of a title) didn't
+    // save it, since a title is always capitalized regardless of how
+    // generic the underlying word is. Fixed by adding "all" (and the rest
+    // of that quantifier closed class already partly represented via
+    // "any"/"some") to BASE_STOP_WORDS, so it's filtered out of the
+    // question itself before the index is ever consulted.
+    expect(getRelevantHeroIds("list all heroes gold damage")).toEqual([]);
+    expect(wantsCrossHeroStatSummary("list all heroes gold damage", [])).toBe(true);
+  });
 });
 
 describe("wantsCrossHeroStatSummary", () => {

@@ -10,6 +10,13 @@ export const BASE_STOP_WORDS = new Set([
   "and", "or", "in", "on", "at", "for", "with", "about", "what", "who",
   "when", "where", "why", "how", "did", "do", "does", "it", "this", "that",
   "i", "you", "we", "they", "he", "she", "there", "any", "some",
+  // Quantifiers/determiners — same closed class as "any"/"some" above,
+  // just missing until "list all heroes gold damage" matched a single
+  // hero via a card literally named "All Aboard": "all" was never
+  // filtered out of the question itself, so it fell through to the
+  // card-name distinctiveness index and got treated as if the user had
+  // named that hero specifically.
+  "all", "each", "every", "both", "no",
 ]);
 
 // Splits on anything that isn't a letter/digit — including apostrophes,
