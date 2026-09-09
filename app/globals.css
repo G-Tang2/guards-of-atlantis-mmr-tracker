@@ -6700,6 +6700,11 @@
     border-radius: 6px;
     padding: 0.55rem 0.7rem;
   }
+  .goa-card-ref-borderless {
+    background: none;
+    border: none;
+    padding: 0;
+  }
   .goa-card-ref-art {
     display: block;
     width: 100%;

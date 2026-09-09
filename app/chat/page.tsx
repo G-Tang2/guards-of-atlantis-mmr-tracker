@@ -262,6 +262,22 @@ function CardStatBlock({ reference }: { reference: CardReference }) {
   const accent = CARD_COLOR_ACCENT[color] ?? "var(--border)";
   const showArt = hasCardArt(reference.heroId);
 
+  if (showArt) {
+    // The card art itself already shows the name/title, so the separate
+    // text header (and the border framing it, sized for that text block)
+    // would just be redundant chrome around the visual card.
+    return (
+      <div className="goa-card-ref goa-card-ref-borderless">
+        {reference.colorMismatch && (
+          <p className="goa-card-ref-warning">
+            ⚠ You asked about a different color — this card is actually {color || "a different color"}.
+          </p>
+        )}
+        <HeroActionCard heroId={reference.heroId} card={card} className="goa-card-ref-art" />
+      </div>
+    );
+  }
+
   return (
     <div className="goa-card-ref" style={{ borderColor: accent }}>
       {reference.colorMismatch && (
@@ -275,11 +291,7 @@ function CardStatBlock({ reference }: { reference: CardReference }) {
         </span>
         <span className="goa-card-ref-hero">{reference.heroName}</span>
       </div>
-      {showArt ? (
-        <HeroActionCard heroId={reference.heroId} card={card} className="goa-card-ref-art" />
-      ) : (
-        <>
-          <div className="goa-card-ref-tags">
+      <div className="goa-card-ref-tags">
             {color && (
               <span className="goa-card-ref-tag" style={{ borderColor: accent, color: accent }}>
                 {color} · {level ? `Tier ${level}` : "Starting"}
@@ -304,10 +316,8 @@ function CardStatBlock({ reference }: { reference: CardReference }) {
               <span className="goa-card-ref-tag">Def {secondaryDefense}</span>
             )}
             {item && <span className="goa-card-ref-tag">Item: {item}</span>}
-          </div>
-          {description && <div className="goa-card-ref-desc">{renderChatText(description)}</div>}
-        </>
-      )}
+      </div>
+      {description && <div className="goa-card-ref-desc">{renderChatText(description)}</div>}
     </div>
   );
 }
@@ -343,6 +353,13 @@ function ChatPageInner() {
   // not), so a mid-stream failure or navigation away never leaves a
   // half-written turn sitting in persisted history.
   const [streamingReply, setStreamingReply] = useState("");
+  // Ticks once a second while waiting on a reply — shown next to
+  // "Thinking…" so a free-tier wait (up to 45s, see FIRST_CHUNK_DEADLINE_MS
+  // in app/api/chat/route.ts) reads as "still working" rather than
+  // "possibly stuck," since there's nothing else visible changing during
+  // that stretch.
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardReference | null>(null);
   // Bumped only when the user submits a question — a dedicated trigger
@@ -375,6 +392,12 @@ function ChatPageInner() {
     return () => document.body.classList.remove("goa-chat-input-focused");
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    };
+  }, []);
+
   const persistMessages = (next: ChatTurn[]) => {
     setMessages(next);
     sessionStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(next));
@@ -401,6 +424,12 @@ function ChatPageInner() {
     setStreamingReply("");
     setError(null);
     setSendCount((c) => c + 1);
+
+    const startedAt = Date.now();
+    setElapsedSeconds(0);
+    elapsedTimerRef.current = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
 
     try {
       const res = await fetch("/api/chat", {
@@ -475,6 +504,8 @@ function ChatPageInner() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = null;
       setSending(false);
       setStreamingReply("");
     }
@@ -528,7 +559,7 @@ function ChatPageInner() {
         ))}
         {sending && (
           <div className={`goa-chat-bubble model${streamingReply ? "" : " goa-chat-thinking"}`}>
-            {streamingReply ? renderChatText(streamingReply) : "Thinking…"}
+            {streamingReply ? renderChatText(streamingReply) : `Thinking… (${elapsedSeconds}s)`}
           </div>
         )}
         {error && <p className="goa-chat-error">{error}</p>}
