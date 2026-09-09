@@ -390,30 +390,29 @@ const STRATEGY_INTENT_PATTERNS = [
 ];
 
 // "Lowest red initiative", "who has the highest attack", "which heroes
-// have a movement card with area" — questions comparing a stat *across*
-// heroes rather than asking about one hero's own kit. These never name a
-// hero (there's nothing to name — the whole point is "which hero"), so
-// getRelevantHeroIds always comes back empty for them and the model was
-// left with zero card data to compare, producing an honest but useless
-// "I don't have every hero's details" instead of an actual answer.
-const CROSS_HERO_COMPARISON_PATTERNS = [
-  /\blowest\b/, /\bhighest\b/, /\bmost\b/, /\bleast\b/, /\bfewest\b/,
-  /\bbest\b/, /\bworst\b/, /\bstrongest\b/, /\bweakest\b/,
-  /\bfastest\b/, /\bslowest\b/,
-  /\bwho has\b/, /\bwhich hero(es)?\b/, /\bwhat hero(es)?\b/, /\bany hero(es)?\b/,
-  /\ball heroes\b/, /\bevery hero\b/, /\bcompare\b/, /\bcomparison\b/,
-  /\brank(ed|ing)?\b/,
-];
-
-// Only worth building the (still nontrivial) all-heroes stat table when
-// there's no hero already in scope to answer from — a superlative about
-// one already-named hero ("Arien's highest initiative card") is answered
-// fine from that hero's own card set, already sent via the normal path.
+// have a movement card with area", "list all hero gold attack damage in
+// descending order" — questions comparing a stat *across* heroes rather
+// than asking about one hero's own kit. These never name a hero (there's
+// nothing to name — the whole point is "which hero"), so
+// getRelevantHeroIds always comes back empty for them.
+//
+// This used to also require the question to match one of a growing list
+// of comparison-flavored phrases ("highest"/"compare"/"rank"/...) on top
+// of the two checks below — but that list needed a new entry every time
+// a real question phrased the same intent differently (plural vs.
+// singular "all hero(es)", "descending order" instead of a superlative
+// word, and whatever comes next), each miss producing the same useless
+// "I don't have that data" instead of an actual answer. There's no
+// legitimate case where a question wants card details AND no specific
+// hero is already in scope that ISN'T some kind of whole-roster
+// question, so the wording check was never actually load-bearing —
+// dropped in favor of just the two structural conditions, which are
+// phrasing-agnostic by construction. A false positive here (a card-detail
+// question that isn't really comparative) just attaches a stat table the
+// model is free to ignore, not an incorrect answer.
 export function wantsCrossHeroStatSummary(question: string, relevantHeroIds: string[]): boolean {
   if (relevantHeroIds.length > 0) return false;
-  if (!isCardDetailQuestion(question)) return false;
-  const lower = question.toLowerCase();
-  return CROSS_HERO_COMPARISON_PATTERNS.some((re) => re.test(lower));
+  return isCardDetailQuestion(question);
 }
 
 // Even with the full, correct data in front of it (see

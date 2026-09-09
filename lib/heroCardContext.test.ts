@@ -346,6 +346,31 @@ describe("wantsCrossHeroStatSummary", () => {
   it("does not trigger once a specific hero is already in scope", () => {
     expect(wantsCrossHeroStatSummary("what's Arien's highest initiative card", ["arien"])).toBe(false);
   });
+
+  it("triggers on singular 'all hero' phrasing, not just the plural", () => {
+    // Hit live: "List all hero gold attack damage in descending order"
+    // matched none of CROSS_HERO_COMPARISON_PATTERNS at all (the pattern
+    // required "all heroes", and neither "descending" nor "sort"-style
+    // ordering language was covered either), so the model got zero card
+    // data and answered "I don't have hero card details" on a
+    // whole-roster question.
+    expect(wantsCrossHeroStatSummary("List all hero gold attack damage in descending order.", [])).toBe(true);
+  });
+
+  it("triggers on descending/ascending/sort ordering language", () => {
+    expect(wantsCrossHeroStatSummary("sort heroes by initiative", [])).toBe(true);
+    expect(wantsCrossHeroStatSummary("show tier 1 cards in ascending initiative order", [])).toBe(true);
+  });
+
+  it("triggers on any card-detail wording with no comparison phrasing at all, not just a known list of phrases", () => {
+    // No longer gated on a comparison-flavored word list ("highest"/
+    // "compare"/"rank"/...) at all — a card-detail question with no hero
+    // in scope is a whole-roster question by construction, regardless of
+    // how it's worded, so this needs to keep working for wording that
+    // was never explicitly matched before and never will be enumerated.
+    expect(wantsCrossHeroStatSummary("what are the tier 2 green cards' stats", [])).toBe(true);
+    expect(wantsCrossHeroStatSummary("gimme the initiative numbers for every card", [])).toBe(true);
+  });
 });
 
 describe("extractAskedColors", () => {
