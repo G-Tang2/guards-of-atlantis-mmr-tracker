@@ -11,6 +11,7 @@ import { requireSharedAuth } from "@/lib/apiAuth";
 import { fetchDiscordCandidates, selectDiscordContext } from "@/lib/discordContext";
 import { wantsRulebookContext, fetchRelevantRulebookPages } from "@/lib/rulebook";
 import { fetchRelevantHeroGuides } from "@/lib/heroGuides";
+import { HERO_CARDS } from "@/lib/heroCards";
 import { GENERAL_STRATEGY_GUIDES } from "@/lib/generalStrategy";
 import {
   getRelevantHeroIds,
@@ -19,6 +20,8 @@ import {
   extractAskedColors,
   isCardDetailQuestion,
   wantsHeroCardContext,
+  wantsCrossHeroStatSummary,
+  buildAllHeroStatSummary,
 } from "@/lib/heroCardContext";
 import { streamChatReply, countTokens, GeminiRateLimitError } from "@/lib/gemini";
 import { ChatRequestBody, ChatStreamEvent, ChatTurn, trimHistoryToBudget } from "@/lib/chat";
@@ -90,8 +93,20 @@ export async function POST(request: Request) {
     const wantsContext = wantsHeroCardContext(message);
     const wantsDetail = isCardDetailQuestion(message);
     const relevantHeroIds = wantsContext ? getRelevantHeroIds(message) : [];
+    const askedColors = wantsDetail ? extractAskedColors(message) : [];
     const heroCardContext = wantsContext ? fetchRelevantHeroCards(relevantHeroIds) : "";
     const heroGuideContext = wantsContext ? fetchRelevantHeroGuides(relevantHeroIds) : "";
+    // "Who has the lowest red initiative" and similar cross-hero
+    // comparisons never name a hero (there's nothing to name — the whole
+    // question is which one), so relevantHeroIds always comes back empty
+    // and heroCardContext above is empty too — without this, the model
+    // had zero card data to compare and could only give an honest but
+    // useless "I don't have every hero's details" instead of an actual
+    // answer. See wantsCrossHeroStatSummary/buildAllHeroStatSummary in
+    // lib/heroCardContext.ts for why this needs its own compact
+    // all-heroes table rather than just widening heroCardContext.
+    const useCrossHeroStatSummary = wantsContext && wantsCrossHeroStatSummary(message, relevantHeroIds);
+    const statSummaryText = useCrossHeroStatSummary ? buildAllHeroStatSummary(askedColors) : "";
     // Not hero-specific (card-color roles, push potential/minion advantage,
     // statline & item matchups) — sent alongside hero context on any
     // strategy-flavored question, not just ones naming a hero, since these
@@ -123,14 +138,20 @@ export async function POST(request: Request) {
       : fetchRelevantRulebookPages(message);
     const rulebookSection = rulebookText && `Official rulebook:\n${rulebookText}`;
 
-    const askedColors = wantsDetail ? extractAskedColors(message) : [];
+    const statSummarySection =
+      statSummaryText &&
+      `All hero card stats, for cross-hero comparison questions (plain table, one row per card — "-" means that field doesn't apply to that card; every hero is included${askedColors.length ? `, filtered to ${askedColors.join("/")} cards only since that's what was asked` : ", across every color"}, so this table is complete for answering a "who has the lowest/highest" style question — don't say you're missing other heroes' data):\n${statSummaryText}`;
+
     const colorFilterNote = askedColors.length
       ? ` The question specifically asks about ${askedColors.join("/")} card(s) — before including any card in your answer, check that card's own "color" field and silently exclude it if it does not match ${askedColors.join(" or ")}, even if it's otherwise a similar level/initiative to the cards that do match. Do not present an off-color card as if it were one of the requested-color options.`
       : "";
 
+    const crossHeroNote = useCrossHeroStatSummary
+      ? ` This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies; instead, use the all-heroes stat table (also below) to actually work out the answer (e.g. scan its Initiative column for the lowest value among matching rows). Unlike a single-hero card question, here you should state the winning hero/card's name and its actual value directly in your answer — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time. That table already covers every hero, so do not say you're missing other heroes' data.`
+      : " If the question is about a hero whose cards aren't included below, say you don't have that hero's card details in this message rather than guessing.";
     let priorityInstruction: string;
     if (wantsDetail) {
-      priorityInstruction = ` This question is asking about a hero's action cards' own facts — ground your answer primarily in that hero's actual card data below, since it's the source of truth. Don't lead with Discord opinions or banter in place of concrete card facts; only bring in Discord history or that hero's strategy guide (if included below) where it adds real, specific insight (e.g. a known strong line of play, a house-rule ruling on that hero), treated as supporting color, not the main answer. When you name a specific action card, refer to it by its exact name and focus on explaining/comparing it in prose — do not restate its exact color, level, initiative, or numeric values yourself, since the app automatically shows that card's exact data (sourced directly from the database, not from you) right alongside your answer.${colorFilterNote} If the question is about a hero whose cards aren't included below, say you don't have that hero's card details in this message rather than guessing.`;
+      priorityInstruction = ` This question is asking about a hero's action cards' own facts — ground your answer primarily in that hero's actual card data below, since it's the source of truth. Don't lead with Discord opinions or banter in place of concrete card facts; only bring in Discord history or that hero's strategy guide (if included below) where it adds real, specific insight (e.g. a known strong line of play, a house-rule ruling on that hero), treated as supporting color, not the main answer. When you name a specific action card, refer to it by its exact name and focus on explaining/comparing it in prose — do not restate its exact color, level, initiative, or numeric values yourself, since the app automatically shows that card's exact data (sourced directly from the database, not from you) right alongside your answer.${colorFilterNote}${crossHeroNote}`;
     } else if (wantsContext) {
       priorityInstruction = ` This question is about a specific hero's kit, playstyle, or a mechanic tied to their cards, or about general strategy (how the card colors function, reading the minion wave, push potential/minion advantage, statline or item matchups), without asking for the literal card-by-card facts — if a community strategy guide for the relevant hero is included below, treat it as your primary grounding for that hero's playstyle/strategy advice (it's written specifically to answer "how do I play/counter this hero" questions, so it's richer for this than the raw card data); for anything about general mechanics/patterns rather than one hero's kit, ground your answer in the general strategy guides instead. Fall back to the hero's card data (and the rulebook/Discord history, when included below, which may already contain a direct, specific answer — e.g. a prior ruling or established community consensus on exactly this) when no guide is available or it doesn't cover what's being asked. Write in prose rather than cataloging every card. No card-data box will be shown alongside this reply, so don't enumerate the hero's full card list or state exact numeric stats/tier/color as if they were verified facts; you may reference a specific card by its exact name when it helps illustrate a point, described qualitatively. If a guide or Discord history already answers this question clearly, use that answer confidently — don't deflect with "I don't have that data" just because the formal card JSON doesn't spell out every detail itself.`;
     } else {
@@ -150,7 +171,7 @@ export async function POST(request: Request) {
     // heuristic on any failure (missing key, network error), so this never
     // blocks a reply. Order doesn't matter for a token count, so this
     // doesn't need to match the final section ordering below.
-    const nonDiscordSections = [cardSection, guideSection, generalStrategySection, rulebookSection].filter(Boolean);
+    const nonDiscordSections = [cardSection, statSummarySection, guideSection, generalStrategySection, rulebookSection].filter(Boolean);
     const nonDiscordSystemInstructionSoFar = `${promptPreamble}\n\n${nonDiscordSections.join("\n\n")}`;
     // Run alongside each other rather than one after the other — the
     // Discord fetch doesn't actually need the token count until the
@@ -174,8 +195,8 @@ export async function POST(request: Request) {
     // kit-based advice. For anything else (general/social/rules
     // questions), Discord leads as the group's own primary source.
     const sections = wantsContext
-      ? [cardSection, guideSection, generalStrategySection, rulebookSection, discordSection].filter(Boolean)
-      : [discordSection, rulebookSection, cardSection, guideSection, generalStrategySection].filter(Boolean);
+      ? [cardSection, statSummarySection, guideSection, generalStrategySection, rulebookSection, discordSection].filter(Boolean)
+      : [discordSection, rulebookSection, cardSection, statSummarySection, guideSection, generalStrategySection].filter(Boolean);
 
     const systemInstruction = `${promptPreamble}\n\n${sections.join("\n\n")}`;
     const trimmedHistory = trimHistoryToBudget(history);
@@ -204,7 +225,12 @@ export async function POST(request: Request) {
           // tappable in the UI for an on-demand detail popout, even
           // though they don't auto-render as visible blocks — see
           // showCardDetails for that distinction.
-          const cardReferences = wantsContext ? findMentionedCards(fullReply, relevantHeroIds, askedColors) : [];
+          // In cross-hero comparison mode the winning card can be any
+          // hero's, not just one of relevantHeroIds (which is empty for
+          // these questions in the first place — see useCrossHeroStatSummary
+          // above), so every hero is in scope for spotting the named card.
+          const cardScanHeroIds = useCrossHeroStatSummary ? Object.keys(HERO_CARDS) : relevantHeroIds;
+          const cardReferences = wantsContext ? findMentionedCards(fullReply, cardScanHeroIds, askedColors) : [];
           send(controller, { type: "done", cardReferences, showCardDetails: wantsDetail });
         } catch (e) {
           console.error("Chat stream error:", e);

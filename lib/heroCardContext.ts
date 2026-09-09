@@ -207,6 +207,67 @@ const STRATEGY_INTENT_PATTERNS = [
   /\bwin condition\b/, /\bopening\b/,
 ];
 
+// "Lowest red initiative", "who has the highest attack", "which heroes
+// have a movement card with area" — questions comparing a stat *across*
+// heroes rather than asking about one hero's own kit. These never name a
+// hero (there's nothing to name — the whole point is "which hero"), so
+// getRelevantHeroIds always comes back empty for them and the model was
+// left with zero card data to compare, producing an honest but useless
+// "I don't have every hero's details" instead of an actual answer.
+const CROSS_HERO_COMPARISON_PATTERNS = [
+  /\blowest\b/, /\bhighest\b/, /\bmost\b/, /\bleast\b/, /\bfewest\b/,
+  /\bbest\b/, /\bworst\b/, /\bstrongest\b/, /\bweakest\b/,
+  /\bwho has\b/, /\bwhich hero(es)?\b/, /\bwhat hero(es)?\b/, /\bany hero(es)?\b/,
+  /\ball heroes\b/, /\bevery hero\b/, /\bcompare\b/, /\bcomparison\b/,
+  /\brank(ed|ing)?\b/,
+];
+
+// Only worth building the (still nontrivial) all-heroes stat table when
+// there's no hero already in scope to answer from — a superlative about
+// one already-named hero ("Arien's highest initiative card") is answered
+// fine from that hero's own card set, already sent via the normal path.
+export function wantsCrossHeroStatSummary(question: string, relevantHeroIds: string[]): boolean {
+  if (relevantHeroIds.length > 0) return false;
+  if (!isCardDetailQuestion(question)) return false;
+  const lower = question.toLowerCase();
+  return CROSS_HERO_COMPARISON_PATTERNS.some((re) => re.test(lower));
+}
+
+// One compact line per card across every hero (not per-hero JSON, which
+// at 32 heroes/~600 cards would run well over budget once every field is
+// repeated card after card) — just the numeric/categorical fields a stat
+// comparison actually needs, skipping description/traits entirely. Small
+// enough (well under 20k tokens even unfiltered) to never need the
+// defensive per-hero trim fetchRelevantHeroCards uses, which matters
+// here specifically: trimming would silently drop some heroes from a
+// comparison and risk naming the wrong "lowest"/"highest" card.
+export function buildAllHeroStatSummary(askedColors: string[]): string {
+  const header = "Hero | Card | Color | Level | Initiative | PrimaryAction | PrimaryValue | Movement | Defense | Attack";
+  const rows: string[] = [header];
+
+  for (const heroId of Object.keys(HERO_CARDS)) {
+    const hero = HEROES.find((h) => h.id === heroId);
+    const heroName = hero?.name ?? heroId;
+    for (const card of HERO_CARDS[heroId]) {
+      const color = typeof card.color === "string" ? card.color : "";
+      if (askedColors.length > 0 && !askedColors.includes(color)) continue;
+      const name = typeof card.name === "string" ? card.name : "";
+      const level = typeof card.level === "number" ? card.level : "-";
+      const initiative = typeof card.initiative === "number" ? card.initiative : "-";
+      const primaryAction = typeof card.primaryAction === "string" ? card.primaryAction : "-";
+      const primaryValue = typeof card.primaryValue === "number" ? card.primaryValue : "-";
+      const movement = typeof card.secondaryMovement === "number" ? card.secondaryMovement : "-";
+      const defense = typeof card.secondaryDefense === "number" ? card.secondaryDefense : "-";
+      const attack = typeof card.secondaryAttack === "number" ? card.secondaryAttack : "-";
+      rows.push(
+        `${heroName} | ${name} | ${color} | ${level} | ${initiative} | ${primaryAction} | ${primaryValue} | ${movement} | ${defense} | ${attack}`,
+      );
+    }
+  }
+
+  return rows.join("\n");
+}
+
 export function wantsHeroCardContext(question: string): boolean {
   if (isCardDetailQuestion(question)) return true;
   const lower = question.toLowerCase();
