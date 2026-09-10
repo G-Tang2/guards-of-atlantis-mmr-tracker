@@ -35,6 +35,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Caps the browser's own native pinch-to-zoom-the-whole-page gesture.
+  // Without this, a two-finger touch starting on the battle board could
+  // still be claimed by the page's native zoom (especially on iOS
+  // Safari, where its own Gesture Events can activate independently of
+  // an element's `touch-action: none`) instead of reaching the board's
+  // own custom pinch/pan handling.
+  maximumScale: 1,
   viewportFit: "cover",
   themeColor: "#1c1a14",
 };

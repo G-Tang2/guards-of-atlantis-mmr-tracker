@@ -750,6 +750,28 @@ export function HexBoard() {
     return () => el.removeEventListener("wheel", handleWheel);
   }, []);
 
+  // iOS Safari's own two-finger pinch is a legacy, non-standard
+  // "Gesture Event" that can activate independently of a touch-action
+  // CSS value — `.goa-board-wrap`'s `touch-action: none` stops it in
+  // most cases, but not reliably on every iOS version, and when it does
+  // fire it zooms the whole page instead of reaching the board's own
+  // pointer-event-based pinch/pan handling above. Suppressed outright
+  // here as a defensive backstop; harmless (a no-op) on every other
+  // browser, which never dispatches these events at all.
+  useEffect(() => {
+    const el = wrapElRef.current;
+    if (!el) return;
+    const suppressGesture = (e: Event) => e.preventDefault();
+    el.addEventListener("gesturestart", suppressGesture);
+    el.addEventListener("gesturechange", suppressGesture);
+    el.addEventListener("gestureend", suppressGesture);
+    return () => {
+      el.removeEventListener("gesturestart", suppressGesture);
+      el.removeEventListener("gesturechange", suppressGesture);
+      el.removeEventListener("gestureend", suppressGesture);
+    };
+  }, []);
+
   // Single-finger/mouse pan when zoomed in — a separate gesture from
   // both piece-dragging and pinch-zoom above, so it only ever starts
   // when neither of those has already claimed the pointer (see
