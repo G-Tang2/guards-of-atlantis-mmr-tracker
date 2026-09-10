@@ -7327,4 +7327,37 @@
     padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
     -webkit-overflow-scrolling: touch;
   }
+  /* Plain reset — this button exists only to make a card tappable, it
+     shouldn't look or behave like a button. */
+  .goa-board-drawer-card-btn {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+  /* Full-screen tap-to-enlarge overlay for a single card — sits above
+     the drawer itself (which is z-index: 55), dismissed by tapping
+     anywhere on the dark backdrop. */
+  .goa-board-card-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+    background: rgba(10, 9, 7, 0.92);
+    backdrop-filter: blur(4px);
+    cursor: zoom-out;
+  }
+  .goa-board-card-lightbox-img {
+    max-width: min(90vw, 420px);
+    max-height: 85vh;
+    width: auto !important;
+    height: auto !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    border-radius: 12px;
+  }
 }

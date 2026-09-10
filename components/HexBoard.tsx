@@ -390,6 +390,12 @@ export function HexBoard() {
   // that one placement, in case the same hero is placed more than once.
   // Minion pieces have no cards, so tapping one leaves this untouched.
   const [openHero, setOpenHero] = useState<{ heroId: string; tokenId: string } | null>(null);
+  // Index into that hero's own card list — tapping a card in the drawer
+  // enlarges it full-screen; null means nothing's enlarged. Reset
+  // whenever the drawer itself changes (closing it, or opening a
+  // different hero) so a stale index can't point at the wrong hero's
+  // cards.
+  const [enlargedCardIndex, setEnlargedCardIndex] = useState<number | null>(null);
   const [savedLayouts, setSavedLayouts] = useState<SavedLayout[]>([]);
   const [layoutsLoaded, setLayoutsLoaded] = useState(false);
   const [selectedLayoutName, setSelectedLayoutName] = useState(DEFAULT_LAYOUT_NAME);
@@ -652,6 +658,7 @@ export function HexBoard() {
           const heroId = visual.hero.id;
           const tokenId = current.id;
           setOpenHero((prev) => (prev?.tokenId === tokenId ? null : { heroId, tokenId }));
+          setEnlargedCardIndex(null);
         }
         return;
       } else if (cell) {
@@ -1426,7 +1433,10 @@ export function HexBoard() {
                 <button
                   type="button"
                   className="goa-board-drawer-close"
-                  onClick={() => setOpenHero(null)}
+                  onClick={() => {
+                    setOpenHero(null);
+                    setEnlargedCardIndex(null);
+                  }}
                   aria-label="Close"
                 >
                   <X size={18} />
@@ -1434,9 +1444,30 @@ export function HexBoard() {
               </div>
               <div className="goa-board-drawer-cards">
                 {cards.map((card, i) => (
-                  <HeroActionCard key={i} heroId={openHero.heroId} card={card} className="goa-board-drawer-card" />
+                  <button
+                    key={i}
+                    type="button"
+                    className="goa-board-drawer-card-btn"
+                    onClick={() => setEnlargedCardIndex(i)}
+                    aria-label={`Enlarge ${typeof card.name === "string" ? card.name : "card"}`}
+                  >
+                    <HeroActionCard heroId={openHero.heroId} card={card} className="goa-board-drawer-card" />
+                  </button>
                 ))}
               </div>
+              {/* Tap-to-enlarge overlay — a plain re-render of the same
+                  card at full size, rather than trying to resize the
+                  drawer's own canvas in place, since HeroActionCard
+                  already repaints cleanly from scratch given any size. */}
+              {enlargedCardIndex !== null && cards[enlargedCardIndex] && (
+                <div className="goa-board-card-lightbox" onClick={() => setEnlargedCardIndex(null)}>
+                  <HeroActionCard
+                    heroId={openHero.heroId}
+                    card={cards[enlargedCardIndex]}
+                    className="goa-board-card-lightbox-img"
+                  />
+                </div>
+              )}
             </div>
           );
         })()}
