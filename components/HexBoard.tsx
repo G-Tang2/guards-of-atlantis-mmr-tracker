@@ -420,7 +420,18 @@ export function HexBoard() {
   );
   // Pinch tracking (native TouchEvents, not PointerEvents — see the
   // touchstart/touchmove effect's own comment for why).
-  const touchPinchRef = useRef<{ id1: number; id2: number; dist: number; scale: number } | null>(null);
+  const touchPinchRef = useRef<{
+    id1: number;
+    id2: number;
+    dist: number;
+    scale: number;
+    // The content-space point under the pinch midpoint at gesture start —
+    // fixed for the life of the gesture. See handleTouchMoveForPinch's
+    // own comment for why re-deriving this fresh from the live view
+    // every frame (the original approach) breaks panning specifically.
+    contentX: number;
+    contentY: number;
+  } | null>(null);
   const pendingPressRef = useRef<{
     pieceId: string;
     pointerId: number;
@@ -715,7 +726,25 @@ export function HexBoard() {
         pendingPressRef.current = null;
       }
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-      touchPinchRef.current = { id1: t1.identifier, id2: t2.identifier, dist, scale: viewRef.current.scale };
+      const v = viewRef.current;
+      // v.x/v.y are relative to the frame's own top-left (that's what
+      // the CSS transform they drive is relative to), not the viewport
+      // — e.clientX/Y have to be converted the same way (matching how
+      // resolveCellAt already does it for hit-testing) before mixing
+      // them with v.x/v.y, or this anchor silently drifts by however far
+      // the board sits from the viewport's own edge. On a centered
+      // desktop layout that's hundreds of pixels, not a rounding error.
+      const rect = wrapElRef.current?.getBoundingClientRect();
+      const midX = (t1.clientX + t2.clientX) / 2 - (rect?.left ?? 0);
+      const midY = (t1.clientY + t2.clientY) / 2 - (rect?.top ?? 0);
+      touchPinchRef.current = {
+        id1: t1.identifier,
+        id2: t2.identifier,
+        dist,
+        scale: v.scale,
+        contentX: (midX - v.x) / v.scale,
+        contentY: (midY - v.y) / v.scale,
+      };
     };
 
     const handleTouchMoveForPinch = (e: TouchEvent) => {
@@ -730,24 +759,33 @@ export function HexBoard() {
       e.preventDefault();
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       if (dist === 0) return;
-      const midX = (t1.clientX + t2.clientX) / 2;
-      const midY = (t1.clientY + t2.clientY) / 2;
+      const rect = wrapElRef.current?.getBoundingClientRect();
+      const midX = (t1.clientX + t2.clientX) / 2 - (rect?.left ?? 0);
+      const midY = (t1.clientY + t2.clientY) / 2 - (rect?.top ?? 0);
       const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, pinch.scale * (dist / pinch.dist)));
 
-      setView((v) => {
-        // Standard "zoom to point": find which content-space point is
-        // currently under the pinch midpoint, then choose the pan that
-        // keeps that same point under the midpoint at the new scale.
-        // Since the midpoint itself is recomputed live from both
-        // fingers' actual positions, this also naturally handles panning
-        // (dragging both fingers together) in the same formula, not
-        // just pinching in place.
-        const contentX = (midX - v.x) / v.scale;
-        const contentY = (midY - v.y) / v.scale;
-        const next = { scale: newScale, x: midX - contentX * newScale, y: midY - contentY * newScale };
-        const rect = wrapElRef.current?.getBoundingClientRect();
-        return rect ? clampView(next, rect) : next;
-      });
+      // Anchored to the content-space point captured once at gesture
+      // start (pinch.contentX/Y), not re-derived from the live view every
+      // frame — re-deriving it (the original approach here, and the
+      // pinch handler's own approach before this file's rewrite to
+      // TouchEvents) makes it a function of the current view instead of
+      // a fixed anchor: when scale doesn't change between two frames
+      // (exactly what happens during a flat two-finger pan, as opposed
+      // to a pinch that's actively zooming), the reused formula
+      // algebraically collapses to `next.x = v.x` — i.e. a no-op,
+      // regardless of how far the midpoint itself has moved. That silent
+      // no-op is what every previous "can't pan with two fingers" report
+      // in this file's history actually was; it was never about which
+      // event API dispatched the touches. Anchoring to a value fixed for
+      // the whole gesture instead makes moving the midpoint (pan) and
+      // changing the distance (zoom) both affect the result independently,
+      // which is what a combined pinch/pan gesture actually needs.
+      const next = {
+        scale: newScale,
+        x: midX - pinch.contentX * newScale,
+        y: midY - pinch.contentY * newScale,
+      };
+      setView(rect ? clampView(next, rect) : next);
     };
 
     const handleTouchEndForPinch = (e: TouchEvent) => {
@@ -808,13 +846,25 @@ export function HexBoard() {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const zoomFactor = Math.exp(-e.deltaY * 0.001);
+      const rect = el.getBoundingClientRect();
+      // v.x/v.y are relative to the frame's own top-left (what the CSS
+      // transform they drive is relative to), not the viewport —
+      // e.clientX/Y have to be converted the same way (matching how
+      // resolveCellAt already does it for hit-testing) before mixing
+      // them with v.x/v.y, or the zoom anchors to the wrong content
+      // point by however far the board sits from the viewport's own
+      // edge — hundreds of pixels on a typical centered desktop layout,
+      // not a rounding error, and it pushes the view straight into a pan
+      // clamp boundary on the very first zoom step.
+      const localX = e.clientX - rect.left;
+      const localY = e.clientY - rect.top;
       setView((v) => {
         const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.scale * zoomFactor));
         if (newScale <= MIN_SCALE) return DEFAULT_VIEW;
-        const contentX = (e.clientX - v.x) / v.scale;
-        const contentY = (e.clientY - v.y) / v.scale;
-        const next = { scale: newScale, x: e.clientX - contentX * newScale, y: e.clientY - contentY * newScale };
-        return clampView(next, el.getBoundingClientRect());
+        const contentX = (localX - v.x) / v.scale;
+        const contentY = (localY - v.y) / v.scale;
+        const next = { scale: newScale, x: localX - contentX * newScale, y: localY - contentY * newScale };
+        return clampView(next, rect);
       });
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
