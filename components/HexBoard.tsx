@@ -165,7 +165,7 @@ const MOVE_THRESHOLD_PX = 8;
 // picked up for dragging — see startPendingPress's own comment for why
 // (in short: a touch swipe starting directly on a palette item needs to
 // still be able to scroll the strip, which an immediate drag prevented).
-const LONG_PRESS_MS = 400;
+const LONG_PRESS_MS = 200;
 // How far a touch can move during that hold before it's treated as a
 // scroll swipe instead (cancelling the pending drag) — deliberately
 // looser than MOVE_THRESHOLD_PX: a hold's own natural finger jitter
@@ -670,27 +670,36 @@ export function HexBoard() {
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  // Pinch-zoom/pan — deliberately built on native TouchEvents rather
-  // than PointerEvents (unlike every other gesture in this file). An
-  // earlier PointerEvent-based version of this exact feature (tracking
-  // both fingers via pointerdown/pointermove/pointerup, keyed by
-  // pointerId) worked on desktop/Android but two-finger panning
-  // remained unreliable on iOS WebKit browsers (Safari and Chrome-iOS
-  // alike, since Chrome-iOS is also a WKWebView under Apple's rules)
-  // even after ruling out every other explanation (a piece stealing the
-  // second finger, native gesture hijacking, etc.) — pointing at
-  // WebKit's own multi-touch PointerEvent dispatch specifically, not
-  // this file's logic. TouchEvent.touches is a single, atomic snapshot
-  // of every currently-active touch on every dispatch, which sidesteps
-  // that entirely: there's no risk of one finger's move event going
-  // missing or arriving with a stale identifier the way there can be
-  // when two touches are tracked as separate per-pointer event streams.
+  // Pinch-zoom/pan — built on native TouchEvents rather than
+  // PointerEvents (unlike every other gesture in this file). An earlier
+  // PointerEvent-based version worked on desktop/Android but two-finger
+  // panning stayed unreliable on iOS WebKit browsers; TouchEvent.touches
+  // is a single atomic snapshot of every active touch on each dispatch,
+  // avoiding any risk of one finger's move arriving with a stale/missed
+  // identifier the way separate per-pointer event streams can.
+  //
+  // Listened on `window`, not the board element: each touch's own
+  // touchstart/touchmove/touchend only ever fires on (and bubbles from)
+  // wherever *that* finger first landed, so a listener scoped to the
+  // board would simply never see a second finger that happened to touch
+  // down just outside its bounds — which reads as "can't pan with two
+  // fingers" despite nothing being wrong with the pinch math itself.
+  // `e.touches` is global regardless of listener scope, so nothing here
+  // needs the two fingers to have started on the same element; the
+  // isPointInWrap check below only exists to keep the board from
+  // reacting to some unrelated two-finger gesture happening elsewhere on
+  // the page.
   useEffect(() => {
-    const el = wrapElRef.current;
-    if (!el) return;
+    const isPointInWrap = (x: number, y: number): boolean => {
+      const rect = wrapElRef.current?.getBoundingClientRect();
+      if (!rect) return false;
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    };
 
     const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length < 2) return;
+      if (e.touches.length < 2 || touchPinchRef.current) return;
+      const [t1, t2] = [e.touches[0], e.touches[1]];
+      if (!isPointInWrap(t1.clientX, t1.clientY) && !isPointInWrap(t2.clientX, t2.clientY)) return;
       // A second finger touching down means this is a pinch, not a
       // pickup or a single-finger pan — claim the gesture outright, even
       // if a piece or a palette long-press had already claimed the
@@ -705,7 +714,6 @@ export function HexBoard() {
         clearTimeout(pendingPressRef.current.timer);
         pendingPressRef.current = null;
       }
-      const [t1, t2] = [e.touches[0], e.touches[1]];
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       touchPinchRef.current = { id1: t1.identifier, id2: t2.identifier, dist, scale: viewRef.current.scale };
     };
@@ -716,6 +724,10 @@ export function HexBoard() {
       const t1 = [...e.touches].find((t) => t.identifier === pinch.id1);
       const t2 = [...e.touches].find((t) => t.identifier === pinch.id2);
       if (!t1 || !t2) return;
+      // Non-passive specifically so this can suppress native page
+      // pinch-zoom/scroll for the rest of this gesture, regardless of
+      // which element each move event's own target happens to be.
+      e.preventDefault();
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       if (dist === 0) return;
       const midX = (t1.clientX + t2.clientX) / 2;
@@ -733,7 +745,8 @@ export function HexBoard() {
         const contentX = (midX - v.x) / v.scale;
         const contentY = (midY - v.y) / v.scale;
         const next = { scale: newScale, x: midX - contentX * newScale, y: midY - contentY * newScale };
-        return clampView(next, el.getBoundingClientRect());
+        const rect = wrapElRef.current?.getBoundingClientRect();
+        return rect ? clampView(next, rect) : next;
       });
     };
 
@@ -752,15 +765,15 @@ export function HexBoard() {
       }
     };
 
-    el.addEventListener("touchstart", handleTouchStart, { passive: true });
-    el.addEventListener("touchmove", handleTouchMoveForPinch, { passive: false });
-    el.addEventListener("touchend", handleTouchEndForPinch);
-    el.addEventListener("touchcancel", handleTouchEndForPinch);
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMoveForPinch, { passive: false });
+    window.addEventListener("touchend", handleTouchEndForPinch);
+    window.addEventListener("touchcancel", handleTouchEndForPinch);
     return () => {
-      el.removeEventListener("touchstart", handleTouchStart);
-      el.removeEventListener("touchmove", handleTouchMoveForPinch);
-      el.removeEventListener("touchend", handleTouchEndForPinch);
-      el.removeEventListener("touchcancel", handleTouchEndForPinch);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMoveForPinch);
+      window.removeEventListener("touchend", handleTouchEndForPinch);
+      window.removeEventListener("touchcancel", handleTouchEndForPinch);
     };
   }, []);
 
@@ -828,27 +841,6 @@ export function HexBoard() {
       el.removeEventListener("gesturechange", suppressGesture);
       el.removeEventListener("gestureend", suppressGesture);
     };
-  }, []);
-
-  // Belt-and-suspenders backstop for multi-touch specifically — several
-  // mobile browsers (iOS Chrome among them) don't reliably honor
-  // `touch-action: none` for a *second* simultaneous touch, letting
-  // their own native pinch-to-zoom-the-page or edge-swipe gestures claim
-  // it before our pointer-event pinch/pan handling above ever sees a
-  // clean two-finger gesture. Calling preventDefault() on a non-passive
-  // touchmove is the older, more universally-respected way to say "this
-  // element handles its own multi-touch, don't." Registered natively
-  // (not as a React onTouchMove) because React's own delegated touch
-  // listener defaults to passive, same reasoning as the wheel listener
-  // above.
-  useEffect(() => {
-    const el = wrapElRef.current;
-    if (!el) return;
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length >= 2) e.preventDefault();
-    };
-    el.addEventListener("touchmove", handleTouchMove, { passive: false });
-    return () => el.removeEventListener("touchmove", handleTouchMove);
   }, []);
 
   // Single-finger/mouse pan when zoomed in — a separate gesture from
