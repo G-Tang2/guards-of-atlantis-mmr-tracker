@@ -415,10 +415,12 @@ export function HexBoard() {
   const dragStateRef = useRef<DragState | null>(null);
   const viewRef = useRef(view);
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const pinchBaselineRef = useRef<{ dist: number; scale: number } | null>(null);
   const panStateRef = useRef<{ pointerId: number; startX: number; startY: number; viewX: number; viewY: number } | null>(
     null,
   );
+  // Pinch tracking (native TouchEvents, not PointerEvents — see the
+  // touchstart/touchmove effect's own comment for why).
+  const touchPinchRef = useRef<{ id1: number; id2: number; dist: number; scale: number } | null>(null);
   const pendingPressRef = useRef<{
     pieceId: string;
     pointerId: number;
@@ -668,60 +670,116 @@ export function HexBoard() {
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  // Pinch-zoom/pan: only ever acts once a *second* pointer joins one
-  // already down on the board — a lone finger is left entirely alone
-  // here, so this can't interfere with dragging a piece with one hand.
-  const handlePinchPointerMove = useCallback((e: PointerEvent) => {
-    if (!activePointersRef.current.has(e.pointerId)) return;
-    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (activePointersRef.current.size !== 2) return;
-    const baseline = pinchBaselineRef.current;
-    if (!baseline) return;
-
-    const pts = [...activePointersRef.current.values()];
-    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-    if (dist === 0) return;
-    const midX = (pts[0].x + pts[1].x) / 2;
-    const midY = (pts[0].y + pts[1].y) / 2;
-    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, baseline.scale * (dist / baseline.dist)));
-
-    setView((v) => {
-      // Standard "zoom to point": find which content-space point is
-      // currently under the pinch midpoint, then choose the pan that
-      // keeps that same point under the midpoint at the new scale. Since
-      // the midpoint itself is recomputed live from both fingers' actual
-      // positions, this also naturally handles panning (dragging both
-      // fingers together) in the same formula, not just pinching in place.
-      const contentX = (midX - v.x) / v.scale;
-      const contentY = (midY - v.y) / v.scale;
-      const next = { scale: newScale, x: midX - contentX * newScale, y: midY - contentY * newScale };
-      const rect = wrapElRef.current?.getBoundingClientRect();
-      return rect ? clampView(next, rect) : next;
-    });
-  }, []);
-
-  const handlePinchPointerUp = useCallback((e: PointerEvent) => {
-    activePointersRef.current.delete(e.pointerId);
-    if (activePointersRef.current.size < 2) {
-      pinchBaselineRef.current = null;
-    }
-    if (activePointersRef.current.size === 0 && viewRef.current.scale <= MIN_SCALE) {
-      // Fully zoomed back out — snap to a clean centered state instead
-      // of leaving a leftover pan offset from wherever the gesture ended.
-      setView(DEFAULT_VIEW);
-    }
-  }, []);
-
+  // Pinch-zoom/pan — deliberately built on native TouchEvents rather
+  // than PointerEvents (unlike every other gesture in this file). An
+  // earlier PointerEvent-based version of this exact feature (tracking
+  // both fingers via pointerdown/pointermove/pointerup, keyed by
+  // pointerId) worked on desktop/Android but two-finger panning
+  // remained unreliable on iOS WebKit browsers (Safari and Chrome-iOS
+  // alike, since Chrome-iOS is also a WKWebView under Apple's rules)
+  // even after ruling out every other explanation (a piece stealing the
+  // second finger, native gesture hijacking, etc.) — pointing at
+  // WebKit's own multi-touch PointerEvent dispatch specifically, not
+  // this file's logic. TouchEvent.touches is a single, atomic snapshot
+  // of every currently-active touch on every dispatch, which sidesteps
+  // that entirely: there's no risk of one finger's move event going
+  // missing or arriving with a stale identifier the way there can be
+  // when two touches are tracked as separate per-pointer event streams.
   useEffect(() => {
-    window.addEventListener("pointermove", handlePinchPointerMove);
-    window.addEventListener("pointerup", handlePinchPointerUp);
-    window.addEventListener("pointercancel", handlePinchPointerUp);
-    return () => {
-      window.removeEventListener("pointermove", handlePinchPointerMove);
-      window.removeEventListener("pointerup", handlePinchPointerUp);
-      window.removeEventListener("pointercancel", handlePinchPointerUp);
+    const el = wrapElRef.current;
+    if (!el) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length < 2) return;
+      // A second finger touching down means this is a pinch, not a
+      // pickup or a single-finger pan — claim the gesture outright, even
+      // if a piece or a palette long-press had already claimed the
+      // first finger (see startDragExisting/startPendingPress's own
+      // "another pointer is already down" guard for the normal path;
+      // this is the backstop for whenever that guard's timing doesn't
+      // catch it, e.g. a long-press timer that already fired).
+      dragStateRef.current = null;
+      setDragRender(null);
+      panStateRef.current = null;
+      if (pendingPressRef.current) {
+        clearTimeout(pendingPressRef.current.timer);
+        pendingPressRef.current = null;
+      }
+      const [t1, t2] = [e.touches[0], e.touches[1]];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      touchPinchRef.current = { id1: t1.identifier, id2: t2.identifier, dist, scale: viewRef.current.scale };
     };
-  }, [handlePinchPointerMove, handlePinchPointerUp]);
+
+    const handleTouchMoveForPinch = (e: TouchEvent) => {
+      const pinch = touchPinchRef.current;
+      if (!pinch) return;
+      const t1 = [...e.touches].find((t) => t.identifier === pinch.id1);
+      const t2 = [...e.touches].find((t) => t.identifier === pinch.id2);
+      if (!t1 || !t2) return;
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      if (dist === 0) return;
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+      const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, pinch.scale * (dist / pinch.dist)));
+
+      setView((v) => {
+        // Standard "zoom to point": find which content-space point is
+        // currently under the pinch midpoint, then choose the pan that
+        // keeps that same point under the midpoint at the new scale.
+        // Since the midpoint itself is recomputed live from both
+        // fingers' actual positions, this also naturally handles panning
+        // (dragging both fingers together) in the same formula, not
+        // just pinching in place.
+        const contentX = (midX - v.x) / v.scale;
+        const contentY = (midY - v.y) / v.scale;
+        const next = { scale: newScale, x: midX - contentX * newScale, y: midY - contentY * newScale };
+        return clampView(next, el.getBoundingClientRect());
+      });
+    };
+
+    const handleTouchEndForPinch = (e: TouchEvent) => {
+      const pinch = touchPinchRef.current;
+      if (!pinch) return;
+      const stillDown = new Set([...e.touches].map((t) => t.identifier));
+      if (!stillDown.has(pinch.id1) || !stillDown.has(pinch.id2)) {
+        touchPinchRef.current = null;
+        if (e.touches.length === 0 && viewRef.current.scale <= MIN_SCALE) {
+          // Fully zoomed back out — snap to a clean centered state
+          // instead of leaving a leftover pan offset from wherever the
+          // gesture ended.
+          setView(DEFAULT_VIEW);
+        }
+      }
+    };
+
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
+    el.addEventListener("touchmove", handleTouchMoveForPinch, { passive: false });
+    el.addEventListener("touchend", handleTouchEndForPinch);
+    el.addEventListener("touchcancel", handleTouchEndForPinch);
+    return () => {
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMoveForPinch);
+      el.removeEventListener("touchend", handleTouchEndForPinch);
+      el.removeEventListener("touchcancel", handleTouchEndForPinch);
+    };
+  }, []);
+
+  // activePointersRef only ever grows on pointerdown (handleBoardPointerDown
+  // below) — this is the only place entries are ever removed again, so
+  // the "is another pointer already down" pickup guards keep reflecting
+  // reality instead of accumulating stale entries from fingers that were
+  // lifted long ago.
+  useEffect(() => {
+    const clearPointer = (e: PointerEvent) => {
+      activePointersRef.current.delete(e.pointerId);
+    };
+    window.addEventListener("pointerup", clearPointer);
+    window.addEventListener("pointercancel", clearPointer);
+    return () => {
+      window.removeEventListener("pointerup", clearPointer);
+      window.removeEventListener("pointercancel", clearPointer);
+    };
+  }, []);
 
   // Mouse/trackpad zoom (PC has no pinch gesture) — scroll wheel over the
   // board zooms in/out, anchored at the cursor using the same "zoom to
@@ -824,13 +882,14 @@ export function HexBoard() {
   // Tracks every pointer that touches down anywhere on the board (not
   // just on pieces) purely to notice when a *second* one joins — this
   // is a plain bubbling React handler, so it fires for token/palette
-  // pointerdowns too without interfering with their own handlers.
+  // pointerdowns too without interfering with their own handlers. Pinch
+  // itself is tracked separately via native TouchEvents (see that
+  // effect's own comment) — this only still needs to know "is more than
+  // one pointer down right now" for the pickup guards below and to bail
+  // a single-finger pan out once a second finger joins.
   const handleBoardPointerDown = (e: ReactPointerEvent) => {
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (activePointersRef.current.size === 2) {
-      const pts = [...activePointersRef.current.values()];
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      pinchBaselineRef.current = { dist, scale: viewRef.current.scale };
+    if (activePointersRef.current.size >= 2) {
       // A second finger joining means this is a pinch, not a pan.
       panStateRef.current = null;
       return;
