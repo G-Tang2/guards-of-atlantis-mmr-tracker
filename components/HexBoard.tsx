@@ -772,6 +772,27 @@ export function HexBoard() {
     };
   }, []);
 
+  // Belt-and-suspenders backstop for multi-touch specifically — several
+  // mobile browsers (iOS Chrome among them) don't reliably honor
+  // `touch-action: none` for a *second* simultaneous touch, letting
+  // their own native pinch-to-zoom-the-page or edge-swipe gestures claim
+  // it before our pointer-event pinch/pan handling above ever sees a
+  // clean two-finger gesture. Calling preventDefault() on a non-passive
+  // touchmove is the older, more universally-respected way to say "this
+  // element handles its own multi-touch, don't." Registered natively
+  // (not as a React onTouchMove) because React's own delegated touch
+  // listener defaults to passive, same reasoning as the wheel listener
+  // above.
+  useEffect(() => {
+    const el = wrapElRef.current;
+    if (!el) return;
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length >= 2) e.preventDefault();
+    };
+    el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", handleTouchMove);
+  }, []);
+
   // Single-finger/mouse pan when zoomed in — a separate gesture from
   // both piece-dragging and pinch-zoom above, so it only ever starts
   // when neither of those has already claimed the pointer (see
