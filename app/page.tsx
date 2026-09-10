@@ -1,9 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { forwardRef, useLayoutEffect, useRef, useState } from "react";
-import { Sparkles, ChevronDown, MessageCircle, Map } from "lucide-react";
+import { Sparkles, ChevronDown } from "lucide-react";
 import { UPDATES, UpdateEntry, UpdateDetailItem } from "@/lib/updates";
 
 const PAGE_SIZE = 3;
@@ -100,8 +99,6 @@ const UpdatePost = forwardRef<HTMLDivElement, { update: UpdateEntry }>(
 );
 
 export default function Home() {
-  const router = useRouter();
-
   // null = not yet expanded, so the visible count tracks fitCount as the
   // viewport is measured/resized. Once the user loads more (or collapses
   // back), it holds an explicit count instead.
@@ -165,25 +162,6 @@ export default function Home() {
           />
         </div>
         <p className="goa-hero-sub">MMR Tracker</p>
-        <div className="goa-hero-entry-row">
-          <button
-            type="button"
-            className="goa-chat-entry"
-            onClick={() => router.push("/chat")}
-          >
-            <MessageCircle size={16} />
-            Ask the Oracle
-            <span className="goa-beta-tag">Beta</span>
-          </button>
-          <button
-            type="button"
-            className="goa-chat-entry"
-            onClick={() => router.push("/board")}
-          >
-            <Map size={16} />
-            Battle Board
-          </button>
-        </div>
       </div>
 
       {/* What's New */}

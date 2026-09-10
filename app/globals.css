@@ -2138,38 +2138,6 @@
     margin-bottom: 0;
   }
 
-  .goa-chat-entry {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-top: 1rem;
-    padding: 0.45rem 0.9rem;
-    border-radius: 999px;
-    border: 1px solid rgba(201, 151, 58, 0.35);
-    background: rgba(28, 26, 20, 0.6);
-    color: var(--gold-light);
-    font-family: "Cinzel", serif;
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .goa-chat-entry:hover {
-    border-color: var(--gold);
-    background: rgba(201, 151, 58, 0.12);
-  }
-
-  .goa-hero-entry-row {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.6rem;
-  }
-  .goa-hero-entry-row .goa-chat-entry {
-    margin-top: 1rem;
-  }
 
   .goa-hero-wrap {
     padding: 0.3rem 0.55rem 0.45rem;
