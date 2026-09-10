@@ -1,19 +1,18 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import Image from "next/image";
 import { X, Trash2, Save, RotateCcw, Grid3x3, ZoomOut, HelpCircle, ChevronDown } from "lucide-react";
 import { HEROES } from "@/lib/heroes";
 import { HERO_CARDS } from "@/lib/heroCards";
 import { HeroActionCard } from "@/components/HeroActionCard";
-import { BOARD_WIDTH, BOARD_HEIGHT, IMAGE_WIDTH, IMAGE_HEIGHT, ALL_CELLS, hexCenter, hexPoints, nearestCell } from "@/lib/hexGrid";
+import { IMAGE_WIDTH, IMAGE_HEIGHT, BOARD_COLS, BOARD_ROWS, createHexGrid, coverScaleForRotation } from "@/lib/hexGrid";
 
 // The board's own photo sits behind the grid as a plain background
 // image; the hexes render as an outline-only overlay on top of it (see
 // the SVG below) rather than solid terrain colors, so the real art shows
 // through instead of being covered by it.
-const BOARD_IMAGE_SRC = "/board/across-the-river.webp";
 
 // Generic (non-hero) pieces — no dedicated art exists for these in the
 // repo, so they're a colored badge with a single letter instead of a
@@ -73,7 +72,7 @@ const GAME_TOKENS: GameTokenType[] = GAME_TOKEN_FILES.map((t) => ({
   id: `gametoken-${t.file.replace("token_", "").replace(".png", "")}`,
   label: t.label,
   icon: `/tokens/${t.file}`,
-}));
+})).sort((a, b) => a.label.localeCompare(b.label));
 
 type PieceVisual = {
   label: string;
@@ -150,7 +149,14 @@ function PieceThumb({
   );
 }
 
-const STORAGE_KEY = "goa-board-placements";
+// Pre-feature key — kept only so a board saved before multiple maps
+// existed (everything back then was implicitly "Across the River")
+// still loads once, via the migration fallback in loadMapData below.
+const LEGACY_STORAGE_KEY = "goa-board-placements";
+const LEGACY_LAYOUTS_STORAGE_KEY = "goa-board-layouts";
+const MAP_STORAGE_KEY = "goa-board-selected-map";
+const placementsKey = (mapId: string) => `goa-board-placements-${mapId}`;
+const layoutsKey = (mapId: string) => `goa-board-layouts-${mapId}`;
 // How far the pointer has to move before a press counts as a drag rather
 // than a tap — shared by "tap a placed piece to remove it" and "tap a
 // palette piece does nothing" below. Palette pieces used to need a
@@ -166,35 +172,120 @@ const MOVE_THRESHOLD_PX = 8;
 type PlacedToken = { id: string; pieceId: string; col: number; row: number; team?: string };
 
 type SavedLayout = { name: string; tokens: PlacedToken[] };
-const LAYOUTS_STORAGE_KEY = "goa-board-layouts";
 // A built-in entry in the "load layout" dropdown, alongside whatever the
-// user has actually saved — not itself a SavedLayout (it isn't persisted
-// to LAYOUTS_STORAGE_KEY and can't be deleted), just always available as
-// a way back to the starting scenario. Named distinctly enough that a
-// user's own saved layout is very unlikely to collide with it.
-const DEFAULT_LAYOUT_NAME = "Default Layout";
+// user has actually saved for the current map — not itself a
+// SavedLayout (it isn't persisted and can't be deleted), just always
+// available as a way back to that map's starting scenario. Named
+// distinctly enough that a user's own saved layout is very unlikely to
+// collide with it.
+const DEFAULT_LAYOUT_NAME = "Start Layout";
 
-// A starting scenario — two skirmish clusters (top-middle and
-// bottom-left grass regions) instead of a blank board on a first-ever
-// visit, and reloadable at any time afterward via DEFAULT_LAYOUT_NAME
-// in the layout dropdown.
-const DEFAULT_TOKENS: PlacedToken[] = [
+// A starting scenario for Across the River — two skirmish clusters
+// (top-middle and bottom-left grass regions) instead of a blank board
+// on a first-ever visit, and reloadable at any time afterward via
+// DEFAULT_LAYOUT_NAME in the layout dropdown.
+const ACROSS_THE_RIVER_TOKENS: PlacedToken[] = [
   { id: "default-1", pieceId: "minion-heavy-titans", col: 13, row: 2 },
   { id: "default-2", pieceId: "minion-ranged-titans", col: 12, row: 2 },
-  { id: "default-3", pieceId: "minion-heavy-titans", col: 13, row: 4 },
-  { id: "default-4", pieceId: "minion-heavy-titans", col: 15, row: 1 },
-  { id: "default-5", pieceId: "minion-heavy-atlantis", col: 15, row: 2 },
-  { id: "default-6", pieceId: "minion-ranged-atlantis", col: 17, row: 3 },
-  { id: "default-7", pieceId: "minion-melee-atlantis", col: 14, row: 4 },
-  { id: "default-8", pieceId: "minion-melee-atlantis", col: 16, row: 1 },
-  { id: "default-9", pieceId: "minion-heavy-atlantis", col: 8, row: 16 },
-  { id: "default-10", pieceId: "minion-ranged-atlantis", col: 9, row: 16 },
-  { id: "default-11", pieceId: "minion-melee-atlantis", col: 8, row: 14 },
-  { id: "default-12", pieceId: "minion-melee-atlantis", col: 6, row: 17 },
-  { id: "default-13", pieceId: "minion-heavy-titans", col: 6, row: 16 },
-  { id: "default-14", pieceId: "minion-ranged-titans", col: 4, row: 15 },
-  { id: "default-15", pieceId: "minion-melee-titans", col: 5, row: 17 },
-  { id: "default-16", pieceId: "minion-melee-titans", col: 7, row: 14 },
+  { id: "default-3", pieceId: "minion-heavy-atlantis", col: 15, row: 2 },
+  { id: "default-4", pieceId: "minion-ranged-atlantis", col: 17, row: 3 },
+  { id: "default-5", pieceId: "minion-melee-atlantis", col: 14, row: 4 },
+  { id: "default-6", pieceId: "minion-melee-atlantis", col: 16, row: 1 },
+  { id: "default-7", pieceId: "minion-heavy-atlantis", col: 8, row: 16 },
+  { id: "default-8", pieceId: "minion-ranged-atlantis", col: 9, row: 16 },
+  { id: "default-9", pieceId: "minion-melee-atlantis", col: 8, row: 14 },
+  { id: "default-10", pieceId: "minion-melee-atlantis", col: 6, row: 17 },
+  { id: "default-11", pieceId: "minion-heavy-titans", col: 6, row: 16 },
+  { id: "default-12", pieceId: "minion-ranged-titans", col: 4, row: 15 },
+  { id: "default-13", pieceId: "minion-melee-titans", col: 5, row: 17 },
+  { id: "default-14", pieceId: "minion-melee-titans", col: 7, row: 14 },
+  { id: "default-15", pieceId: "minion-melee-titans", col: 15, row: 1 },
+  { id: "default-16", pieceId: "minion-melee-titans", col: 13, row: 4 },
+];
+
+// A starting scenario for Forgotten Island — mirrors Across the
+// River's own approach (two clusters facing off), found by hand-placing
+// pieces and exporting their positions via the (now-removed) temporary
+// Export button.
+const FORGOTTEN_ISLAND_TOKENS: PlacedToken[] = [
+  { id: "default-1", pieceId: "minion-melee-titans", col: 16, row: 16 },
+  { id: "default-2", pieceId: "minion-melee-titans", col: 17, row: 16 },
+  { id: "default-3", pieceId: "minion-melee-titans", col: 15, row: 12 },
+  { id: "default-4", pieceId: "minion-melee-titans", col: 19, row: 10 },
+  { id: "default-5", pieceId: "minion-ranged-titans", col: 17, row: 13 },
+  { id: "default-6", pieceId: "minion-heavy-titans", col: 16, row: 10 },
+  { id: "default-7", pieceId: "minion-melee-atlantis", col: 14, row: 10 },
+  { id: "default-8", pieceId: "minion-melee-atlantis", col: 15, row: 10 },
+  { id: "default-9", pieceId: "minion-melee-atlantis", col: 16, row: 14 },
+  { id: "default-10", pieceId: "minion-melee-atlantis", col: 12, row: 16 },
+  { id: "default-11", pieceId: "minion-ranged-atlantis", col: 14, row: 13 },
+  { id: "default-12", pieceId: "minion-heavy-atlantis", col: 15, row: 16 },
+];
+
+type MapDef = {
+  id: string;
+  label: string;
+  image: string;
+  defaultTokens: PlacedToken[];
+  gridRotationDeg: number;
+  gridCols: number;
+  gridRows: number;
+  // Nudges the grid's on-screen position, as a percentage of the frame's
+  // own width/height, applied before the rotate/scale in HexBoard's
+  // grid-rotate transform — lets a map's grid be centered on its terrain
+  // rather than the photo's own frame. Percent, not raw px: the frame's
+  // actual rendered size varies by screen (`.goa-board-wrap` is
+  // `width: 100%; max-width: 480px`), so a fixed px offset tuned on one
+  // screen represents a different (and visibly wrong) fraction of a
+  // differently-sized one — percent stays correct at every size.
+  gridOffsetX: number;
+  gridOffsetY: number;
+  // How much the grid+token layer is scaled up before being rotated by
+  // gridRotationDeg, so the rotated layer still fully covers the square
+  // frame instead of leaving its corners bare (see coverScaleForRotation
+  // in lib/hexGrid.ts). A per-map field, not derived from gridRotationDeg
+  // at render time, because gridCols/gridRows/gridOffsetX/Y were each
+  // calibrated by eye against one specific scale value — re-deriving a
+  // "tighter" scale from the angle alone would shrink the grid relative
+  // to what those numbers actually mean. Across the River was never
+  // part of any rotation calibration, so it keeps the untouched 1:1 fit
+  // it always had.
+  gridCoverScale: number;
+};
+const MAPS: MapDef[] = [
+  {
+    id: "across-the-river",
+    label: "Across the River",
+    image: "/board/across-the-river.webp",
+    defaultTokens: ACROSS_THE_RIVER_TOKENS,
+    gridRotationDeg: 0,
+    gridCols: BOARD_COLS,
+    gridRows: BOARD_ROWS,
+    gridOffsetX: 0,
+    gridOffsetY: 0,
+    gridCoverScale: 1,
+  },
+  {
+    id: "forgotten-island",
+    label: "Forgotten Island",
+    image: "/board/forgotten-island.webp",
+    defaultTokens: FORGOTTEN_ISLAND_TOKENS,
+    // This map's own terrain runs at an angle to the photo's edges and
+    // is a differently-sized grid than Across the River's — found by
+    // eye via the (now-removed) live-calibration debug panel, which
+    // rendered every angle at the worst-case (45°) cover scale to avoid
+    // the grid visibly resizing while the angle slider was dragged — see
+    // gridCoverScale's own comment above.
+    gridRotationDeg: 15,
+    gridCols: 31,
+    gridRows: 27,
+    // Converted from the raw px values (-9, 1) the offset was originally
+    // tuned as, using the wrap's own max-width (480px) as the basis —
+    // see gridOffsetX/Y's own comment on why percent replaced px.
+    gridOffsetX: (-9 / 480) * 100,
+    gridOffsetY: (1 / 480) * 100,
+    gridCoverScale: coverScaleForRotation(45, IMAGE_WIDTH / IMAGE_HEIGHT),
+  },
 ];
 
 type DragState = {
@@ -224,7 +315,51 @@ const MAX_SCALE = 4;
 type ViewTransform = { scale: number; x: number; y: number };
 const DEFAULT_VIEW: ViewTransform = { scale: MIN_SCALE, x: 0, y: 0 };
 
+// The frame is flush with the wrap's padding box (`.goa-board-frame`
+// is `inset: 0`), but `.goa-board-wrap` still has its own
+// `border: 1px solid` — and getBoundingClientRect() on the wrap
+// measures its border box (the outer edge, border included), not its
+// padding box (where the frame actually sits, one border-width in on
+// every side). Left unaccounted for, that 1px mismatch is invisible at
+// rest but grows with scale, showing up as a real gap once zoomed in
+// and panned to an edge — matches wrap's own `border-width` in
+// globals.css.
+const FRAME_INSET_PX = 1;
+
+// Keeps the pan offset from ever revealing empty space past the map's
+// edge. The frame sits at wrap-local (FRAME_INSET_PX, FRAME_INSET_PX)
+// with its own size `rect.width/height - 2*FRAME_INSET_PX`; a local
+// point p in the frame renders at FRAME_INSET_PX + scale*p + translate,
+// so for the frame's far edge to still reach the wrap's far edge, and
+// its near edge to not overshoot past the wrap's near edge, translate
+// must stay within [wrap - inset - frame*scale, -inset] on each axis.
+function clampView(view: ViewTransform, rect: { width: number; height: number }): ViewTransform {
+  if (view.scale <= MIN_SCALE || rect.width === 0 || rect.height === 0) {
+    return { ...view, x: 0, y: 0 };
+  }
+  const frameW = rect.width - FRAME_INSET_PX * 2;
+  const frameH = rect.height - FRAME_INSET_PX * 2;
+  const maxX = -FRAME_INSET_PX;
+  const maxY = -FRAME_INSET_PX;
+  const minX = rect.width - FRAME_INSET_PX - frameW * view.scale;
+  const minY = rect.height - FRAME_INSET_PX - frameH * view.scale;
+  return { ...view, x: Math.min(maxX, Math.max(minX, view.x)), y: Math.min(maxY, Math.max(minY, view.y)) };
+}
+
 export function HexBoard() {
+  const [selectedMapId, setSelectedMapId] = useState(MAPS[0].id);
+  const currentMap = MAPS.find((m) => m.id === selectedMapId) ?? MAPS[0];
+
+  // The grid's own coordinate math never rotates (see coverScaleForRotation's
+  // own comment for why) — only its size varies per map. Memoized since
+  // createHexGrid does a full pass over every cell to compute its bounds.
+  const grid = useMemo(
+    () => createHexGrid(currentMap.gridCols, currentMap.gridRows),
+    [currentMap.gridCols, currentMap.gridRows],
+  );
+  // Per-map — see MapDef's own comment on gridCoverScale for why this
+  // isn't derived from gridRotationDeg here instead.
+  const gridCoverScale = currentMap.gridCoverScale;
   const [tokens, setTokens] = useState<PlacedToken[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [dragRender, setDragRender] = useState<DragState | null>(null);
@@ -234,7 +369,9 @@ export function HexBoard() {
   // the photo first; "Show Grid" is right there for precise placement.
   const [showGrid, setShowGrid] = useState(false);
   const [heroSearch, setHeroSearch] = useState("");
-  const filteredHeroes = HEROES.filter((h) => h.name.toLowerCase().includes(heroSearch.trim().toLowerCase()));
+  const filteredHeroes = HEROES.filter((h) => h.name.toLowerCase().includes(heroSearch.trim().toLowerCase())).sort(
+    (a, b) => a.name.localeCompare(b.name),
+  );
   // Pinch-zoom/pan — entirely separate gesture from piece dragging below
   // (that only ever tracks a single pointer; this only ever acts once a
   // *second* one joins it), so the two can't fight over the same touch.
@@ -248,7 +385,7 @@ export function HexBoard() {
   const [openHero, setOpenHero] = useState<{ heroId: string; tokenId: string } | null>(null);
   const [savedLayouts, setSavedLayouts] = useState<SavedLayout[]>([]);
   const [layoutsLoaded, setLayoutsLoaded] = useState(false);
-  const [selectedLayoutName, setSelectedLayoutName] = useState("");
+  const [selectedLayoutName, setSelectedLayoutName] = useState(DEFAULT_LAYOUT_NAME);
   // Off by default — a tap-to-reveal tip instead of permanent on-page
   // text, since it's mainly useful the first few visits.
   const [showHelp, setShowHelp] = useState(false);
@@ -258,7 +395,7 @@ export function HexBoard() {
   // Expanded by default so a first-time visit doesn't hide the palette
   // entirely — collapsing is an opt-in decluttering step, not the
   // default state.
-  const [openSections, setOpenSections] = useState({ minions: true, tokens: true, heroes: true });
+  const [openSections, setOpenSections] = useState({ minions: false, tokens: false, heroes: false });
   const toggleSection = (key: keyof typeof openSections) =>
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
@@ -272,61 +409,93 @@ export function HexBoard() {
   const viewRef = useRef(view);
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchBaselineRef = useRef<{ dist: number; scale: number } | null>(null);
+  const panStateRef = useRef<{ pointerId: number; startX: number; startY: number; viewX: number; viewY: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     viewRef.current = view;
   }, [view]);
 
-  // Load once on mount, then persist on every change after that — the
-  // `loaded` guard keeps the very first render (before the load effect
-  // below has run) from immediately overwriting whatever was already
-  // saved with an empty array. A first-ever visit (nothing saved yet)
-  // starts from DEFAULT_TOKENS instead of a blank board; anything
-  // actually saved — including an intentionally-cleared empty board —
-  // always wins over it from then on.
-  useEffect(() => {
+  // Loads everything for one map — its live board, its saved layouts,
+  // and resets the selected-layout dropdown back to DEFAULT_LAYOUT_NAME
+  // (that dropdown's other options are map-specific, so a name selected
+  // for the old map likely doesn't exist for the new one). Used both on
+  // first mount and whenever the
+  // user switches maps below. A first-ever visit to a given map starts
+  // from that map's own defaultTokens instead of a blank board; anything
+  // actually saved for it — including an intentionally-cleared empty
+  // board — always wins over that from then on. Across the River also
+  // falls back to the flat pre-multi-map keys so a board saved before
+  // this feature existed isn't silently lost.
+  const loadMapData = useCallback((mapId: string) => {
+    const map = MAPS.find((m) => m.id === mapId) ?? MAPS[0];
+    const isLegacyMap = mapId === MAPS[0].id;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      setTokens(raw ? JSON.parse(raw) : DEFAULT_TOKENS);
+      const raw = localStorage.getItem(placementsKey(mapId)) ?? (isLegacyMap ? localStorage.getItem(LEGACY_STORAGE_KEY) : null);
+      setTokens(raw ? JSON.parse(raw) : map.defaultTokens.map((t) => ({ ...t })));
     } catch {
       // Private browsing / storage disabled — still start from the
       // default scenario for this session, same as a first-ever visit.
-      setTokens(DEFAULT_TOKENS);
+      setTokens(map.defaultTokens.map((t) => ({ ...t })));
     }
-    setLoaded(true);
+    try {
+      const raw = localStorage.getItem(layoutsKey(mapId)) ?? (isLegacyMap ? localStorage.getItem(LEGACY_LAYOUTS_STORAGE_KEY) : null);
+      setSavedLayouts(raw ? JSON.parse(raw) : []);
+    } catch {
+      setSavedLayouts([]);
+    }
+    setSelectedLayoutName(DEFAULT_LAYOUT_NAME);
   }, []);
+
+  useEffect(() => {
+    let mapId = MAPS[0].id;
+    try {
+      const saved = localStorage.getItem(MAP_STORAGE_KEY);
+      if (saved && MAPS.some((m) => m.id === saved)) mapId = saved;
+    } catch {
+      // Private browsing / storage disabled — fall back to the first map.
+    }
+    setSelectedMapId(mapId);
+    loadMapData(mapId);
+    setLoaded(true);
+    setLayoutsLoaded(true);
+    // Deliberately mount-only — switchMap (not this effect) handles
+    // every subsequent map change, since it also needs to persist the
+    // choice and reset the view, not just reload data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const switchMap = (mapId: string) => {
+    if (mapId === selectedMapId) return;
+    setSelectedMapId(mapId);
+    try {
+      localStorage.setItem(MAP_STORAGE_KEY, mapId);
+    } catch {
+      // Nothing to do if storage isn't available.
+    }
+    loadMapData(mapId);
+    setView(DEFAULT_VIEW);
+  };
 
   useEffect(() => {
     if (!loaded) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
+      localStorage.setItem(placementsKey(selectedMapId), JSON.stringify(tokens));
     } catch {
       // Nothing to do if storage isn't available — the board still
       // works for the rest of this session, it just won't persist.
     }
-  }, [tokens, loaded]);
-
-  // Named layouts — a separate save slot from the live board above, so
-  // "what's on the board right now" and "scenarios I've saved for later"
-  // don't overwrite each other.
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LAYOUTS_STORAGE_KEY);
-      if (raw) setSavedLayouts(JSON.parse(raw));
-    } catch {
-      // Private browsing / storage disabled — start with no saved layouts.
-    }
-    setLayoutsLoaded(true);
-  }, []);
+  }, [tokens, loaded, selectedMapId]);
 
   useEffect(() => {
     if (!layoutsLoaded) return;
     try {
-      localStorage.setItem(LAYOUTS_STORAGE_KEY, JSON.stringify(savedLayouts));
+      localStorage.setItem(layoutsKey(selectedMapId), JSON.stringify(savedLayouts));
     } catch {
       // Nothing to do if storage isn't available.
     }
-  }, [savedLayouts, layoutsLoaded]);
+  }, [savedLayouts, layoutsLoaded, selectedMapId]);
 
   const saveCurrentAsLayout = () => {
     const name = window.prompt("Name this layout:")?.trim();
@@ -346,7 +515,7 @@ export function HexBoard() {
     setSelectedLayoutName(name);
     if (!name) return;
     if (name === DEFAULT_LAYOUT_NAME) {
-      setTokens(DEFAULT_TOKENS.map((t) => ({ ...t })));
+      setTokens(currentMap.defaultTokens.map((t) => ({ ...t })));
       return;
     }
     const layout = savedLayouts.find((l) => l.name === name);
@@ -354,10 +523,10 @@ export function HexBoard() {
   };
 
   const deleteSelectedLayout = () => {
-    if (!selectedLayoutName) return;
+    if (!selectedLayoutName || selectedLayoutName === DEFAULT_LAYOUT_NAME) return;
     if (!window.confirm(`Delete saved layout "${selectedLayoutName}"?`)) return;
     setSavedLayouts((prev) => prev.filter((l) => l.name !== selectedLayoutName));
-    setSelectedLayoutName("");
+    setSelectedLayoutName(DEFAULT_LAYOUT_NAME);
   };
 
   const resolveCellAt = useCallback((clientX: number, clientY: number) => {
@@ -367,10 +536,34 @@ export function HexBoard() {
     if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
       return null;
     }
-    const localX = ((clientX - rect.left) / rect.width) * BOARD_WIDTH;
-    const localY = ((clientY - rect.top) / rect.height) * BOARD_HEIGHT;
-    return nearestCell(localX, localY);
-  }, []);
+    // Position within the frame, in the grid's own (unrotated) board
+    // units — the frame itself never rotates, only the visual grid+token
+    // layer inside it does (see coverScaleForRotation's own comment), so
+    // that translate+rotate+scale has to be undone here to get back to
+    // plain grid coordinates for nearestCell.
+    const frameX = ((clientX - rect.left) / rect.width) * grid.boardWidth;
+    const frameY = ((clientY - rect.top) / rect.height) * grid.boardHeight;
+    // gridOffsetX/Y are a percentage of the frame's width/height, which
+    // — since the frame's own grid-space extent (boardWidth/boardHeight)
+    // is stretched linearly onto it — converts directly to the same
+    // percentage of boardWidth/boardHeight, with no separate px-based
+    // ratio needed (that's the resolution-independence this unit choice
+    // is for; see gridOffsetX/Y's own comment). Undone first since the
+    // forward transform is `translate(...) rotate(...) scale(...)` —
+    // translate is applied last there, so it's undone first here.
+    const offsetX = (currentMap.gridOffsetX / 100) * grid.boardWidth;
+    const offsetY = (currentMap.gridOffsetY / 100) * grid.boardHeight;
+    const cx = grid.boardWidth / 2;
+    const cy = grid.boardHeight / 2;
+    const dx = (frameX - offsetX - cx) / gridCoverScale;
+    const dy = (frameY - offsetY - cy) / gridCoverScale;
+    const rad = (-currentMap.gridRotationDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const localX = cx + dx * cos - dy * sin;
+    const localY = cy + dx * sin + dy * cos;
+    return grid.nearestCell(localX, localY);
+  }, [grid, gridCoverScale, currentMap.gridRotationDeg, currentMap.gridOffsetX, currentMap.gridOffsetY]);
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
     const current = dragStateRef.current;
@@ -481,7 +674,9 @@ export function HexBoard() {
       // fingers together) in the same formula, not just pinching in place.
       const contentX = (midX - v.x) / v.scale;
       const contentY = (midY - v.y) / v.scale;
-      return { scale: newScale, x: midX - contentX * newScale, y: midY - contentY * newScale };
+      const next = { scale: newScale, x: midX - contentX * newScale, y: midY - contentY * newScale };
+      const rect = wrapElRef.current?.getBoundingClientRect();
+      return rect ? clampView(next, rect) : next;
     });
   }, []);
 
@@ -527,12 +722,41 @@ export function HexBoard() {
         if (newScale <= MIN_SCALE) return DEFAULT_VIEW;
         const contentX = (e.clientX - v.x) / v.scale;
         const contentY = (e.clientY - v.y) / v.scale;
-        return { scale: newScale, x: e.clientX - contentX * newScale, y: e.clientY - contentY * newScale };
+        const next = { scale: newScale, x: e.clientX - contentX * newScale, y: e.clientY - contentY * newScale };
+        return clampView(next, el.getBoundingClientRect());
       });
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
   }, []);
+
+  // Single-finger/mouse pan when zoomed in — a separate gesture from
+  // both piece-dragging and pinch-zoom above, so it only ever starts
+  // when neither of those has already claimed the pointer (see
+  // handleBoardPointerDown below).
+  const handlePanPointerMove = useCallback((e: PointerEvent) => {
+    const pan = panStateRef.current;
+    if (!pan || pan.pointerId !== e.pointerId) return;
+    const rect = wrapElRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const next = { scale: viewRef.current.scale, x: pan.viewX + (e.clientX - pan.startX), y: pan.viewY + (e.clientY - pan.startY) };
+    setView(clampView(next, rect));
+  }, []);
+
+  const handlePanPointerUp = useCallback((e: PointerEvent) => {
+    if (panStateRef.current?.pointerId === e.pointerId) panStateRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("pointermove", handlePanPointerMove);
+    window.addEventListener("pointerup", handlePanPointerUp);
+    window.addEventListener("pointercancel", handlePanPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePanPointerMove);
+      window.removeEventListener("pointerup", handlePanPointerUp);
+      window.removeEventListener("pointercancel", handlePanPointerUp);
+    };
+  }, [handlePanPointerMove, handlePanPointerUp]);
 
   // Tracks every pointer that touches down anywhere on the board (not
   // just on pieces) purely to notice when a *second* one joins — this
@@ -544,6 +768,22 @@ export function HexBoard() {
       const pts = [...activePointersRef.current.values()];
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       pinchBaselineRef.current = { dist, scale: viewRef.current.scale };
+      // A second finger joining means this is a pinch, not a pan.
+      panStateRef.current = null;
+      return;
+    }
+    // A lone pointer starts a pan only when zoomed in and it wasn't
+    // already claimed by a piece drag — startDragExisting runs first
+    // (it's the deeper element, so its handler fires before this one
+    // during bubbling) and sets dragStateRef before this check runs.
+    if (activePointersRef.current.size === 1 && !dragStateRef.current && viewRef.current.scale > MIN_SCALE) {
+      panStateRef.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        viewX: viewRef.current.x,
+        viewY: viewRef.current.y,
+      };
     }
   };
 
@@ -593,6 +833,25 @@ export function HexBoard() {
 
   return (
     <div className="goa-board-inner">
+      {/* Its own row — kept apart from the icon toolbar below (rather
+          than just another flex-wrap item there) so which map is active
+          always reads as a distinct, full-width choice instead of
+          competing for space with the board's own controls. */}
+      <div className="goa-board-map-row">
+        <select
+          className="goa-board-layout-select"
+          value={selectedMapId}
+          onChange={(e) => switchMap(e.target.value)}
+          aria-label="Select map"
+        >
+          {MAPS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* One combined icon toolbar — this used to be two separate rows
           of text buttons (board controls, then layout controls), which
           ate a lot of vertical space above the board itself. */}
@@ -632,7 +891,6 @@ export function HexBoard() {
         >
           <Trash2 size={16} />
         </button>
-
         <div className="goa-board-toolbar-divider" />
 
         <select
@@ -640,7 +898,6 @@ export function HexBoard() {
           value={selectedLayoutName}
           onChange={(e) => loadSelectedLayout(e.target.value)}
         >
-          <option value="">Load layout…</option>
           <option value={DEFAULT_LAYOUT_NAME}>{DEFAULT_LAYOUT_NAME}</option>
           {savedLayouts.map((l) => (
             <option key={l.name} value={l.name}>
@@ -655,19 +912,17 @@ export function HexBoard() {
             been moved around on the board since — selecting the same
             option again wouldn't re-fire onChange, so this is the only
             way back to it without picking a different layout first. */}
-        {selectedLayoutName && (
-          <button
-            type="button"
-            className="goa-board-icon-btn"
-            onClick={() => loadSelectedLayout(selectedLayoutName)}
-            aria-label="Reset to selected layout"
-          >
-            <RotateCcw size={16} />
-          </button>
-        )}
+        <button
+          type="button"
+          className="goa-board-icon-btn"
+          onClick={() => loadSelectedLayout(selectedLayoutName)}
+          aria-label="Reset to selected layout"
+        >
+          <RotateCcw size={16} />
+        </button>
         {/* Not shown for the built-in default — that one isn't a saved
             layout and can't be deleted, only user-saved ones can. */}
-        {selectedLayoutName && selectedLayoutName !== DEFAULT_LAYOUT_NAME && (
+        {selectedLayoutName !== DEFAULT_LAYOUT_NAME && (
           <button
             type="button"
             className="goa-board-icon-btn goa-board-icon-btn-danger"
@@ -702,19 +957,18 @@ export function HexBoard() {
         onPointerDown={handleBoardPointerDown}
         onDoubleClick={() => setView(DEFAULT_VIEW)}
       >
-        {/* The 2px gap from the wrap's own border lives here (inset: 2px
-            in CSS) rather than as padding on .goa-board-wrap — the image
-            below uses `fill` (position: absolute; inset: 0), which
-            aligns to its containing block's padding-box edge regardless
-            of that block's own padding value, so padding on the wrap
-            wouldn't actually create a visible gap. */}
+        {/* Sized/positioned via .goa-board-frame's own `inset: 0` rather
+            than padding on .goa-board-wrap — the image below uses
+            `fill`, which ignores a parent's padding value for its own
+            inset. */}
         <div
           className="goa-board-frame"
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`, transformOrigin: "0 0" }}
         >
           <Image
-            src={BOARD_IMAGE_SRC}
-            alt="Guards of Atlantis II battle board"
+            key={currentMap.id}
+            src={currentMap.image}
+            alt={`Guards of Atlantis II battle board — ${currentMap.label}`}
             fill
             className="goa-board-bg-img"
             sizes="(max-width: 480px) 100vw, 480px"
@@ -728,40 +982,68 @@ export function HexBoard() {
               of the board's coordinate math (hit-testing, token
               placement) is anchored to this frame. */}
           <div className="goa-board-grid-frame" ref={boardWrapRef}>
-            {/* "none" stretches the grid non-uniformly to exactly fill
-                this frame, instead of letterboxing to preserve regular
-                hexes — the tradeoff that keeps the photo itself
-                uncropped; see IMAGE_WIDTH/IMAGE_HEIGHT's own comment in
-                lib/hexGrid.ts. */}
-            <svg
-              viewBox={`0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`}
-              className="goa-board-svg"
-              preserveAspectRatio="none"
-              style={{ opacity: showGrid ? 1 : 0 }}
+            {/* Carries the map's own grid angle (MapDef's gridRotationDeg)
+                as a plain CSS rotate — scaled up first by gridCoverScale
+                so the rotated layer still fully covers this frame instead
+                of leaving its corners bare; see coverScaleForRotation's
+                own comment in lib/hexGrid.ts for why rotation lives here
+                and not in the grid's own coordinate math. Sized to fill
+                the frame exactly before that transform, so it rotates
+                around the frame's own center. The leading translate
+                (MapDef's gridOffsetX/Y) is applied first in the list so
+                it shifts the already-rotated-and-scaled layer by a plain
+                on-screen amount, not affected by the rotation/scale that
+                follow it — lets a map's grid be centered on its terrain
+                rather than the photo's own frame. */}
+            <div
+              className="goa-board-grid-rotate"
+              style={{
+                transform: `translate(${currentMap.gridOffsetX}%, ${currentMap.gridOffsetY}%) rotate(${currentMap.gridRotationDeg}deg) scale(${gridCoverScale})`,
+              }}
             >
-              {ALL_CELLS.map(({ col, row }) => {
-                const { x, y } = hexCenter(col, row);
-                return <polygon key={`${col}-${row}`} points={hexPoints(x, y)} className="goa-board-hex" />;
-              })}
-            </svg>
+              {/* "none" stretches the grid non-uniformly to exactly fill
+                  this frame, instead of letterboxing to preserve regular
+                  hexes — the tradeoff that keeps the photo itself
+                  uncropped; see IMAGE_WIDTH/IMAGE_HEIGHT's own comment in
+                  lib/hexGrid.ts. */}
+              <svg
+                viewBox={`0 0 ${grid.boardWidth} ${grid.boardHeight}`}
+                className="goa-board-svg"
+                preserveAspectRatio="none"
+                style={{ opacity: showGrid ? 1 : 0 }}
+              >
+                {grid.allCells.map(({ col, row }) => {
+                  const { x, y } = grid.hexCenter(col, row);
+                  return <polygon key={`${col}-${row}`} points={grid.hexPoints(x, y)} className="goa-board-hex" />;
+                })}
+              </svg>
 
-            {tokens
-              .filter((t) => t.id !== draggingExistingId)
-              .map((t) => {
-                if (!resolvePieceVisual(t.pieceId)) return null;
-                const { x, y } = hexCenter(t.col, t.row);
-                const ringColor = MINION_TEAMS.find((team) => team.team === t.team)?.color;
-                return (
-                  <div
-                    key={t.id}
-                    className="goa-board-token"
-                    style={{ left: `${(x / BOARD_WIDTH) * 100}%`, top: `${(y / BOARD_HEIGHT) * 100}%` }}
-                    onPointerDown={(e) => startDragExisting(t, e)}
-                  >
-                    <PieceThumb pieceId={t.pieceId} size={18} className="goa-board-token-img" ringColor={ringColor} />
-                  </div>
-                );
-              })}
+              {tokens
+                .filter((t) => t.id !== draggingExistingId)
+                .map((t) => {
+                  if (!resolvePieceVisual(t.pieceId)) return null;
+                  const { x, y } = grid.hexCenter(t.col, t.row);
+                  const ringColor = MINION_TEAMS.find((team) => team.team === t.team)?.color;
+                  return (
+                    <div
+                      key={t.id}
+                      className="goa-board-token"
+                      style={{
+                        left: `${(x / grid.boardWidth) * 100}%`,
+                        top: `${(y / grid.boardHeight) * 100}%`,
+                        // Cancels the parent's rotate+scale for this
+                        // token's own artwork — its *position* should
+                        // follow the angled grid, but a hero portrait or
+                        // minion badge shouldn't itself appear tilted.
+                        transform: `translate(-50%, -50%) rotate(${-currentMap.gridRotationDeg}deg) scale(${1 / gridCoverScale})`,
+                      }}
+                      onPointerDown={(e) => startDragExisting(t, e)}
+                    >
+                      <PieceThumb pieceId={t.pieceId} size={15} className="goa-board-token-img" ringColor={ringColor} />
+                    </div>
+                  );
+                })}
+            </div>
           </div>
         </div>
       </div>
