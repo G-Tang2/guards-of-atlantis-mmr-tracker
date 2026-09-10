@@ -26,6 +26,7 @@ import {
   detectSortDirection,
   detectStatKeyword,
   computeSortedStatList,
+  listCardsByFilter,
 } from "./heroCardContext";
 
 describe("detectStatSuperlative", () => {
@@ -474,5 +475,80 @@ describe("findMentionedCards — false-positive fixes", () => {
     // No \b word-boundary anchors, specifically because of cards like this.
     const refs = findMentionedCards("Mortimer's Braains...! card is fun.", ["mortimer"]);
     expect(refs.map((r) => r.card.name)).toContain("Braains...!");
+  });
+
+  it("doesn't attach a different hero's identically-named card alongside a correctly-attributed mention", () => {
+    // Hit live: Bain has a GREEN "High Ground" and Brynn has an unrelated
+    // RED "High Ground" — a reply correctly saying "Brynn the Seeker:
+    // High Ground" also pulled in Bain's differently-colored card of the
+    // same name, since the old matching only checked whether the bare
+    // name string appeared anywhere, not which hero it belonged to.
+    const refs = findMentionedCards("Brynn the Seeker: High Ground is a solid Tier 1 Red card.", [
+      "bain",
+      "brynn",
+    ]);
+    expect(refs).toHaveLength(1);
+    expect(refs[0].heroId).toBe("brynn");
+    expect(refs[0].card.color).toBe("RED");
+  });
+
+  it("attaches the other hero's version when that one is who's actually named instead", () => {
+    const refs = findMentionedCards("Bain the Bounty Hunter: High Ground gives him extra reach.", [
+      "bain",
+      "brynn",
+    ]);
+    expect(refs).toHaveLength(1);
+    expect(refs[0].heroId).toBe("bain");
+    expect(refs[0].card.color).toBe("GREEN");
+  });
+
+  it("still disambiguates correctly when the OTHER hero's name also appears elsewhere in a long reply", () => {
+    // A first version of the ambiguity fix checked "does this hero's name
+    // appear anywhere in the whole reply" — that broke down exactly for
+    // the case it was built for: a reply listing many heroes' cards
+    // (like "list all the tier 1 red") legitimately mentions every one
+    // of them somewhere, so Bain having his own line elsewhere doesn't
+    // mean *this* "High Ground" mention is his. Only proximity to the
+    // specific occurrence should decide it.
+    const reply =
+      "- Arien the Tidemaster: \"Dangerous Current\"\n" +
+      "- Bain the Bounty Hunter: \"Light Crossbow\"\n" +
+      "- Brogan the Destroyer: \"Mad Dash\"\n" +
+      "- Brynn the Seeker: \"High Ground\"\n" +
+      "- Cutter the Sky Pirate: \"Daring Strike\"";
+    const refs = findMentionedCards(reply, ["bain", "brynn"]);
+    const highGrounds = refs.filter((r) => r.card.name === "High Ground");
+    expect(highGrounds).toHaveLength(1);
+    expect(highGrounds[0].heroId).toBe("brynn");
+    expect(highGrounds[0].card.color).toBe("RED");
+  });
+});
+
+describe("listCardsByFilter", () => {
+  it("resolves 'tier 1 red' to every hero's own matching card, not a subset", () => {
+    // Hit live: this question ("list all the tier 1 red") dropped two
+    // heroes' matching cards from the answer, since buildAllHeroStatSummary
+    // has no tier filter of its own (see its own comment) and the model
+    // was left to filter by tier itself off a table covering every tier.
+    const entries = listCardsByFilter(["RED"], 1);
+    expect(entries).not.toBeNull();
+    expect(entries).toHaveLength(32); // one Tier 1 Red card per hero
+    const byHero = new Map(entries!.map((e) => [e.heroName, e]));
+    expect(byHero.get("Gydion the Archwizard")?.cardName).toBe("Elementary Evocation");
+    expect(byHero.get("Mrak the Rockshaper")?.cardName).toBe("Seismic Slam");
+    expect(entries!.every((e) => e.color === "RED" && e.level === 1)).toBe(true);
+  });
+
+  it("excludes a same-named card of the wrong color", () => {
+    // Bain's GREEN "High Ground" must not show up in a RED Tier 1 list —
+    // only Brynn's RED Tier 1 "High Ground" should.
+    const entries = listCardsByFilter(["RED"], 1);
+    const highGrounds = entries!.filter((e) => e.cardName === "High Ground");
+    expect(highGrounds).toHaveLength(1);
+    expect(highGrounds[0].heroName).toBe("Brynn the Seeker");
+  });
+
+  it("returns null when nothing matches", () => {
+    expect(listCardsByFilter(["RED"], 99)).toBeNull();
   });
 });

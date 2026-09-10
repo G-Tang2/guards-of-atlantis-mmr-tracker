@@ -770,6 +770,38 @@ export function computeStatBreakdown(
   });
 }
 
+export type FilteredCardEntry = { heroName: string; cardName: string; color: string; level: number | null };
+
+// "List all the tier 1 red cards" — no stat criterion at all, just a
+// color/tier filter to enumerate, unlike every function above (all of
+// which revolve around a stat value). This gap used to be covered by
+// handing the model buildAllHeroStatSummary's raw table and trusting it
+// to filter by color *and* tier itself — that table has no tier
+// filtering of its own (see its own comment), so the model was doing
+// the tier filtering unassisted. Hit live: asked for "tier 1 red", it
+// silently dropped two heroes' matching cards from the answer.
+export function listCardsByFilter(
+  colors: string[],
+  level: number | null,
+  heroIds: string[] = [],
+): FilteredCardEntry[] | null {
+  const scopeIds = heroIds.length > 0 ? heroIds : Object.keys(HERO_CARDS);
+  const entries: FilteredCardEntry[] = [];
+  for (const heroId of scopeIds) {
+    const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
+    for (const card of HERO_CARDS[heroId] ?? []) {
+      if (!cardMatchesFilters(card, colors, level)) continue;
+      entries.push({
+        heroName,
+        cardName: typeof card.name === "string" ? card.name : "",
+        color: typeof card.color === "string" ? card.color : "",
+        level: typeof card.level === "number" ? card.level : null,
+      });
+    }
+  }
+  return entries.length > 0 ? entries : null;
+}
+
 // One compact line per card across every hero (not per-hero JSON, which
 // at 32 heroes/~600 cards would run well over budget once every field is
 // repeated card after card) — just the numeric/categorical fields a stat
@@ -895,20 +927,66 @@ export function findMentionedCards(
   // client-side for the same reason.
   const sortedNames = [...new Set(candidates.map((c) => c.name))].sort((a, b) => b.length - a.length);
   const pattern = new RegExp(`(?:${sortedNames.map(escapeRegExp).join("|")})`, "gi");
-  const matchedNames = new Set(searchText.match(pattern)?.map((m) => m.toLowerCase()) ?? []);
-  if (matchedNames.size === 0) return [];
+  const occurrences = [...searchText.matchAll(pattern)];
+  if (occurrences.length === 0) return [];
+
+  // Two different heroes can have a card with the identical exact name
+  // (e.g. Bain's GREEN "High Ground" and Brynn's own, unrelated RED
+  // "High Ground") — grouping by lowercase name is what exposes that
+  // ambiguity, since a single occurrence of the bare string can't say by
+  // itself which hero it belongs to.
+  const ownersByName = new Map<string, string[]>();
+  const cardByHeroAndName = new Map<string, HeroCard>();
+  for (const { heroId, card, name } of candidates) {
+    const key = name.toLowerCase();
+    const owners = ownersByName.get(key) ?? [];
+    if (!owners.includes(heroId)) owners.push(heroId);
+    ownersByName.set(key, owners);
+    cardByHeroAndName.set(`${heroId}::${key}`, card);
+  }
+
+  // Which hero's own name to credit an *ambiguous* occurrence to — a
+  // *global* "does the hero's name appear anywhere in the whole reply"
+  // check (the first version of this fix) broke down for exactly the
+  // case it was built for: a reply listing many heroes' cards mentions
+  // every one of their names somewhere, so Bain's name being present
+  // elsewhere in a 32-hero list doesn't mean *this* "High Ground" is
+  // his. These lists are consistently formatted one hero+card per line
+  // ("- HeroName: \"CardName\""), so restricting the check to the same
+  // line as this specific occurrence is what actually disambiguates it
+  // — a fixed character window was tried first and measured out as
+  // either too tight for long hero names or too loose to exclude an
+  // adjacent line, since line lengths vary with both.
+  function lineAround(text: string, index: number): string {
+    const start = text.lastIndexOf("\n", index) + 1;
+    const end = text.indexOf("\n", index);
+    return text.slice(start, end === -1 ? text.length : end);
+  }
 
   const found: CardReference[] = [];
   const seen = new Set<string>();
-  for (const { heroId, card, name } of candidates) {
-    if (!matchedNames.has(name.toLowerCase())) continue;
-    const key = `${heroId}::${name}`;
-    if (seen.has(key)) continue;
-    const hero = HEROES.find((h) => h.id === heroId);
-    const cardColor = typeof card.color === "string" ? card.color : null;
-    const colorMismatch = askedColors.length > 0 && cardColor !== null && !askedColors.includes(cardColor);
-    found.push({ heroId, heroName: hero?.name ?? heroId, card, colorMismatch });
-    seen.add(key);
+  for (const match of occurrences) {
+    const lowerName = match[0].toLowerCase();
+    const idx = match.index ?? 0;
+    const owners = ownersByName.get(lowerName) ?? [];
+
+    for (const heroId of owners) {
+      const key = `${heroId}::${lowerName}`;
+      if (seen.has(key)) continue;
+
+      if (owners.length > 1) {
+        const heroLowerName = HEROES.find((h) => h.id === heroId)?.name.toLowerCase();
+        if (!heroLowerName || !lineAround(lowerReply, idx).includes(heroLowerName)) continue;
+      }
+
+      const card = cardByHeroAndName.get(key);
+      if (!card) continue;
+      const hero = HEROES.find((h) => h.id === heroId);
+      const cardColor = typeof card.color === "string" ? card.color : null;
+      const colorMismatch = askedColors.length > 0 && cardColor !== null && !askedColors.includes(cardColor);
+      found.push({ heroId, heroName: hero?.name ?? heroId, card, colorMismatch });
+      seen.add(key);
+    }
   }
   return found;
 }
