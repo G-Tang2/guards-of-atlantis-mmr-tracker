@@ -7213,10 +7213,12 @@
     background: var(--stone-mid);
     padding: 0;
     cursor: grab;
-    /* Drag now starts immediately on pointerdown (see startDragNew's own
-       comment) — this stops the browser trying to also treat the same
-       gesture as a native scroll/pan of the strip. */
-    touch-action: none;
+    /* Lets a touch swipe starting on a piece still scroll the strip
+       natively — a touch only turns into a drag after a long-press (see
+       startPendingPress's own comment); "none" here would block that
+       scroll entirely regardless of what the JS decides. Mouse/pen
+       still starts dragging immediately, unaffected by this. */
+    touch-action: pan-x;
     transition: border-color 0.15s, transform 0.15s;
   }
   .goa-board-palette-item.active {

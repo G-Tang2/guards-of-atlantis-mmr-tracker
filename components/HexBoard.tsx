@@ -159,12 +159,19 @@ const placementsKey = (mapId: string) => `goa-board-placements-${mapId}`;
 const layoutsKey = (mapId: string) => `goa-board-layouts-${mapId}`;
 // How far the pointer has to move before a press counts as a drag rather
 // than a tap — shared by "tap a placed piece to remove it" and "tap a
-// palette piece does nothing" below. Palette pieces used to need a
-// long-press first (to avoid fighting the strip's own horizontal
-// scroll), but drag now starts immediately on pointerdown everywhere,
-// same as board pieces — scrolling the strip via a swipe that starts
-// directly on a piece is the traded-off cost of that.
+// palette piece does nothing" below.
 const MOVE_THRESHOLD_PX = 8;
+// Touch-only: a palette item needs to be *held* this long before it's
+// picked up for dragging — see startPendingPress's own comment for why
+// (in short: a touch swipe starting directly on a palette item needs to
+// still be able to scroll the strip, which an immediate drag prevented).
+const LONG_PRESS_MS = 400;
+// How far a touch can move during that hold before it's treated as a
+// scroll swipe instead (cancelling the pending drag) — deliberately
+// looser than MOVE_THRESHOLD_PX: a hold's own natural finger jitter
+// needs more slack than a moving drag's tap-vs-drag distinction does, or
+// genuine holds routinely misfire as scrolls before the timer even fires.
+const PALETTE_CANCEL_THRESHOLD_PX = 12;
 
 // Team is only ever meaningfully set on hero pieces (minions already
 // bake it into which colored variant was placed) — optional and unset
@@ -412,6 +419,13 @@ export function HexBoard() {
   const panStateRef = useRef<{ pointerId: number; startX: number; startY: number; viewX: number; viewY: number } | null>(
     null,
   );
+  const pendingPressRef = useRef<{
+    pieceId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   useEffect(() => {
     viewRef.current = view;
@@ -568,6 +582,12 @@ export function HexBoard() {
   const handlePointerMove = useCallback((e: PointerEvent) => {
     const current = dragStateRef.current;
     if (!current) return;
+    // A drag that began via startPendingPress's long-press never called
+    // preventDefault on its own pointerdown (needed to leave a swipe
+    // free to scroll the palette strip instead) — once movement starts
+    // for real, this stops the browser from still claiming it as that
+    // same native scroll.
+    e.preventDefault();
     // Measured from the drag's fixed starting point, not the previous
     // frame's position — comparing frame-to-frame deltas meant a smooth,
     // slow drag (lots of small pointermove steps) could accumulate a
@@ -788,8 +808,16 @@ export function HexBoard() {
   };
 
   const startDragExisting = (token: PlacedToken, e: ReactPointerEvent) => {
-    e.preventDefault();
     if (dragStateRef.current) return;
+    // Another pointer is already down elsewhere on the board — this one
+    // is (or is about to become) the second finger of a pinch/pan
+    // gesture, not a pickup. Without this, a second finger landing on a
+    // piece would both start dragging it *and* register as the pinch's
+    // second finger, and the two fought over the same view/token state
+    // (this is also why two-finger panning could stop working — the
+    // pinch handler was never getting an uncontested gesture).
+    if (activePointersRef.current.size >= 1) return;
+    e.preventDefault();
     const state: DragState = {
       kind: "existing",
       id: token.id,
@@ -804,29 +832,101 @@ export function HexBoard() {
     setDragRender(state);
   };
 
-  // Starts immediately on pointerdown, same as startDragExisting — this
-  // used to wait for a long-press first, to avoid fighting the palette
-  // strip's own horizontal scroll, but that made a real drag routinely
-  // misfire as "just scrolling" and get cancelled before it ever
-  // started (see MOVE_THRESHOLD_PX's own comment for why). Swiping a
-  // finger starting directly on a piece now always picks it up instead
-  // of scrolling the strip.
-  const startDragNew = (pieceId: string, e: ReactPointerEvent) => {
-    e.preventDefault();
+  // Picks a palette piece up for dragging — called either immediately
+  // (mouse/pen, from startPendingPress) or once a touch's long-press
+  // timer fires (see startPendingPress's own comment).
+  const startDragNew = useCallback((pieceId: string, clientX: number, clientY: number) => {
     if (dragStateRef.current) return;
     const state: DragState = {
       kind: "new",
       id: pieceId,
       pieceId,
-      startX: e.clientX,
-      startY: e.clientY,
-      x: e.clientX,
-      y: e.clientY,
+      startX: clientX,
+      startY: clientY,
+      x: clientX,
+      y: clientY,
       moved: false,
     };
     dragStateRef.current = state;
     setDragRender(state);
+  }, []);
+
+  const cancelPendingPress = useCallback(() => {
+    const pending = pendingPressRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingPressRef.current = null;
+  }, []);
+
+  // A touch starting directly on a palette item is ambiguous — it might
+  // be the start of a drag, or it might be a swipe meant to scroll the
+  // (horizontally-overflowing) palette strip. Immediately starting a
+  // drag on every touch (tried first) made scrolling the strip
+  // impossible; waiting for a long-press before committing to a drag
+  // lets a swipe still scroll normally, at the cost of needing to hold
+  // briefly to actually pick a piece up. Mouse/pen has no such ambiguity
+  // (there's no swipe-to-scroll gesture to protect), so those still
+  // start dragging immediately, same as before.
+  const startPendingPress = (pieceId: string, e: ReactPointerEvent) => {
+    if (dragStateRef.current) return;
+    // A finger already down on the board (see startDragExisting's own
+    // comment) means this second touch is part of a pinch/pan gesture,
+    // not a pickup — even if it happens to land on a palette item.
+    if (activePointersRef.current.size >= 1) return;
+    if (e.pointerType !== "touch") {
+      e.preventDefault();
+      startDragNew(pieceId, e.clientX, e.clientY);
+      return;
+    }
+    if (pendingPressRef.current) return;
+    const pointerId = e.pointerId;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const timer = setTimeout(() => {
+      if (pendingPressRef.current?.pointerId !== pointerId) return;
+      pendingPressRef.current = null;
+      startDragNew(pieceId, startX, startY);
+    }, LONG_PRESS_MS);
+    pendingPressRef.current = { pieceId, pointerId, startX, startY, timer };
   };
+
+  const handlePendingPressMove = useCallback(
+    (e: PointerEvent) => {
+      const pending = pendingPressRef.current;
+      if (!pending || pending.pointerId !== e.pointerId) return;
+      const moved = Math.hypot(e.clientX - pending.startX, e.clientY - pending.startY);
+      // Real movement before the hold completed — this is the palette
+      // strip's own scroll gesture, not a drag; leave it alone (no
+      // preventDefault anywhere in this flow) so the browser keeps
+      // scrolling it natively.
+      if (moved > PALETTE_CANCEL_THRESHOLD_PX) cancelPendingPress();
+    },
+    [cancelPendingPress],
+  );
+
+  const handlePendingPressUp = useCallback(
+    (e: PointerEvent) => {
+      const pending = pendingPressRef.current;
+      if (!pending || pending.pointerId !== e.pointerId) return;
+      // Released before the hold completed — a plain tap, does nothing.
+      cancelPendingPress();
+    },
+    [cancelPendingPress],
+  );
+
+  useEffect(() => {
+    window.addEventListener("pointermove", handlePendingPressMove);
+    window.addEventListener("pointerup", handlePendingPressUp);
+    window.addEventListener("pointercancel", handlePendingPressUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePendingPressMove);
+      window.removeEventListener("pointerup", handlePendingPressUp);
+      window.removeEventListener("pointercancel", handlePendingPressUp);
+      // Otherwise a still-pending long-press timer would fire after
+      // unmount and try to start a drag on a component that's gone.
+      cancelPendingPress();
+    };
+  }, [handlePendingPressMove, handlePendingPressUp, cancelPendingPress]);
 
   const draggingPieceId = dragRender?.pieceId ?? null;
   const draggingExistingId = dragRender?.kind === "existing" ? dragRender.id : null;
@@ -1070,7 +1170,7 @@ export function HexBoard() {
                     key={m.id}
                     type="button"
                     className={`goa-board-palette-item ${draggingPieceId === m.id && dragRender?.kind === "new" ? "active" : ""}`}
-                    onPointerDown={(e) => startDragNew(m.id, e)}
+                    onPointerDown={(e) => startPendingPress(m.id, e)}
                   >
                     <PieceThumb pieceId={m.id} size={32} />
                   </button>
@@ -1108,7 +1208,7 @@ export function HexBoard() {
                   key={hero.id}
                   type="button"
                   className={`goa-board-palette-item ${draggingPieceId === hero.id && dragRender?.kind === "new" ? "active" : ""}`}
-                  onPointerDown={(e) => startDragNew(hero.id, e)}
+                  onPointerDown={(e) => startPendingPress(hero.id, e)}
                 >
                   <PieceThumb pieceId={hero.id} size={32} />
                 </button>
@@ -1134,7 +1234,7 @@ export function HexBoard() {
               key={g.id}
               type="button"
               className={`goa-board-palette-item ${draggingPieceId === g.id && dragRender?.kind === "new" ? "active" : ""}`}
-              onPointerDown={(e) => startDragNew(g.id, e)}
+              onPointerDown={(e) => startPendingPress(g.id, e)}
             >
               <PieceThumb pieceId={g.id} size={32} />
             </button>
