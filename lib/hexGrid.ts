@@ -2,7 +2,7 @@
 // no React/DOM here, so it's cheap to unit test and reason about
 // independent of rendering/drag concerns.
 //
-// The real board (see public/board/across-the-river.webp) is 22
+// The real board (see public/board/across_the_river.webp) is 22
 // (horizontal) x 19.5 (vertical) hexes — flat-top hexagons in "offset
 // columns" (odd-q) layout, see Red Blob Games' hex grid reference for
 // the standard formulas this follows. The ".5" isn't a per-column row

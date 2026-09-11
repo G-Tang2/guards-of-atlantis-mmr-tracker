@@ -263,7 +263,7 @@ const MAPS: MapDef[] = [
   {
     id: "across-the-river",
     label: "Across the River",
-    image: "/board/across-the-river.webp",
+    image: "/board/across_the_river.webp",
     defaultTokens: ACROSS_THE_RIVER_TOKENS,
     gridRotationDeg: 0,
     gridCols: BOARD_COLS,
@@ -275,7 +275,7 @@ const MAPS: MapDef[] = [
   {
     id: "forgotten-island",
     label: "Forgotten Island",
-    image: "/board/forgotten-island.webp",
+    image: "/board/forgotten_island.webp",
     defaultTokens: FORGOTTEN_ISLAND_TOKENS,
     // This map's own terrain runs at an angle to the photo's edges and
     // is a differently-sized grid than Across the River's — found by
@@ -489,6 +489,15 @@ export function HexBoard() {
     } catch {
       // Private browsing / storage disabled — fall back to the first map.
     }
+    // Deliberately an effect, not a lazy useState initializer, even
+    // though the localStorage read itself is synchronous — a lazy
+    // initializer would run during SSR too (no localStorage there),
+    // rendering "the first map" on the server and then a possibly
+    // different one on the client once this runs, a hydration mismatch.
+    // Starting from the same default on both, then correcting it here
+    // once mounted (matching every other loaded/layoutsLoaded-gated
+    // effect in this file), avoids that.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedMapId(mapId);
     loadMapData(mapId);
     setLoaded(true);
@@ -674,7 +683,13 @@ export function HexBoard() {
         setTokens((prev) => prev.filter((t) => t.id !== current.id));
       }
     },
-    [resolveCellAt],
+    // setDragRender/setTokens/setOpenHero/setEnlargedCardIndex are all
+    // useState setters — stable across renders by React's own guarantee
+    // — but listed anyway (alongside resolveCellAt, the one dependency
+    // that actually changes) so the React Compiler's own dependency
+    // inference agrees with this array instead of skipping optimization
+    // for the whole component over the mismatch.
+    [resolveCellAt, setDragRender, setTokens, setOpenHero, setEnlargedCardIndex],
   );
 
   useEffect(() => {
