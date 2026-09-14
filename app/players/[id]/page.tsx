@@ -16,7 +16,7 @@ import { Hero } from "@/lib/heroes";
 import { BADGES } from "@/lib/badges";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { Swords, Loader2, X, Camera, Coins, ChevronDown } from "lucide-react";
+import { Swords, Loader2, X, Camera, Coins, ChevronDown, Sprout } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +36,7 @@ type MatchPlayer = {
   hero_id?: string | null;
   is_bounty?: boolean;
   bounty_bonus?: number | null;
+  rookie_bonus?: number | null;
   players: Player;
 };
 
@@ -60,6 +61,7 @@ type RawMatchPlayer = {
   hero_id?: string | null;
   is_bounty?: boolean;
   bounty_bonus?: number | null;
+  rookie_bonus?: number | null;
   players: Player | Player[] | null;
 };
 
@@ -533,7 +535,7 @@ export default function PlayerProfilePage() {
             `
             id, match_number, winner, created_at, atlantis_avg_mmr, titans_avg_mmr,
             match_players (
-              player_id, team, mmr_before, mmr_after, hero_id, is_bounty, bounty_bonus,
+              player_id, team, mmr_before, mmr_after, hero_id, is_bounty, bounty_bonus, rookie_bonus,
               players ( id, name, mmr, avatar_url )
             )
           `,
@@ -1234,6 +1236,14 @@ export default function PlayerProfilePage() {
                   {me.is_bounty && (
                     <span className="goa-bounty-badge">
                       <Coins size={10} />+{me.bounty_bonus ?? 5}
+                    </span>
+                  )}
+                  {!!me.rookie_bonus && (
+                    <span
+                      className="goa-rookie-badge"
+                      title="Rookie bonus: flat MMR for a new player's first few matches"
+                    >
+                      <Sprout size={10} />+{me.rookie_bonus}
                     </span>
                   )}
                 </div>

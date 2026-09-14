@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { getHero, renderStars, formatActionTime, MatchPlayer } from "@/lib/match";
-import { Coins, Sparkles, Timer, Crown, Heart, Flame } from "lucide-react";
+import { Coins, Sparkles, Timer, Crown, Heart, Flame, Sprout } from "lucide-react";
 
 type TeamPanelProps = {
   label: string;
@@ -133,6 +133,14 @@ export function TeamPanel({
                   <Flame size={10} />
                   {p.defiant_bonus > 0 ? "+" : ""}
                   {p.defiant_bonus}
+                </span>
+              )}
+              {!!p.rookie_bonus && (
+                <span
+                  className="goa-rookie-badge"
+                  title="Rookie bonus: flat MMR for a new player's first few matches"
+                >
+                  <Sprout size={10} />+{p.rookie_bonus}
                 </span>
               )}
               {p.badge_earned && (

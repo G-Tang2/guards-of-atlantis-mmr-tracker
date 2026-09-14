@@ -30,6 +30,7 @@ export type MatchPlayer = {
   devoted_bonus?: number | null;
   renowned_bonus?: number | null;
   defiant_bonus?: number | null;
+  rookie_bonus?: number | null;
 };
 
 export enum WinCondition {

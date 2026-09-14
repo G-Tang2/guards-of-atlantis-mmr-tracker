@@ -40,13 +40,15 @@ Three tables in Supabase:
 |--------|------|-------|
 | `id` | `uuid` | Primary key |
 | `name` | `text` | Unique |
-| `mmr` | `integer` | Default 1000 |
+| `mmr` | `integer` | Default 700 |
 | `avatar_url` | `text` | Base64 JPEG, nullable |
+| `matches_played` | `integer` | Default 0; used to grant the rookie MMR bonus for a player's first few matches (see `lib/rookieBonus.ts`) |
 
 ### `matches`
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | `uuid` | Primary key |
+| `match_number` | `integer` | Sequential display number, assigned by a trigger (see `supabase/migrations/0005_prevent_match_number_gaps.sql`) rather than a plain sequence default — a failed insert never consumes a number, so this stays gap-free; that same migration also compacts any gaps that existed beforehand |
 | `winner` | `text` | `"atlantis"` or `"titans"` |
 | `win_condition` | `win_condition` | How the game was won |
 | `created_at` | `timestamptz` | Auto-set |
@@ -74,6 +76,7 @@ Three tables in Supabase:
 | `mmr_after` | `integer` | Player MMR after the match |
 | `hero_id` | `text` | Hero ID from `lib/heroes.ts`, nullable |
 | `is_bounty` | `boolean` | Whether `hero_id` was a bounty hero when this match was recorded |
+| `rookie_bonus` | `integer` | Flat MMR bonus paid out for this row, if the player was still within their first few matches; nullable |
 
 ---
 
@@ -90,6 +93,7 @@ K factor        = 40
 - Each team is treated as a single Elo entity using its average MMR.
 - All players on the winning team gain MMR; all players on the losing team lose the same amount.
 - Upsets (lower-rated team winning) yield larger MMR swings; expected wins yield smaller ones.
+- New players start at 700 MMR and get a flat +100 MMR on top of the normal result (win, lose, or draw) for each of their first three matches — see `lib/rookieBonus.ts`.
 
 ---
 
@@ -185,8 +189,9 @@ create type draft_method as enum (
 create table players (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
-  mmr integer not null default 1000,
-  avatar_url text
+  mmr integer not null default 700,
+  avatar_url text,
+  matches_played integer not null default 0
 );
 
 -- Matches
@@ -218,7 +223,8 @@ create table match_players (
   mmr_before integer,
   mmr_after integer,
   hero_id text,
-  is_bounty boolean not null default false
+  is_bounty boolean not null default false,
+  rookie_bonus integer
 );
 
 -- Index for faster hero lookups

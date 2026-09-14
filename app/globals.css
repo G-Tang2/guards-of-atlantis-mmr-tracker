@@ -1584,6 +1584,29 @@
     margin-left: auto;
   }
 
+  /* Rookie bonus — shown on a new player's hero pick for their first few
+     matches (see lib/rookieBonus.ts). Same pill shape, its own green
+     "new growth" accent so it doesn't blend with the gold bounty/badge
+     pills. */
+  .goa-rookie-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid #6fbf73;
+    border-radius: 999px;
+    background: rgba(111, 191, 115, 0.15);
+    color: #b8e6ba;
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
   /* Cumulative action-phase time, recorded when a match used the
      /matches/timer clock — same pill treatment as bounty/first-win, in a
      neutral slate tone since it isn't a bonus or achievement. */
@@ -5465,6 +5488,13 @@
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
+    /* This is a plain <button> (see OptionCard in app/teams/vote/page.tsx),
+       so tapping it to cast a vote otherwise leaves the browser's own
+       focus ring/tap-highlight sitting on its border afterward — the vote
+       itself is reflected elsewhere (the winner's own border-color once
+       results are in), so this option shouldn't visibly stay "selected". */
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
   }
   .ranked-option-head {
     display: flex;

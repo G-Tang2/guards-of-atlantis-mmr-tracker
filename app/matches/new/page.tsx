@@ -13,6 +13,7 @@ import {
   ARCANE_BOUNTY_THRESHOLD,
   WAYWARD_BOUNTY_MMR_BONUS,
 } from "@/lib/bounty";
+import { isRookie, ROOKIE_MMR_BONUS } from "@/lib/rookieBonus";
 import {
   computeHeroWinBonus,
   applyHeroWinBonus,
@@ -34,6 +35,7 @@ type Player = {
   rank: number;
   avatar_url?: string | null;
   last_played_match_number: number;
+  matches_played: number;
 };
 
 type PoolEntry = {
@@ -400,8 +402,32 @@ function NewMatchPageInner() {
         winner,
         ownedBadgesByPlayer,
       );
-      const atlantisFinal = badgeRewards.atlantis;
-      const titansFinal = badgeRewards.titans;
+
+      // A player still within their first ROOKIE_MATCH_THRESHOLD matches
+      // gets a flat MMR cushion, unaffected by any of the multiplicative
+      // bonuses above (first-hero-win, badge completion) — applied last so
+      // it's always exactly ROOKIE_MMR_BONUS, on top of whatever this match
+      // otherwise gave them, win, lose, or draw. Keyed off matches_played
+      // *before* this match (see the Player type/select("*") above).
+      const rookieBonusByPlayer = new Map<string, number>();
+      const applyRookieBonus = (
+        list: PlayerResult[],
+        team: Team,
+      ): PlayerResult[] =>
+        list.map((p) => {
+          const pool = team === "atlantis" ? atlPlayers : titPlayers;
+          const matchesPlayed = pool.find((x) => x.id === p.id)?.matches_played ?? 0;
+          if (!isRookie(matchesPlayed)) return p;
+          rookieBonusByPlayer.set(p.id, ROOKIE_MMR_BONUS);
+          return {
+            ...p,
+            mmrChange: p.mmrChange + ROOKIE_MMR_BONUS,
+            newMmr: p.newMmr + ROOKIE_MMR_BONUS,
+          };
+        });
+
+      const atlantisFinal = applyRookieBonus(badgeRewards.atlantis, "atlantis");
+      const titansFinal = applyRookieBonus(badgeRewards.titans, "titans");
 
       const { data: match, error } = await supabaseClient
         .from("matches")
@@ -477,6 +503,7 @@ function NewMatchPageInner() {
             devoted_bonus: bonuses?.devoted ?? null,
             renowned_bonus: bonuses?.renowned ?? null,
             defiant_bonus: bonuses?.defiant ?? null,
+            rookie_bonus: rookieBonusByPlayer.get(p.id) ?? null,
             action_time_seconds: timerLog[p.id] ?? null,
           };
         }),
@@ -496,6 +523,7 @@ function NewMatchPageInner() {
             devoted_bonus: bonuses?.devoted ?? null,
             renowned_bonus: bonuses?.renowned ?? null,
             defiant_bonus: bonuses?.defiant ?? null,
+            rookie_bonus: rookieBonusByPlayer.get(p.id) ?? null,
             action_time_seconds: timerLog[p.id] ?? null,
           };
         }),
@@ -525,6 +553,9 @@ function NewMatchPageInner() {
           last_played_match_number: isParticipant
             ? newMatchNumber
             : (p.last_played_match_number ?? 0),
+          matches_played: isParticipant
+            ? (p.matches_played ?? 0) + 1
+            : (p.matches_played ?? 0),
           isParticipant,
         };
       });
@@ -607,7 +638,7 @@ function NewMatchPageInner() {
         .update({ rank: null })
         .in("id", allPlayersPostMatch.map((p) => p.id));
 
-      // Pass 2: Update final MMR, last_played_match_number, and computed ranks
+      // Pass 2: Update final MMR, last_played_match_number, matches_played, and computed ranks
       await Promise.all(
         allPlayersPostMatch.map((p) =>
           supabaseClient
@@ -616,6 +647,7 @@ function NewMatchPageInner() {
               mmr: p.postMatchMmr,
               rank: computedRanks.get(p.id),
               last_played_match_number: p.last_played_match_number,
+              matches_played: p.matches_played,
             })
             .eq("id", p.id),
         ),

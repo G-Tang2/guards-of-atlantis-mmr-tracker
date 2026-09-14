@@ -57,6 +57,7 @@ type RawMatchPlayer = {
   devoted_bonus?: number | null;
   renowned_bonus?: number | null;
   defiant_bonus?: number | null;
+  rookie_bonus?: number | null;
   action_time_seconds?: number | null;
   players: Player | Player[] | null;
 };
@@ -111,6 +112,7 @@ const MATCH_SELECT = `
     devoted_bonus,
     renowned_bonus,
     defiant_bonus,
+    rookie_bonus,
     action_time_seconds,
     players (
       id,
@@ -137,6 +139,7 @@ const normalizeMatch = (match: RawMatch): Match => {
         devoted_bonus: mp.devoted_bonus ?? null,
         renowned_bonus: mp.renowned_bonus ?? null,
         defiant_bonus: mp.defiant_bonus ?? null,
+        rookie_bonus: mp.rookie_bonus ?? null,
         action_time_seconds: mp.action_time_seconds ?? null,
         players: {
           id: player.id,
