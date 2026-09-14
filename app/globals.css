@@ -6352,8 +6352,14 @@
       box-shadow 0.15s,
       background 0.15s;
   }
-  .vote-option-card:hover {
-    border-color: rgba(201, 151, 58, 0.45);
+  /* Gated to real-hover devices only (a mouse) — touchscreens simulate
+     :hover on tap and don't clear it again until something else is
+     tapped, so on mobile this would otherwise leave a "stuck" highlighted
+     border on whichever option was last voted for. */
+  @media (hover: hover) and (pointer: fine) {
+    .vote-option-card:hover {
+      border-color: rgba(201, 151, 58, 0.45);
+    }
   }
   .vote-option-card:active {
     border-color: var(--gold-light);
