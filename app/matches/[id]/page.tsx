@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, ReactNode, useEffect, useState } from "react";
+import { CSSProperties, ReactNode, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -26,6 +26,8 @@ import {
 import { Badge } from "@/lib/badges";
 import { sharedAuthHeaders } from "@/lib/apiAuth";
 import { renderSimpleMarkdown } from "@/lib/simpleMarkdown";
+import { CardReference, findMentionedCards } from "@/lib/heroCardContext";
+import { CardDetailModal } from "@/components/CardDetail";
 
 type Match = {
   id: string;
@@ -271,6 +273,7 @@ export default function MatchDetailPage() {
   >(new Map());
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<CardReference | null>(null);
 
   useEffect(() => {
     if (!matchId) return;
@@ -310,6 +313,24 @@ export default function MatchDetailPage() {
     };
     loadFirstHeroWins();
   }, []);
+
+  // Lets a card named in the Oracle's own generated analysis text be
+  // tapped to view its exact stats (see goa-card-mention in
+  // lib/simpleMarkdown.tsx), same as a card mentioned in an Oracle chat
+  // reply — scoped to only the heroes actually in this match, same
+  // reasoning as findMentionedCards' own comment (avoids false-positive
+  // matches from short/generic names against heroes with nothing to do
+  // with this match). Recomputed from the plain stored text rather than
+  // a separate persisted column, since it's cheap and always stays in
+  // sync with whatever text is actually shown.
+  const draftAnalysisHeroIds = useMemo(
+    () => Array.from(new Set((match?.match_players ?? []).map((p) => p.hero_id).filter((id): id is string => !!id))),
+    [match],
+  );
+  const draftAnalysisCardReferences = useMemo(
+    () => (match?.draft_analysis ? findMentionedCards(match.draft_analysis, draftAnalysisHeroIds) : []),
+    [match, draftAnalysisHeroIds],
+  );
 
   const goToProfile = (id: string) => router.push(`/players/${id}`);
 
@@ -577,7 +598,7 @@ export default function MatchDetailPage() {
 
         {match.draft_analysis ? (
           <div className="goa-draft-analysis-text">
-            {renderSimpleMarkdown(match.draft_analysis)}
+            {renderSimpleMarkdown(match.draft_analysis, draftAnalysisCardReferences, setSelectedCard)}
           </div>
         ) : analysisLoading ? (
           <p className="goa-draft-analysis-hint">
@@ -604,6 +625,10 @@ export default function MatchDetailPage() {
         )}
         {analysisError && <p className="goa-chat-error">{analysisError}</p>}
       </div>
+
+      {selectedCard && (
+        <CardDetailModal reference={selectedCard} onClose={() => setSelectedCard(null)} />
+      )}
     </main>
   );
 }
