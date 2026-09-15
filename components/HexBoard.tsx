@@ -1098,7 +1098,15 @@ export function HexBoard() {
   const draggingExistingId = dragRender?.kind === "existing" ? dragRender.id : null;
 
   return (
-    <div className="goa-board-inner">
+    <div
+      className="goa-board-inner"
+      // A long-press on a token/palette item is how dragging starts (see
+      // startDragExisting/startPendingPress) — without this, Android
+      // Chrome (and some other touch browsers) also reads that same
+      // press-and-hold as a request for its own right-click-style context
+      // menu and pops it up over the board, hijacking the gesture.
+      onContextMenu={(e) => e.preventDefault()}
+    >
       {/* Its own row — kept apart from the icon toolbar below (rather
           than just another flex-wrap item there) so which map is active
           always reads as a distinct, full-width choice instead of

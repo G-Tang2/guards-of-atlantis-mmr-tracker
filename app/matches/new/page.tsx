@@ -36,6 +36,7 @@ type Player = {
   avatar_url?: string | null;
   last_played_match_number: number;
   matches_played: number;
+  rookie_eligible: boolean;
 };
 
 type PoolEntry = {
@@ -403,10 +404,13 @@ function NewMatchPageInner() {
         ownedBadgesByPlayer,
       );
 
-      // A player still within their first ROOKIE_MATCH_THRESHOLD matches
-      // gets a flat MMR cushion, unaffected by any of the multiplicative
-      // bonuses above (first-hero-win, badge completion) — applied last so
-      // it's always exactly ROOKIE_MMR_BONUS, on top of whatever this match
+      // A genuinely new player (rookie_eligible — see
+      // supabase/migrations/0008_rookie_eligible_flag.sql; an existing
+      // player never qualifies, regardless of their own matches_played)
+      // still within their first ROOKIE_MATCH_THRESHOLD matches gets a
+      // flat MMR cushion, unaffected by any of the multiplicative bonuses
+      // above (first-hero-win, badge completion) — applied last so it's
+      // always exactly ROOKIE_MMR_BONUS, on top of whatever this match
       // otherwise gave them, win, lose, or draw. Keyed off matches_played
       // *before* this match (see the Player type/select("*") above).
       const rookieBonusByPlayer = new Map<string, number>();
@@ -416,8 +420,8 @@ function NewMatchPageInner() {
       ): PlayerResult[] =>
         list.map((p) => {
           const pool = team === "atlantis" ? atlPlayers : titPlayers;
-          const matchesPlayed = pool.find((x) => x.id === p.id)?.matches_played ?? 0;
-          if (!isRookie(matchesPlayed)) return p;
+          const player = pool.find((x) => x.id === p.id);
+          if (!isRookie(player?.matches_played ?? 0, player?.rookie_eligible ?? false)) return p;
           rookieBonusByPlayer.set(p.id, ROOKIE_MMR_BONUS);
           return {
             ...p,

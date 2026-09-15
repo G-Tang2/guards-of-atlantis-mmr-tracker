@@ -7120,6 +7120,14 @@
     border-radius: 50%;
     cursor: grab;
     touch-action: none;
+    /* A long-press here is how startDragExisting picks the token back up
+       — without these, iOS Safari pops its own press-and-hold callout
+       menu (copy/save image/etc.) over it instead, hijacking the
+       gesture (see goa-board-inner's onContextMenu for the Android/
+       Chrome equivalent of this same fix). */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
   .goa-piece-thumb {
     border-radius: 50%;
@@ -7256,6 +7264,12 @@
        still starts dragging immediately, unaffected by this. */
     touch-action: pan-x;
     transition: border-color 0.15s, transform 0.15s;
+    /* Same long-press-triggers-a-native-menu problem as .goa-board-token
+       above — a long-press here starts a drag (startPendingPress), not a
+       request for iOS's copy/save-image callout. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
   .goa-board-palette-item.active {
     border-color: var(--gold-light);
