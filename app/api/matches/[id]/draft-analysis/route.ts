@@ -118,13 +118,11 @@ Atlantis picks: ${formatRoster(atlantisRoster)}
 Titans picks: ${formatRoster(titansRoster)}
 ${resultLine}
 
-TASK — produce exactly two parts, in this order, using Markdown:
+TASK: Write a focused analysis of which team drafted the stronger overall TEAM COMPOSITION — not simply whichever team happened to win the actual game. The match result above is context only: a team can win despite a weaker draft, or lose despite a stronger one — say so plainly if that's the case.
 
-1. A "## Draft Verdict" section: 2-4 sentences judging which team drafted the stronger TEAM COMPOSITION — synergy between their own heroes' card colors/kits, and how well their picks answer the opponents' picks — not simply whichever team happened to win the actual game. The match result above is context only: a team can win despite a weaker draft, or lose despite a stronger one — say so plainly if that's the case. End with a clear verdict naming one team, or state it was roughly even if it genuinely was.
+Cover: how well each team's own heroes' card colors/kits work together (synergy), and how well each team's picks answer the specific heroes they're facing. Write this as a few skimmable paragraphs — no per-hero breakdown needed. End with a clear, direct verdict naming one team as having drafted better, or state it was roughly even if it genuinely was.
 
-2. A "## Hero Notes" section: one bolded sub-heading per hero in the match (both teams, every hero must be covered), each followed by 2-4 sentences of concrete, specific tips covering (a) how that hero should play together with their own team's other picks, and (b) how they should use their kit against the specific enemy heroes they're facing this match. Keep each hero's note skimmable — this is generated for every match, not just this one.
-
-Ground every specific claim (card names, numbers, effects) in the hero card details and strategy guides below — don't invent numbers or effects that aren't there. If a hero's own card/guide data isn't included below, still give genuinely useful advice based on their known role and general strategy principles rather than refusing — unlike an ordinary Q&A answer, this analysis must cover every hero actually in the match.
+Ground every specific claim (card names, numbers, effects) in the hero card details and strategy guides below — don't invent numbers or effects that aren't there.
 
 ${sections.join("\n\n")}`;
 

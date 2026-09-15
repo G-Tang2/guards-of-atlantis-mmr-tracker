@@ -553,10 +553,9 @@ export default function MatchDetailPage() {
       </div>
 
       {/* Draft Analysis — an Oracle-generated (Gemini) read on which team
-          drafted the stronger composition, plus per-hero tips for playing
-          with their own team and against the specific enemy picks. Generated
-          once on demand and cached on the match row (see draft_analysis in
-          MATCH_SELECT above) rather than regenerated on every page view. */}
+          drafted the stronger composition. Generated once on demand and
+          cached on the match row (see draft_analysis in MATCH_SELECT
+          above) rather than regenerated on every page view. */}
       <div className="goa-section">
         <div className="goa-sec-head goa-draft-analysis-head">
           <span className="goa-draft-analysis-head-title">
@@ -587,7 +586,7 @@ export default function MatchDetailPage() {
         ) : (
           <>
             <p className="goa-draft-analysis-hint">
-              Let the Oracle judge this draft and give per-hero tips for both teams.
+              Let the Oracle judge which team drafted the stronger composition.
             </p>
             <button
               type="button"
