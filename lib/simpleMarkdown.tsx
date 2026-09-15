@@ -52,7 +52,13 @@ function wrapCardMentions(
   ).sort((a, b) => b.length - a.length);
   if (names.length === 0) return [text];
 
-  const pattern = new RegExp(`(${names.map(escapeRegExp).join("|")})`, "gi");
+  // Letter-boundary lookaround (zero-width, so it isn't itself captured
+  // by split() below) rather than \b — see lib/heroCardContext.ts's
+  // findMentionedCards for why a real \b breaks on names ending in
+  // punctuation. This stops a short, common-word card name (e.g.
+  // Gydion's spell "Shield") from matching as a fragment of an unrelated
+  // longer word like "windshield" or "shielding".
+  const pattern = new RegExp(`(?<![a-zA-Z])(${names.map(escapeRegExp).join("|")})(?![a-zA-Z])`, "gi");
   const parts = text.split(pattern);
   if (parts.length === 1) return [text];
 

@@ -941,8 +941,16 @@ export function findMentionedCards(
   // silently stop that card from ever being detected. Plain alternation,
   // longest names first, is exactly what wrapCardMentions already uses
   // client-side for the same reason.
+  // Letter-boundary lookaround (not \b — see this function's own note
+  // above on why a real \b breaks for names ending in punctuation):
+  // requires a non-letter (or string start/end) on both sides of the
+  // match, so a short, common-word card name (e.g. Brogan's/Gydion's
+  // "Shield") can't match as a fragment of an unrelated longer word like
+  // "windshield" or "shielding" — a real risk once a card name is an
+  // ordinary English word rather than a distinctive multi-word phrase.
+  // Punctuation and spaces still satisfy this fine on either side.
   const sortedNames = [...new Set(candidates.map((c) => c.name))].sort((a, b) => b.length - a.length);
-  const pattern = new RegExp(`(?:${sortedNames.map(escapeRegExp).join("|")})`, "gi");
+  const pattern = new RegExp(`(?<![a-zA-Z])(?:${sortedNames.map(escapeRegExp).join("|")})(?![a-zA-Z])`, "gi");
   const occurrences = [...searchText.matchAll(pattern)];
   if (occurrences.length === 0) return [];
 
