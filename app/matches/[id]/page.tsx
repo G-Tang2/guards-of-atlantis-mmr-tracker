@@ -15,7 +15,7 @@ import {
   Team,
   WinCondition,
 } from "@/lib/match";
-import { ScrollText, Swords } from "lucide-react";
+import { ScrollText, Swords, MessageCircle, Loader2, RotateCw } from "lucide-react";
 import {
   buildFirstHeroWinMap,
   isFirstHeroWinMatch,
@@ -24,6 +24,8 @@ import {
   buildCompletedBadgesMap,
 } from "@/lib/heroWinBonus";
 import { Badge } from "@/lib/badges";
+import { sharedAuthHeaders } from "@/lib/apiAuth";
+import { renderSimpleMarkdown } from "@/lib/simpleMarkdown";
 
 type Match = {
   id: string;
@@ -43,6 +45,7 @@ type Match = {
   wave_counter_remaining_2: number | null;
   atlantis_life_counter: number | null;
   titans_life_counter: number | null;
+  draft_analysis: string | null;
   match_players: MatchPlayer[];
 };
 
@@ -80,6 +83,7 @@ type RawMatch = {
   wave_counter_remaining_2: number | null;
   atlantis_life_counter: number | null;
   titans_life_counter: number | null;
+  draft_analysis: string | null;
   match_players: RawMatchPlayer[] | null;
 };
 
@@ -101,6 +105,7 @@ const MATCH_SELECT = `
   wave_counter_remaining_2,
   atlantis_life_counter,
   titans_life_counter,
+  draft_analysis,
   match_players (
     player_id,
     team,
@@ -169,6 +174,7 @@ const normalizeMatch = (match: RawMatch): Match => {
     wave_counter_remaining_2: match.wave_counter_remaining_2,
     atlantis_life_counter: match.atlantis_life_counter,
     titans_life_counter: match.titans_life_counter,
+    draft_analysis: match.draft_analysis,
     match_players: normalizedMatchPlayers,
   };
 };
@@ -263,6 +269,8 @@ export default function MatchDetailPage() {
   const [completedBadgesMap, setCompletedBadgesMap] = useState<
     Map<string, Badge[]>
   >(new Map());
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!matchId) return;
@@ -304,6 +312,28 @@ export default function MatchDetailPage() {
   }, []);
 
   const goToProfile = (id: string) => router.push(`/players/${id}`);
+
+  const generateDraftAnalysis = async (regenerate: boolean) => {
+    if (!matchId || analysisLoading) return;
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const res = await fetch(`/api/matches/${matchId}/draft-analysis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...sharedAuthHeaders() },
+        body: JSON.stringify({ regenerate }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || "Failed to generate the draft analysis");
+      }
+      setMatch((prev) => (prev ? { ...prev, draft_analysis: data.analysis } : prev));
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : "Failed to generate the draft analysis");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -520,6 +550,60 @@ export default function MatchDetailPage() {
             showAllBadges
           />
         </div>
+      </div>
+
+      {/* Draft Analysis — an Oracle-generated (Gemini) read on which team
+          drafted the stronger composition, plus per-hero tips for playing
+          with their own team and against the specific enemy picks. Generated
+          once on demand and cached on the match row (see draft_analysis in
+          MATCH_SELECT above) rather than regenerated on every page view. */}
+      <div className="goa-section">
+        <div className="goa-sec-head goa-draft-analysis-head">
+          <span className="goa-draft-analysis-head-title">
+            <MessageCircle size={14} />
+            Draft Analysis
+          </span>
+          {match.draft_analysis && !analysisLoading && (
+            <button
+              type="button"
+              className="goa-draft-analysis-regen-btn"
+              onClick={() => generateDraftAnalysis(true)}
+              aria-label="Regenerate draft analysis"
+              title="Regenerate"
+            >
+              <RotateCw size={13} />
+            </button>
+          )}
+        </div>
+
+        {match.draft_analysis ? (
+          <div className="goa-draft-analysis-text">
+            {renderSimpleMarkdown(match.draft_analysis)}
+          </div>
+        ) : analysisLoading ? (
+          <p className="goa-draft-analysis-hint">
+            The Oracle is analyzing the draft… this can take up to 45 seconds.
+          </p>
+        ) : (
+          <>
+            <p className="goa-draft-analysis-hint">
+              Let the Oracle judge this draft and give per-hero tips for both teams.
+            </p>
+            <button
+              type="button"
+              className="goa-draft-analysis-btn"
+              onClick={() => generateDraftAnalysis(false)}
+            >
+              Generate Draft Analysis
+            </button>
+          </>
+        )}
+        {analysisLoading && (
+          <div className="goa-draft-analysis-loading">
+            <Loader2 size={16} className="goa-spin" />
+          </div>
+        )}
+        {analysisError && <p className="goa-chat-error">{analysisError}</p>}
       </div>
     </main>
   );

@@ -2904,6 +2904,95 @@
     border-bottom: 1px solid var(--border);
   }
 
+  /* Match detail page — Draft Analysis section (Oracle-generated, see
+     app/api/matches/[id]/draft-analysis/route.ts). */
+  .goa-draft-analysis-head {
+    justify-content: space-between;
+  }
+  .goa-draft-analysis-head-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .goa-draft-analysis-regen-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--gold);
+    cursor: pointer;
+  }
+  .goa-draft-analysis-regen-btn:hover {
+    border-color: var(--border-bright);
+    color: var(--gold-light);
+  }
+  .goa-draft-analysis-hint {
+    padding: 0.85rem;
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .goa-draft-analysis-btn {
+    margin: 0 0.85rem 0.85rem;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--gold);
+    background: linear-gradient(
+      135deg,
+      rgba(201, 151, 58, 0.2),
+      rgba(122, 88, 26, 0.3)
+    );
+    color: var(--gold-light);
+    font-family: "Cinzel", serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+  }
+  .goa-draft-analysis-btn:hover {
+    box-shadow: 0 0 16px rgba(201, 151, 58, 0.3);
+  }
+  .goa-draft-analysis-loading {
+    display: flex;
+    justify-content: center;
+    padding: 0 0.85rem 0.85rem;
+    color: var(--gold);
+  }
+  .goa-spin {
+    animation: goa-spin-rotate 0.8s linear infinite;
+  }
+  @keyframes goa-spin-rotate {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  /* strong/em need their own color here since goa-chat-bubble's own
+     rules (app/chat/page.tsx) are scoped to that specific class — this
+     reuses the rest of that same prose styling (goa-chat-heading/-list/
+     -line, see lib/simpleMarkdown.tsx) unscoped. */
+  .goa-draft-analysis-text {
+    padding: 0.85rem;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+  }
+  .goa-draft-analysis-text strong {
+    font-weight: 700;
+    color: var(--gold-light);
+  }
+  .goa-draft-analysis-text em {
+    font-style: italic;
+    color: var(--text-muted);
+  }
+
   /* Match detail page — pre-match odds bar */
   .goa-odds-wrap {
     padding: 0.75rem 0.85rem;
