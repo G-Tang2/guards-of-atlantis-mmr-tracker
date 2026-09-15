@@ -10,6 +10,22 @@ const CONTEXT_CHAR_BUDGET = CONTEXT_TOKEN_BUDGET * 4;
 
 const CARD_COLORS = ["RED", "BLUE", "GREEN", "GOLD", "PURPLE", "SILVER"];
 
+// Gydion's spellbook cards (isSpell: true, see lib/heroCards.ts) share
+// the same color/level schema as a hero's normal action cards purely for
+// their own physical card layout, but they aren't part of his deck in
+// the sense every stat-comparison/enumeration function below assumes
+// ("one hero, one comparable set of action cards") — including them
+// would e.g. double-count Gydion in a "one Tier 1 Red card per hero"
+// listing (his own real Elementary Evocation, plus the spell Burning
+// Hands), or skew a cross-hero attack/defense comparison with a value
+// that's really the *spell's* stat, not a card he actually holds.
+// Deliberately NOT used by getRelevantHeroIds, findMentionedCards, or
+// fetchRelevantHeroCards elsewhere in this file — a question about
+// "Fireball" or "Wish" should still resolve to Gydion and get real data.
+function nonSpellCards(heroId: string): HeroCard[] {
+  return (HERO_CARDS[heroId] ?? []).filter((c) => c.isSpell !== true);
+}
+
 // On top of the base stopword list. The general principle: any word this
 // app's own question-parsing already treats as a structured filter or
 // meta-vocabulary — a stat name, a color, a tier/level word, "card"/
@@ -618,7 +634,7 @@ export function computeStatExtremes(
 
   const distinctValues = new Set<number>();
   for (const heroId of scopeIds) {
-    for (const card of HERO_CARDS[heroId] ?? []) {
+    for (const card of nonSpellCards(heroId)) {
       if (!cardMatchesFilters(card, colors, level)) continue;
       const value = resolveStatValue(card, stat);
       if (value !== null) distinctValues.add(value);
@@ -633,7 +649,7 @@ export function computeStatExtremes(
     const matches: StatExtremeMatch[] = [];
     for (const heroId of scopeIds) {
       const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
-      for (const card of HERO_CARDS[heroId] ?? []) {
+      for (const card of nonSpellCards(heroId)) {
         if (!cardMatchesFilters(card, colors, level)) continue;
         if (resolveStatValue(card, stat) === targetValue) {
           matches.push({
@@ -709,7 +725,7 @@ export function computeSortedStatList(
   const entries: SortedStatEntry[] = [];
   for (const heroId of scopeIds) {
     const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
-    for (const card of HERO_CARDS[heroId] ?? []) {
+    for (const card of nonSpellCards(heroId)) {
       if (!cardMatchesFilters(card, colors, level)) continue;
       const value = resolveStatValue(card, stat);
       if (value === null) continue;
@@ -755,7 +771,7 @@ export function computeStatBreakdown(
   return heroIds.map((heroId) => {
     const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
     const cards: HeroStatBreakdown["cards"] = [];
-    for (const card of HERO_CARDS[heroId] ?? []) {
+    for (const card of nonSpellCards(heroId)) {
       if (!cardMatchesFilters(card, colors, level)) continue;
       const value = resolveStatValue(card, stat);
       if (value === null) continue;
@@ -789,7 +805,7 @@ export function listCardsByFilter(
   const entries: FilteredCardEntry[] = [];
   for (const heroId of scopeIds) {
     const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
-    for (const card of HERO_CARDS[heroId] ?? []) {
+    for (const card of nonSpellCards(heroId)) {
       if (!cardMatchesFilters(card, colors, level)) continue;
       entries.push({
         heroName,
@@ -817,7 +833,7 @@ export function buildAllHeroStatSummary(askedColors: string[]): string {
   for (const heroId of Object.keys(HERO_CARDS)) {
     const hero = HEROES.find((h) => h.id === heroId);
     const heroName = hero?.name ?? heroId;
-    for (const card of HERO_CARDS[heroId]) {
+    for (const card of nonSpellCards(heroId)) {
       const color = typeof card.color === "string" ? card.color : "";
       if (askedColors.length > 0 && !askedColors.includes(color)) continue;
       const name = typeof card.name === "string" ? card.name : "";

@@ -102,9 +102,17 @@ export function HeroActionCard({ heroId, card, className }: { heroId: string; ca
   const [ready, setReady] = useState(false);
 
   const hasArt = hasCardArt(heroId);
+  // Gydion's spellbook cards (lib/heroCards.ts's isSpell entries) are
+  // pre-rendered card images ported directly from Stats-of-Atlantis
+  // (public/cards/<heroId>/spells/<spellSlug>.webp) — unlike every other
+  // card, which is a bare background template this component paints text/
+  // icons onto via <canvas>, these already have their full layout baked
+  // in, so there's nothing for updateCanvas to do.
+  const isSpell = asBoolean(card.isSpell);
+  const spellSlug = asString(card.spellSlug);
 
   useEffect(() => {
-    if (!hasArt) return;
+    if (!hasArt || isSpell) return;
     let cancelled = false;
 
     async function paint() {
@@ -189,6 +197,21 @@ export function HeroActionCard({ heroId, card, className }: { heroId: string; ca
   }, [heroId, card.name, card.color, card.level, card.description]);
 
   if (!hasArt) return null;
+
+  if (isSpell) {
+    if (!spellSlug) return null;
+    // eslint-disable-next-line @next/next/no-img-element -- a fixed,
+    // small (~90KB) set of already-optimized webp files; not worth
+    // next/image's remote-loader machinery for this.
+    return (
+      <img
+        src={`/cards/${heroId}/spells/${spellSlug}.webp`}
+        alt={asString(card.name) ?? ""}
+        className={className}
+        style={{ width: "100%", height: "auto" }}
+      />
+    );
+  }
 
   return (
     <canvas
