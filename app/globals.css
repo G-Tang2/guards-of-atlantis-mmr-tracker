@@ -1250,6 +1250,25 @@
     box-shadow: 0 0 20px rgba(196, 74, 74, 0.3);
   }
 
+  /* Muted variant for a secondary choice sitting next to a primary
+     .goa-btn (e.g. the ranked-balance setup screen's "vote directly"
+     next to "ban options first") — same shape, no shimmer/glow, so it
+     doesn't compete with the primary option for attention. */
+  .goa-btn.outline {
+    background: transparent;
+    border-color: var(--border-bright);
+    color: var(--text-muted);
+    box-shadow: none;
+  }
+  .goa-btn.outline::before {
+    display: none;
+  }
+  .goa-btn.outline:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
+    border-color: var(--border-bright);
+  }
+
   /* Smaller variant for tighter contexts like confirm-dialog buttons,
      where the default full-size CTA reads oversized next to a short
      one-line prompt. */
@@ -6422,6 +6441,15 @@
     border-color: var(--gain);
     box-shadow: 0 0 6px rgba(93, 187, 138, 0.6);
   }
+  /* A ban round votes for what to remove, not what to keep — red instead
+     of the usual green so the two kinds of ballot are never confusable
+     at a glance, especially mid-handoff when a new voter only gets a
+     quick look at the header. */
+  .goa-vote-dot.voted.ban {
+    background: var(--loss);
+    border-color: var(--loss);
+    box-shadow: 0 0 6px rgba(196, 74, 74, 0.6);
+  }
 
   .goa-vote-options {
     display: flex;
@@ -6453,6 +6481,52 @@
   .vote-option-card:active {
     border-color: var(--gold-light);
     background: rgba(201, 151, 58, 0.08);
+  }
+  /* Ban-round ballot options get the same red theming as their vote dots
+     (see .goa-vote-dot.voted.ban) instead of the usual gold tap feedback. */
+  @media (hover: hover) and (pointer: fine) {
+    .vote-option-card.ban:hover {
+      border-color: rgba(196, 74, 74, 0.5);
+    }
+  }
+  .vote-option-card.ban:active {
+    border-color: var(--loss);
+    background: rgba(196, 74, 74, 0.1);
+  }
+
+  /* A banned option, shown in the ban-results reveal and again (for
+     context) in the final results — dimmed like a lost tie-break option,
+     with its own red border/tag instead of gold so "removed" reads
+     distinctly from "not the winner". */
+  .ranked-option.banned {
+    opacity: 0.5;
+    border-color: rgba(196, 74, 74, 0.4);
+  }
+  /* Groups the "Option N" label with its own banned tag (when present)
+     so .ranked-option-head's justify-content: space-between still only
+     ever balances two things — this group vs. headExtra (a vote-count on
+     the other side of the row, see .vote-results-count's margin-left:
+     auto) — instead of the extra tag becoming a confusing third item. */
+  .ranked-option-head-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .goa-vote-banned-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--loss);
+    border-radius: 999px;
+    background: rgba(196, 74, 74, 0.15);
+    color: #e8a3a3;
+    font-family: "Cinzel", serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
 
   .vote-results-count {
@@ -6505,6 +6579,92 @@
   .vote-tie-option.loser {
     opacity: 0.35;
     filter: grayscale(0.85);
+  }
+
+  /* Ranked-balance setup screen — "ban options first?" choice. */
+  .goa-vote-setup-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+  }
+
+  /* Shown for VOTE_CONFIRM_MS after every tap (ban or choose round) — a
+     small floating pop-up rather than a full-screen takeover, so it
+     reads as a brief confirmation rather than blocking the page. Fixed
+     dead-center so it's the first thing the next voter sees when the
+     device is handed over, and dismissible early via its own close
+     button (see VoteConfirmPopup's onClose). */
+  .goa-vote-confirm-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 250;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.4rem;
+    max-width: min(320px, calc(100vw - 1.5rem));
+    padding: 0.85rem;
+    background: var(--stone-mid);
+    border: 1px solid var(--border-bright);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    animation: goaVoteConfirmIn 0.2s ease;
+  }
+  @keyframes goaVoteConfirmIn {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  .goa-vote-confirm-icon {
+    flex-shrink: 0;
+    color: var(--gain);
+  }
+  .goa-vote-confirm-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.05rem;
+    text-align: center;
+  }
+  .goa-vote-confirm-title {
+    font-family: "Cinzel", serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+  }
+  .goa-vote-confirm-sub {
+    font-family: "Crimson Pro", serif;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .goa-vote-confirm-close {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .goa-vote-confirm-close:hover {
+    color: var(--text-primary);
   }
 
   /* ── iPad+ scale-up (/teams/vote only, via .goa-vote-page) ── same
