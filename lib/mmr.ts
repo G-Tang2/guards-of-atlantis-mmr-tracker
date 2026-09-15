@@ -57,6 +57,26 @@ const applyDelta = (team: Player[], delta: number): PlayerResult[] => {
   }));
 };
 
+// Preview-only: "if this team won, how much MMR would they gain" for
+// each side, given just their average MMR — no real match/roster of
+// PlayerResults needed. Used by the Ranked Balance vote page to show
+// each candidate split's payoff before anyone's actually played
+// anything, so it deliberately mirrors only the base Elo math
+// calculateMMR itself uses (K + win bonus) — none of the extra bonuses
+// (bounty hero picks, hero-win streaks, badges) apply here, since none
+// of those are knowable pre-draft anyway.
+export const previewWinGain = (
+  atlantisAvg: number,
+  titansAvg: number,
+): { atlantis: number; titans: number } => {
+  const expectedA = expectedWin(atlantisAvg, titansAvg);
+  const expectedB = 1 - expectedA;
+  return {
+    atlantis: Math.round(calculateDelta(true, expectedA)),
+    titans: Math.round(calculateDelta(true, expectedB)),
+  };
+};
+
 export const calculateMMR = (
   atlantis: Player[],
   titans: Player[],

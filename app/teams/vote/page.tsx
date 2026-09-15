@@ -8,6 +8,7 @@ import { PasswordGate } from "@/components/PasswordGate";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
 import { rankedBalancedSplits, Split } from "@/lib/rankedBalance";
+import { previewWinGain } from "@/lib/mmr";
 import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
 import { Star, Crown, ScrollText, Swords, Ban, CheckCircle2, X } from "lucide-react";
@@ -16,7 +17,6 @@ type Player = { id: string; name: string; mmr: number; avatar_url?: string | nul
 type Stage =
   | "setup"
   | "ban_ballot"
-  | "ban_tie_reveal"
   | "ban_results"
   | "ballot"
   | "tie_reveal"
@@ -61,19 +61,13 @@ function buildTieBreak(tied: number[]) {
   return { winner, sequence };
 }
 
-// Same flashing-reveal idea as buildTieBreak above, generalized to pick
-// several eliminees out of one tied pool at once (needed when banning:
-// more than one option can tie for a spot among the top BAN_COUNT most
-// banned). Doesn't try to force the flash sequence to land exactly on
-// the chosen ones the way the single-winner version does — with more
-// than one outcome to reveal, that guarantee isn't as meaningful, and
-// this stays simpler for it.
+// Randomly resolves a boundary tie during banning (more than one option
+// can tie for a spot among the top BAN_COUNT most banned) — no reveal
+// animation, unlike buildTieBreak above; see settleBanTally's own
+// comment for why.
 function buildEliminationTieBreak(tiedPool: number[], neededFromTied: number) {
   const shuffled = [...tiedPool].sort(() => Math.random() - 0.5);
-  const eliminated = shuffled.slice(0, neededFromTied);
-  const steps = 14;
-  const sequence = Array.from({ length: steps }, (_, i) => tiedPool[i % tiedPool.length]);
-  return { eliminated, sequence };
+  return { eliminated: shuffled.slice(0, neededFromTied) };
 }
 
 // Works out exactly which `countToEliminate` indices (by ban-vote count,
@@ -114,6 +108,7 @@ function OptionCard({
   className,
   headExtra,
   banned,
+  disabled,
 }: {
   index: number;
   split: Split<Player>;
@@ -121,6 +116,7 @@ function OptionCard({
   className?: string;
   headExtra?: ReactNode;
   banned?: boolean;
+  disabled?: boolean;
 }) {
   const body = (
     <>
@@ -136,27 +132,31 @@ function OptionCard({
         {headExtra}
       </div>
       <div className="draft-live-teams">
-        {FACTIONS.map((faction) => (
-          <div key={faction} className="draft-live-team">
-            <div className="flex justify-between align-center">
-              <span
-                className={`draft-faction-label ${faction === "atlantis" ? "atl" : "tit"}`}
-              >
-                {faction === "atlantis" ? "Atlantis" : "Titans"}
-              </span>
-              <span className="draft-live-team-avg">
-                AVG MMR: {avg(split[faction])}
-              </span>
-            </div>
-            {split[faction].map((p) => (
-              <div key={p.id} className="draft-live-row">
-                <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={18} />
-                <span className="draft-live-name">{p.name}</span>
-                <span className="draft-live-mmr sm">{p.mmr} MMR</span>
+        {(() => {
+          const gain = previewWinGain(avg(split.atlantis), avg(split.titans));
+          return FACTIONS.map((faction) => (
+            <div key={faction} className="draft-live-team">
+              <div className="flex justify-between align-center">
+                <span
+                  className={`draft-faction-label ${faction === "atlantis" ? "atl" : "tit"}`}
+                >
+                  {faction === "atlantis" ? "Atlantis" : "Titans"}
+                </span>
+                <span className="draft-live-team-avg">
+                  AVG MMR: {avg(split[faction])}
+                </span>
               </div>
-            ))}
-          </div>
-        ))}
+              <div className="draft-live-team-gain">+{gain[faction]} MMR for the win</div>
+              {split[faction].map((p) => (
+                <div key={p.id} className="draft-live-row">
+                  <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={18} />
+                  <span className="draft-live-name">{p.name}</span>
+                  <span className="draft-live-mmr sm">{p.mmr} MMR</span>
+                </div>
+              ))}
+            </div>
+          ));
+        })()}
       </div>
     </>
   );
@@ -165,7 +165,7 @@ function OptionCard({
     return <div className={className}>{body}</div>;
   }
   return (
-    <button type="button" className={className} onClick={onClick}>
+    <button type="button" className={className} onClick={onClick} disabled={disabled}>
       {body}
     </button>
   );
@@ -249,9 +249,6 @@ function TeamsVotePageInner() {
   const [banVotes, setBanVotes] = useState<number[]>([]);
   const [banVotesCast, setBanVotesCast] = useState(0);
   const [bannedIndices, setBannedIndices] = useState<number[]>([]);
-  const [banTiePool, setBanTiePool] = useState<number[]>([]);
-  const [banTieActiveIndex, setBanTieActiveIndex] = useState<number | null>(null);
-  const [banTieEliminated, setBanTieEliminated] = useState<number[]>([]);
 
   const [votes, setVotes] = useState<number[]>([]);
   const [votesCast, setVotesCast] = useState(0);
@@ -493,28 +490,6 @@ function TeamsVotePageInner() {
     setStage("ban_results");
   };
 
-  const runBanTieBreak = (tiedPool: number[], neededFromTied: number, locked: number[]) => {
-    setBanTiePool(tiedPool);
-    setStage("ban_tie_reveal");
-
-    const { eliminated, sequence } = buildEliminationTieBreak(tiedPool, neededFromTied);
-
-    let delay = 90;
-    let cumulative = 0;
-    sequence.forEach((idx) => {
-      cumulative += delay;
-      delay = Math.round(delay * 1.18);
-      setTimeout(() => setBanTieActiveIndex(idx), cumulative);
-    });
-
-    setTimeout(() => {
-      setBanTieActiveIndex(null);
-      setBanTieEliminated(eliminated);
-    }, cumulative + 300);
-
-    setTimeout(() => finishBan([...locked, ...eliminated]), cumulative + 2900);
-  };
-
   const settleBanTally = (finalBanVotes: number[]) => {
     // Never eliminate more options than actually got a ban vote — if
     // everyone converged on banning the same single option and left
@@ -528,11 +503,14 @@ function TeamsVotePageInner() {
       activeIndices,
       countToEliminate,
     );
-    if (neededFromTied <= 0 || tiedPool.length === neededFromTied) {
-      finishBan([...locked, ...tiedPool.slice(0, Math.max(neededFromTied, 0))]);
-    } else {
-      runBanTieBreak(tiedPool, neededFromTied, locked);
-    }
+    // A boundary tie is resolved silently (no reveal animation) — the
+    // ban-results screen right after already shows every option's own
+    // ban-vote count, which is all the transparency this needs.
+    const { eliminated } =
+      neededFromTied > 0 && tiedPool.length > neededFromTied
+        ? buildEliminationTieBreak(tiedPool, neededFromTied)
+        : { eliminated: tiedPool.slice(0, Math.max(neededFromTied, 0)) };
+    finishBan([...locked, ...eliminated]);
   };
 
   const castBanVote = (index: number) => {
@@ -694,32 +672,7 @@ function TeamsVotePageInner() {
                 split={split}
                 className="ranked-option vote-option-card ban"
                 onClick={() => castBanVote(i)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {stage === "ban_tie_reveal" && (
-        <div className="vote-tie-scene">
-          <p className="draft-coin-label">
-            Multiple options tied for banning — choosing randomly…
-          </p>
-          <div className="vote-tie-options">
-            {banTiePool.map((i) => (
-              <OptionCard
-                key={i}
-                index={i}
-                split={splits[i]}
-                className={`ranked-option vote-tie-option${
-                  banTieActiveIndex === i ? " active" : ""
-                }${
-                  banTieEliminated.includes(i)
-                    ? " loser"
-                    : banTieEliminated.length > 0
-                      ? " winner"
-                      : ""
-                }`}
+                disabled={voteConfirmVisible}
               />
             ))}
           </div>
@@ -784,6 +737,7 @@ function TeamsVotePageInner() {
                 split={splits[i]}
                 className="ranked-option vote-option-card"
                 onClick={() => castVote(i)}
+                disabled={voteConfirmVisible}
               />
             ))}
           </div>

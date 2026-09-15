@@ -5393,6 +5393,26 @@
   .draft-faction-label.tit {
     color: var(--titans-light);
   }
+  /* Ranked Balance's own option cards pack in more per team (avg MMR
+     plus an MMR-gain preview, see previewWinGain) than /teams' own
+     builder does, so the shared size above reads oversized/crowded here
+     — scaled down just for this page rather than everywhere the shared
+     class is used. */
+  .goa-vote-page .draft-faction-label {
+    font-size: 0.72rem;
+  }
+  /* The Elo-preview line (previewWinGain) under a team's name/avg MMR —
+     green like every other MMR-gain figure in the app (see .goa-player-
+     delta.pos and similar) so it reads as a gain at a glance. */
+  .draft-live-team-gain {
+    font-family: "Cinzel", serif;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--gain);
+    text-align: right;
+    margin-top: 0.1rem;
+  }
 
   .draft-col-label {
     font-family: "Cinzel", serif;
@@ -6467,7 +6487,16 @@
     transition:
       border-color 0.15s,
       box-shadow 0.15s,
-      background 0.15s;
+      background 0.15s,
+      opacity 0.15s;
+  }
+  /* Disabled while the "vote counted" pop-up is up (see voteConfirmVisible
+     in app/teams/vote/page.tsx) — stops a fast second tap during that
+     window from registering as another vote, on the same or a different
+     option, before the device is actually handed over. */
+  .vote-option-card:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
   /* Gated to real-hover devices only (a mouse) — touchscreens simulate
      :hover on tap and don't clear it again until something else is
