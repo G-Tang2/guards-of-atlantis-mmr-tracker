@@ -120,7 +120,7 @@ ${resultLine}
 
 TASK: Write a focused analysis of which team drafted the stronger overall TEAM COMPOSITION — not simply whichever team happened to win the actual game. The match result above is context only: a team can win despite a weaker draft, or lose despite a stronger one — say so plainly if that's the case.
 
-Cover: how well each team's own heroes' card colors/kits work together (synergy), and how well each team's picks answer the specific heroes they're facing. Write this as a few skimmable paragraphs — no per-hero breakdown needed. End with a clear, direct verdict naming one team as having drafted better, or state it was roughly even if it genuinely was.
+Cover: how well each team's own heroes' card colors/kits work together (synergy), and how well each team's picks answer the specific heroes they're facing. Write this as a few skimmable paragraphs — no per-hero breakdown needed. End with a clear, direct verdict: name the team with the stronger draft, or say plainly that the draft was balanced if neither side genuinely had the edge — don't force a winner just to name one.
 
 Ground every specific claim (card names, numbers, effects) in the hero card details and strategy guides below — don't invent numbers or effects that aren't there.
 
