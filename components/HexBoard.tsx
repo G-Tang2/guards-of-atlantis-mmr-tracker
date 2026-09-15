@@ -165,7 +165,7 @@ const MOVE_THRESHOLD_PX = 8;
 // picked up for dragging — see startPendingPress's own comment for why
 // (in short: a touch swipe starting directly on a palette item needs to
 // still be able to scroll the strip, which an immediate drag prevented).
-const LONG_PRESS_MS = 200;
+const LONG_PRESS_MS = 120;
 // How far a touch can move during that hold before it's treated as a
 // scroll swipe instead (cancelling the pending drag) — deliberately
 // looser than MOVE_THRESHOLD_PX: a hold's own natural finger jitter
