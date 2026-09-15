@@ -1331,16 +1331,17 @@ Bain plays best as more of a support character even though his kit is aligned wi
 // stays far under this; it only matters on an unusually broad multi-hero
 // match (e.g. comparing two full three-hero drafts at once), where without
 // this a request could still overflow even after the discordContext/
-// rulebook fixes for that same failure mode.
+// rulebook fixes for that same failure mode. Default — some callers pass
+// their own, larger budget instead (see fetchRelevantHeroCards).
 const CONTEXT_TOKEN_BUDGET = 20_000;
-const CONTEXT_CHAR_BUDGET = CONTEXT_TOKEN_BUDGET * 4;
 
-export function fetchRelevantHeroGuides(heroIds: string[]): string {
+export function fetchRelevantHeroGuides(heroIds: string[], tokenBudget: number = CONTEXT_TOKEN_BUDGET): string {
   const kept = heroIds.filter((id) => HERO_GUIDES[id]);
   if (kept.length === 0) return "";
+  const charBudget = tokenBudget * 4;
 
   let combined = kept.map((id) => HERO_GUIDES[id]).join("\n\n---\n\n");
-  while (kept.length > 1 && combined.length > CONTEXT_CHAR_BUDGET) {
+  while (kept.length > 1 && combined.length > charBudget) {
     kept.pop();
     combined = kept.map((id) => HERO_GUIDES[id]).join("\n\n---\n\n");
   }

@@ -9,17 +9,7 @@ import { X } from "lucide-react";
 import { CardReference } from "@/lib/heroCardContext";
 import { HeroActionCard, hasCardArt } from "@/components/HeroActionCard";
 import { renderSimpleMarkdown } from "@/lib/simpleMarkdown";
-
-// Roughly matches each card color's in-game theme; falls back to the
-// default border for anything unrecognized.
-const CARD_COLOR_ACCENT: Record<string, string> = {
-  RED: "#c42a3a",
-  BLUE: "#2aabb8",
-  GREEN: "#5dbb8a",
-  GOLD: "#f0c96a",
-  PURPLE: "#a97fd4",
-  SILVER: "#b8b8c0",
-};
+import { CARD_COLOR_ACCENT } from "@/lib/cardColors";
 
 function asString(v: unknown): string | null {
   return typeof v === "string" ? v : null;

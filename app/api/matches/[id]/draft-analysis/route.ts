@@ -20,6 +20,14 @@ import { formatWinCondition } from "@/lib/match";
 // it waits, so the whole call just needs to stay well inside maxDuration.
 const GENERATION_DEADLINE_MS = 55_000;
 
+// Well above fetchRelevantHeroCards/fetchRelevantHeroGuides' shared
+// 20k-token default (see lib/heroCardContext.ts) — this route can pull
+// in up to 10 heroes for a full 5v5 draft, with none of the Discord/
+// rulebook sections or per-minute chat traffic that the smaller default
+// is sized around, so there's no reason to risk trimming a hero's data
+// out of a large match here.
+const HERO_CONTEXT_TOKEN_BUDGET = 200_000;
+
 const getHeroName = (heroId: string | null) => HEROES.find((h) => h.id === heroId)?.name ?? heroId ?? "Unknown";
 
 type RawMatchPlayer = {
@@ -101,8 +109,8 @@ export async function POST(
           match.win_condition ? ` ${formatWinCondition(match.win_condition).toLowerCase()}` : ""
         }.`;
 
-  const heroCardContext = fetchRelevantHeroCards(allHeroIds);
-  const heroGuideContext = fetchRelevantHeroGuides(allHeroIds);
+  const heroCardContext = fetchRelevantHeroCards(allHeroIds, HERO_CONTEXT_TOKEN_BUDGET);
+  const heroGuideContext = fetchRelevantHeroGuides(allHeroIds, HERO_CONTEXT_TOKEN_BUDGET);
   const generalStrategyContext = Object.values(GENERAL_STRATEGY_GUIDES).join("\n\n---\n\n");
 
   const sections = [
@@ -122,6 +130,8 @@ ${resultLine}
 
 TASK: Analyze which team drafted the stronger overall TEAM COMPOSITION — not simply whichever team happened to win the actual game. The match result above is context only: a team can win despite a weaker draft, or lose despite a stronger one — say so plainly if that's the case.
 
+Ignore each hero's Tier 4/PURPLE ultimate card when weighing the draft — it's rarely actually reached in a real match, so basing the analysis on it would overstate a hero whose ultimate is strong but who is otherwise weaker, or understate one whose ultimate is weak but who is strong everywhere else. Judge the draft on each hero's basic (Gold/Silver) and Tier 1-3 (Red/Blue/Green) cards only.
+
 Structure your answer with exactly these four "##" Markdown headings, in this order:
 
 ## Atlantis Team Composition (${heroNameList(atlantisRoster)})
@@ -134,9 +144,16 @@ Same, for Titans.
 How each team's composition actually plays against the other's specific picks — where one side's kit directly answers, blunts, or struggles against the other's, not just each team assessed in isolation.
 
 ## Verdict
-State plainly which team drafted the stronger composition ONLY if one side genuinely has the edge. If the gap is marginal, or you'd need to reach to justify picking a side, say explicitly that the draft was balanced instead — do not pick a "winner" just to have named one; a balanced verdict is a normal, common outcome here, not a fallback to avoid. Reconcile this verdict with the actual match result above — if the team you judge to have drafted better didn't win (or vice versa), say so explicitly rather than leaving the two unaddressed.
+Two random drafts are almost never truly equal — one side usually has at least a modest edge once you look closely at the specific matchups above, so treat "balanced" as a rare call, not a safe default. Only land on balanced if you've genuinely weighed both sides' matchup answers against each other and they hold up equally well; don't reach for "balanced" just to avoid committing to a side.
 
-Ground every specific claim (card names, numbers, effects) in the hero card details and strategy guides below — don't invent numbers or effects that aren't there.
+If there is a real, identifiable edge, name that team and grade the gap using exactly one of these three degrees — pick whichever one actually matches how decisive the gap is, don't default to the same one every time:
+- "slightly better" — a real but narrow edge; the other team is still very much in it purely on draft strength.
+- "better" — a clear, meaningful advantage that should tell in most games.
+- "exceptionally better" — a lopsided draft where one side's composition heavily outclasses the other's.
+
+Reconcile this verdict with the actual match result above — if the team you judge to have drafted better didn't win (or vice versa), say so explicitly rather than leaving the two unaddressed.
+
+Ground every specific claim (card names, numbers, effects) in the hero card details and strategy guides below — don't invent numbers or effects that aren't there. Never annotate a card name with its color in parentheses (e.g. write "Raging Stream", not "Raging Stream (Red)") — the app already shows each card's color visually wherever its name appears.
 
 ${sections.join("\n\n")}`;
 

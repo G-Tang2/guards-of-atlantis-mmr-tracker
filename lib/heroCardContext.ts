@@ -4,9 +4,9 @@ import { extractKeywords as extractBaseKeywords } from "@/lib/textKeywords";
 
 // Hard ceiling only — the keyword match below is what normally keeps a
 // request far under this. Estimated via a rough ~4-characters-per-token
-// heuristic, same as lib/discordContext.ts.
+// heuristic, same as lib/discordContext.ts. Default for fetchRelevantHeroCards
+// below — some callers pass their own, larger budget instead.
 const CONTEXT_TOKEN_BUDGET = 20_000;
-const CONTEXT_CHAR_BUDGET = CONTEXT_TOKEN_BUDGET * 4;
 
 const CARD_COLORS = ["RED", "BLUE", "GREEN", "GOLD", "PURPLE", "SILVER"];
 
@@ -309,8 +309,15 @@ export function getRelevantHeroIds(question: string): string[] {
 // usage, since it was previously always included in full. Plain
 // substring/keyword matching, not embeddings — cheap and good enough at
 // this data size, same approach as the Discord context filter.
-export function fetchRelevantHeroCards(heroIds: string[]): string {
+//
+// tokenBudget defaults to the shared chat-route ceiling but can be
+// raised per caller — e.g. the Draft Analysis route (up to 10 heroes at
+// once, no Discord/rulebook budget competing for room, and no per-minute
+// chat traffic to protect) passes a much larger one so a full 5v5 isn't
+// silently trimmed down to whichever heroes sort first.
+export function fetchRelevantHeroCards(heroIds: string[], tokenBudget: number = CONTEXT_TOKEN_BUDGET): string {
   if (heroIds.length === 0) return "";
+  const charBudget = tokenBudget * 4;
 
   const selected: Record<string, (typeof HERO_CARDS)[string]> = {};
   const kept = [...heroIds];
@@ -319,11 +326,11 @@ export function fetchRelevantHeroCards(heroIds: string[]): string {
   });
 
   let json = JSON.stringify(selected);
-  if (json.length > CONTEXT_CHAR_BUDGET) {
+  if (json.length > charBudget) {
     // Defensive trim if an unusually broad match (many heroes at once)
     // still overflows the budget — drop heroes from the end until it
     // fits, rather than truncating mid-JSON and breaking parsing.
-    while (kept.length > 1 && json.length > CONTEXT_CHAR_BUDGET) {
+    while (kept.length > 1 && json.length > charBudget) {
       const dropped = kept.pop()!;
       delete selected[dropped];
       json = JSON.stringify(selected);
@@ -901,10 +908,23 @@ export function findMentionedCards(
   // from being misattributed as a mention of that specific card, while
   // still catching a genuine standalone reference to the card elsewhere
   // in the text.
-  let searchText = lowerReply;
+  //
+  // Keeps the *original* casing (unlike lowerReply above) — see the
+  // pattern built below, which is now case-SENSITIVE specifically so a
+  // short, common-word card name (e.g. "Melee") only counts as a real
+  // reference when it's actually capitalized as a proper noun, the way
+  // the model writes a genuine card mention; an ordinary lowercase use
+  // of the same word in prose ("a devastating melee attack") no longer
+  // matches. Case-insensitive replace here (not lowerReply-based
+  // splitting) so a hero name is still blanked regardless of how the
+  // model happens to capitalize it.
+  let searchText = replyText;
   for (const heroId of heroIds) {
-    const heroName = HEROES.find((h) => h.id === heroId)?.name.toLowerCase();
-    if (heroName) searchText = searchText.split(heroName).join(" ".repeat(heroName.length));
+    const heroName = HEROES.find((h) => h.id === heroId)?.name;
+    if (heroName) {
+      const heroNamePattern = new RegExp(escapeRegExp(heroName), "gi");
+      searchText = searchText.replace(heroNamePattern, (m) => " ".repeat(m.length));
+    }
   }
 
   type Candidate = { heroId: string; card: HeroCard; name: string };
@@ -949,8 +969,16 @@ export function findMentionedCards(
   // "windshield" or "shielding" — a real risk once a card name is an
   // ordinary English word rather than a distinctive multi-word phrase.
   // Punctuation and spaces still satisfy this fine on either side.
+  //
+  // No "i" flag: case-sensitive, matching each card's real stored
+  // capitalization (e.g. "Melee") — hit live, "melee" used as an
+  // ordinary lowercase descriptive word ("a devastating melee attack")
+  // was matching Melee the card even though nothing was actually
+  // referencing it. A genuine reference is written as the proper noun it
+  // is; requiring that exact casing filters out the generic-word usage
+  // without needing a distinctiveness/dictionary check.
   const sortedNames = [...new Set(candidates.map((c) => c.name))].sort((a, b) => b.length - a.length);
-  const pattern = new RegExp(`(?<![a-zA-Z])(?:${sortedNames.map(escapeRegExp).join("|")})(?![a-zA-Z])`, "gi");
+  const pattern = new RegExp(`(?<![a-zA-Z])(?:${sortedNames.map(escapeRegExp).join("|")})(?![a-zA-Z])`, "g");
   const occurrences = [...searchText.matchAll(pattern)];
   if (occurrences.length === 0) return [];
 

@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { CardReference } from "@/lib/heroCardContext";
+import { CARD_COLOR_ACCENT } from "@/lib/cardColors";
 
 // Same lightweight Markdown-ish rendering as app/chat/page.tsx's own
 // renderChatText (bold, italic, inline code, bullet lists, paragraphs,
@@ -58,7 +59,16 @@ function wrapCardMentions(
   // punctuation. This stops a short, common-word card name (e.g.
   // Gydion's spell "Shield") from matching as a fragment of an unrelated
   // longer word like "windshield" or "shielding".
-  const pattern = new RegExp(`(?<![a-zA-Z])(${names.map(escapeRegExp).join("|")})(?![a-zA-Z])`, "gi");
+  //
+  // No "i" flag: case-sensitive, same reasoning and same fix as
+  // findMentionedCards — a card genuinely referenced by name (e.g.
+  // "Melee") is written capitalized as the proper noun it is; matching
+  // case-insensitively would also wrap an unrelated lowercase, ordinary
+  // use of the same word ("a devastating melee attack") as if it were a
+  // real reference, even when findMentionedCards correctly didn't credit
+  // that occurrence (this function still scans the raw text itself, so
+  // it needs the same case restriction independently).
+  const pattern = new RegExp(`(?<![a-zA-Z])(${names.map(escapeRegExp).join("|")})(?![a-zA-Z])`, "g");
   const parts = text.split(pattern);
   if (parts.length === 1) return [text];
 
@@ -67,11 +77,13 @@ function wrapCardMentions(
       (r) => typeof r.card.name === "string" && r.card.name.toLowerCase() === part.toLowerCase(),
     );
     if (!ref) return part;
+    const color = typeof ref.card.color === "string" ? ref.card.color : "";
     return (
       <button
         key={`${keyPrefix}-mention-${i}`}
         type="button"
         className="goa-card-mention"
+        style={color && CARD_COLOR_ACCENT[color] ? { color: CARD_COLOR_ACCENT[color] } : undefined}
         onClick={() => onSelectCard(ref)}
       >
         {part}
