@@ -13,20 +13,21 @@ export type Split<T extends SkillPlayer = SkillPlayer> = {
 // Anyone not listed here ranks last, at 0.
 const SKILL_RANK_POINTS: Record<string, number> = {
   xi: 10,
-  keith: 9,
-  adrian: 9,
-  garvin: 8.5,
-  harry: 8.5,
-  eddy: 7.5,
-  han: 6.5,
+  keith: 10,
+  adrian: 10,
+  garvin: 10,
+  harry: 10,
+  eddy: 8,
+  bao: 7,
   tu: 6.5,
-  bao: 6.5,
+  han: 6,
   amy: 6,
+  gordon: 6,
   sam: 4,
   dave: 4,
-  jenny: 3,
+  vincent: 4,
+  jenny: 4,
   stella: 2,
-  vincent: 2
 };
 
 const skillPointsOf = (p: SkillPlayer) =>
