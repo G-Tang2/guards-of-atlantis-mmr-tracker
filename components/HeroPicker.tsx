@@ -6,14 +6,22 @@ import { renderStars } from "@/lib/match";
 export function HeroPicker({
   selected,
   onSelect,
+  excludeHeroIds = [],
 }: {
   selected: Hero | null;
   onSelect: (h: Hero | null) => void;
+  // Heroes already assigned to another player in this match — a hero can
+  // only be played by one player at a time, so these are hidden from the
+  // list entirely rather than shown disabled.
+  excludeHeroIds?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const sortedHeroes = [...HEROES].sort((a, b) => a.name.localeCompare(b.name));
+  const excluded = new Set(excludeHeroIds);
+  const sortedHeroes = [...HEROES]
+    .filter((h) => !excluded.has(h.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const filtered = search
     ? sortedHeroes.filter((h) =>
         h.name.toLowerCase().includes(search.toLowerCase()),

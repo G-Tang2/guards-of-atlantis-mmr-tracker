@@ -7,6 +7,7 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { TIMER_LOG_STORAGE_KEY } from "@/lib/timerLog";
+import { LAST_BATTLE_STEP_STORAGE_KEY } from "@/lib/battleSession";
 import { formatActionTime } from "@/lib/match";
 import {
   Timer as TimerIcon,
@@ -501,6 +502,7 @@ function MatchTimerPageInner() {
           setTitans(
             saved.titans.map((id) => byId.get(id)).filter((p): p is Player => !!p),
           );
+          localStorage.setItem(LAST_BATTLE_STEP_STORAGE_KEY, "/matches/timer");
           setLoading(false);
         });
     } catch {

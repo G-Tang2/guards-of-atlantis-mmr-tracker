@@ -7,6 +7,7 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
+import { LAST_BATTLE_STEP_STORAGE_KEY } from "@/lib/battleSession";
 import { rankedBalancedSplits, Split } from "@/lib/rankedBalance";
 import { previewWinGain } from "@/lib/mmr";
 import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
@@ -315,6 +316,7 @@ function TeamsVotePageInner() {
           setPlayerIds(saved.playerIds);
           setSplits(computedSplits);
           setTotalVotes(computedTotalVotes);
+          localStorage.setItem(LAST_BATTLE_STEP_STORAGE_KEY, "/teams/vote");
 
           if (computedSplits.length <= 1) {
             // Nothing to vote on — apply the one possible split directly.

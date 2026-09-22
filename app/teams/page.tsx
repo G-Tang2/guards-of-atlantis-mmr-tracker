@@ -9,6 +9,13 @@ import { PasswordGate } from "@/components/PasswordGate";
 import { DraftMethod } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
+import { TIMER_LOG_STORAGE_KEY } from "@/lib/timerLog";
+import {
+  LAST_BATTLE_STEP_STORAGE_KEY,
+  BATTLE_STEP_LABELS,
+  hasValidBattleProgress,
+  type BattleStep,
+} from "@/lib/battleSession";
 import { Swords, Crown, Dices, Scale, GripVertical, Timer, Star } from "lucide-react";
 import {
   DndContext,
@@ -241,6 +248,12 @@ export default function TeamSplitterPage() {
   const [lifeCounter, setLifeCounter] = useState("");
   const [twoWaveLanes, setTwoWaveLanes] = useState(false);
 
+  // Set when the user lands on /teams after having gone deeper into the
+  // Battle flow (vote/timer/record) and left mid-way — offers to jump
+  // straight back into that step instead of silently starting over. Null
+  // means nothing to resume, so the page behaves as before.
+  const [resumeStep, setResumeStep] = useState<BattleStep | null>(null);
+
   // Draft modal
   const [draftOpen, setDraftOpen] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
@@ -281,6 +294,17 @@ export default function TeamSplitterPage() {
       .then(({ data }) => {
         const players = data ?? [];
         setAllPlayers(players);
+
+        // If the user was last on a deeper Battle step (vote/timer/record)
+        // and has now landed back on /teams, ask whether to jump back into
+        // it instead of silently restoring the draft below — they may have
+        // just closed the app mid-battle rather than deliberately backed out.
+        const lastStep = localStorage.getItem(LAST_BATTLE_STEP_STORAGE_KEY);
+        if (hasValidBattleProgress(lastStep)) {
+          setResumeStep(lastStep);
+          setLoading(false);
+          return;
+        }
 
         // Restore an in-progress team assembly (e.g. the user hit Back
         // from the match-record step) instead of starting over empty.
@@ -350,9 +374,12 @@ export default function TeamSplitterPage() {
   // Keep the draft in sync so it can be restored on the way back from
   // /matches/new. Skipped until the initial load (and any restore above)
   // has finished, so it can't clobber a saved draft with the empty state
-  // columns starts in.
+  // columns starts in. Also skipped while the resume-battle prompt is up —
+  // columns are deliberately left at that same empty default until the
+  // user picks Continue/Start Fresh, and persisting in the meantime would
+  // wipe out the very draft "Continue" needs.
   useEffect(() => {
-    if (loading) return;
+    if (loading || resumeStep) return;
     persistDraft();
   }, [
     columns,
@@ -361,6 +388,7 @@ export default function TeamSplitterPage() {
     lifeCounter,
     twoWaveLanes,
     loading,
+    resumeStep,
   ]);
 
   const allAdded = [...columns.pool, ...columns.atlantis, ...columns.titans];
@@ -584,6 +612,54 @@ export default function TeamSplitterPage() {
 
   const canSplit = allAdded.length >= 2;
   const canDraft = allAdded.length >= 3; // need at least 2 captains + 1 player
+
+  const continueBattle = () => {
+    if (resumeStep) router.replace(resumeStep);
+  };
+
+  const startFreshBattle = () => {
+    localStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
+    localStorage.removeItem(RANKED_VOTE_STORAGE_KEY);
+    localStorage.removeItem(TIMER_LOG_STORAGE_KEY);
+    localStorage.removeItem(LAST_BATTLE_STEP_STORAGE_KEY);
+    setResumeStep(null);
+  };
+
+  if (resumeStep) {
+    return (
+      <PasswordGate>
+        <div className="draft-overlay">
+          <div className="draft-sheet">
+            <div className="draft-head">
+              <span className="draft-head-title">Continue your last battle?</span>
+            </div>
+            <div className="draft-body">
+              <p className="draft-note" style={{ textAlign: "left" }}>
+                You left off {BATTLE_STEP_LABELS[resumeStep]}. Continue where
+                you left off, or start a new battle?
+              </p>
+              <div className="goa-btn-wrap" style={{ margin: 0 }}>
+                <button
+                  className="goa-btn sm inline-flex items-center justify-center gap-2"
+                  onClick={continueBattle}
+                >
+                  Continue
+                </button>
+              </div>
+              <div className="goa-btn-wrap" style={{ margin: 0 }}>
+                <button
+                  className="goa-btn outline sm inline-flex items-center justify-center gap-2"
+                  onClick={startFreshBattle}
+                >
+                  Start Fresh
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </PasswordGate>
+    );
+  }
 
   if (loading) {
     return (

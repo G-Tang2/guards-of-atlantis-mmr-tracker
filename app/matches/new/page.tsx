@@ -23,6 +23,7 @@ import { applyBadgeRewards, getOwnedBadgeIds } from "@/lib/badgeRewards";
 import { DraftMethod, didWin } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { TIMER_LOG_STORAGE_KEY } from "@/lib/timerLog";
+import { LAST_BATTLE_STEP_STORAGE_KEY } from "@/lib/battleSession";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { BadgeEarnedOverlay, EarnedBadgeInfo } from "@/components/BadgeEarnedOverlay";
@@ -162,6 +163,7 @@ function NewMatchPageInner() {
         } catch {
           // Corrupt/stale entry — ignore and start empty.
         }
+        localStorage.setItem(LAST_BATTLE_STEP_STORAGE_KEY, "/matches/new");
       }
 
       setLoading(false);
@@ -222,6 +224,14 @@ function NewMatchPageInner() {
 
   const filterPlayers = (list: Player[], query: string): Player[] =>
     list.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
+
+  // A hero can only be played by one player per match — everyone else's
+  // current pick (across both teams) is excluded from this player's own
+  // hero list, so the same hero can never end up assigned twice.
+  const otherAssignedHeroIds = (playerId: string): string[] =>
+    [...atlantis, ...titans]
+      .filter((e) => e.player.id !== playerId && e.hero)
+      .map((e) => e.hero!.id);
 
   const setHero = (playerId: string, team: Team, hero: Hero | null) => {
     if (team === "atlantis") {
@@ -671,6 +681,7 @@ function NewMatchPageInner() {
       setStartingWaveCounter("");
       setStartingLifeCounter("");
       localStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
+      localStorage.removeItem(LAST_BATTLE_STEP_STORAGE_KEY);
 
       if (newlyEarnedBadges.length > 0) {
         // Redirect is deferred to the overlay's dismissal instead of firing
@@ -776,6 +787,7 @@ function NewMatchPageInner() {
               <HeroPicker
                 selected={p.hero}
                 onSelect={(h) => setHero(p.player.id, "atlantis", h)}
+                excludeHeroIds={otherAssignedHeroIds(p.player.id)}
               />
             </div>
           ))}
@@ -847,6 +859,7 @@ function NewMatchPageInner() {
                 <HeroPicker
                   selected={p.hero}
                   onSelect={(h) => setHero(p.player.id, "titans", h)}
+                  excludeHeroIds={otherAssignedHeroIds(p.player.id)}
                 />
               </div>
             </div>
