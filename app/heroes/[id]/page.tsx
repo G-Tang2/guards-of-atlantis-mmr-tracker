@@ -1,14 +1,14 @@
 // app/heroes/[id]/page.tsx
 "use client";
 
-import { CSSProperties, useEffect, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import Image from "next/image";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { Swords, ScrollText, BookUser, CheckCircle2, Circle, X } from "lucide-react";
+import { Swords, ScrollText, BookUser, CheckCircle2, Circle, ChevronsDown, X } from "lucide-react";
 
 type Player = {
   id: string;
@@ -149,6 +149,11 @@ export default function HeroDetailPage() {
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+  // Scroll target for the floating "Jump to Match History" button that
+  // appears once a Played by/Hero Matchups filter is active — those lists
+  // can run long, so reaching the (now-filtered) results below otherwise
+  // means scrolling past all of it by hand.
+  const matchHistoryRef = useRef<HTMLDivElement>(null);
   // Players toggled on in the "Played by" list — when non-empty, match
   // history below is filtered to matches where at least one of them
   // played this specific hero. Multiple players can be highlighted at
@@ -180,6 +185,10 @@ export default function HeroDetailPage() {
       else next.add(opponentHeroId);
       return next;
     });
+  };
+
+  const jumpToMatchHistory = () => {
+    matchHistoryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   useEffect(() => {
@@ -584,8 +593,22 @@ export default function HeroDetailPage() {
         </div>
       )}
 
+      {/* Floating shortcut to the (now-filtered) results below, since the
+          Played by/Hero Matchups lists above can run long enough that
+          reaching them otherwise means scrolling past by hand. */}
+      {(selectedPlayerIds.size > 0 || selectedMatchupHeroIds.size > 0) && (
+        <button
+          type="button"
+          className="goa-hero-jump-btn"
+          onClick={jumpToMatchHistory}
+        >
+          <ChevronsDown size={16} />
+          View {visibleMatches.length} Match{visibleMatches.length === 1 ? "" : "es"}
+        </button>
+      )}
+
       {/* Match history for this hero */}
-      <div className="goa-match-history-header">
+      <div className="goa-match-history-header" ref={matchHistoryRef}>
         <ScrollText size={14} /> Match History
       </div>
 
