@@ -285,7 +285,7 @@ export default function TeamSplitterPage() {
         // Restore an in-progress team assembly (e.g. the user hit Back
         // from the match-record step) instead of starting over empty.
         try {
-          const raw = sessionStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
+          const raw = localStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
           if (raw) {
             const saved = JSON.parse(raw) as {
               pool: string[];
@@ -341,9 +341,9 @@ export default function TeamSplitterPage() {
       draft.atlantis.length === 0 &&
       draft.titans.length === 0;
     if (isEmpty) {
-      sessionStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
+      localStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
     } else {
-      sessionStorage.setItem(TEAMS_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      localStorage.setItem(TEAMS_DRAFT_STORAGE_KEY, JSON.stringify(draft));
     }
   };
 
@@ -421,7 +421,7 @@ export default function TeamSplitterPage() {
 
   const goToRankedVote = () => {
     persistDraft();
-    sessionStorage.setItem(
+    localStorage.setItem(
       RANKED_VOTE_STORAGE_KEY,
       JSON.stringify({ playerIds: allAdded.map((p) => p.id) }),
     );

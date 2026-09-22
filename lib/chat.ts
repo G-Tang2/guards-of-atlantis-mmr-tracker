@@ -39,7 +39,7 @@ export type ChatStreamEvent =
   | { type: "error"; error: string };
 
 // The client resends the whole session's messages as history on every turn
-// (see app/chat/page.tsx) — harmless for the sessionStorage copy, but
+// (see app/chat/page.tsx) — harmless for the localStorage copy, but
 // uncapped it means a long-running conversation compounds token usage on
 // top of whatever the new question itself needs, on every single
 // subsequent turn. Trimmed to the most recent turns that fit this budget
@@ -64,7 +64,10 @@ export function trimHistoryToBudget(history: ChatTurn[]): ChatTurn[] {
   return kept;
 }
 
-// A conversation lives only in the current browser tab's sessionStorage —
-// nothing about it is ever persisted server-side (mirrors this app's other
-// sessionStorage-only flows, e.g. lib/rankedVote.ts).
+// A conversation lives only in this browser's localStorage — nothing about
+// it is ever persisted server-side (mirrors this app's other localStorage-
+// only flows, e.g. lib/rankedVote.ts). localStorage rather than
+// sessionStorage specifically so history survives the app being fully
+// closed and reopened when installed as a home-screen/standalone PWA,
+// which tears down sessionStorage along with the rest of that session.
 export const CHAT_HISTORY_STORAGE_KEY = "goa-chat-history";

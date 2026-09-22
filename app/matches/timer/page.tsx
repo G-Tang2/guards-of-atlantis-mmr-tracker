@@ -474,7 +474,7 @@ function MatchTimerPageInner() {
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
+    const raw = localStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
     if (!raw) {
       router.replace("/teams");
       return;
@@ -730,7 +730,7 @@ function MatchTimerPageInner() {
 
   const handleContinue = () => {
     if (session) {
-      sessionStorage.setItem(TIMER_LOG_STORAGE_KEY, JSON.stringify(session.actionSeconds));
+      localStorage.setItem(TIMER_LOG_STORAGE_KEY, JSON.stringify(session.actionSeconds));
     }
     router.push("/matches/new");
   };

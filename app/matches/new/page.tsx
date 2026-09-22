@@ -113,10 +113,10 @@ function NewMatchPageInner() {
       if (!error && data) {
         setPlayers(data);
 
-        // Handed off from /teams via sessionStorage rather than the URL —
+        // Handed off from /teams via localStorage rather than the URL —
         // one source of truth, and it survives a refresh just as well.
         try {
-          const raw = sessionStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
+          const raw = localStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
           if (raw) {
             const saved = JSON.parse(raw) as {
               pool: string[];
@@ -483,7 +483,7 @@ function NewMatchPageInner() {
       // clock from /teams rather than skipping straight to this page.
       let timerLog: Record<string, number> = {};
       try {
-        const timerLogRaw = sessionStorage.getItem(TIMER_LOG_STORAGE_KEY);
+        const timerLogRaw = localStorage.getItem(TIMER_LOG_STORAGE_KEY);
         if (timerLogRaw) timerLog = JSON.parse(timerLogRaw) as Record<string, number>;
       } catch {
         // Corrupt/stale entry — ignore, action times just come back null.
@@ -537,7 +537,7 @@ function NewMatchPageInner() {
         .from("match_players")
         .insert(matchPlayers);
       if (mpError) throw mpError;
-      sessionStorage.removeItem(TIMER_LOG_STORAGE_KEY);
+      localStorage.removeItem(TIMER_LOG_STORAGE_KEY);
 
 // Combine updated match participants with non-participating players
       const updatedParticipantsMap = new Map(
@@ -670,7 +670,7 @@ function NewMatchPageInner() {
       setWaveCounterRemaining2("");
       setStartingWaveCounter("");
       setStartingLifeCounter("");
-      sessionStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
+      localStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
 
       if (newlyEarnedBadges.length > 0) {
         // Redirect is deferred to the overlay's dismissal instead of firing

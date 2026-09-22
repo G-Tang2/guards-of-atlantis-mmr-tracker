@@ -28,7 +28,7 @@ function ChatPageInner() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   // The in-progress reply's text as it streams in — kept separate from
-  // `messages`/sessionStorage until the stream finishes (successfully or
+  // `messages`/localStorage until the stream finishes (successfully or
   // not), so a mid-stream failure or navigation away never leaves a
   // half-written turn sitting in persisted history.
   const [streamingReply, setStreamingReply] = useState("");
@@ -56,7 +56,7 @@ function ChatPageInner() {
   // `messages` already starts at [] via useState, so there's no setState
   // here to trip the set-state-in-effect rule.
   useEffect(() => {
-    sessionStorage.removeItem(CHAT_HISTORY_STORAGE_KEY);
+    localStorage.removeItem(CHAT_HISTORY_STORAGE_KEY);
   }, []);
 
   useEffect(() => {
@@ -93,7 +93,7 @@ function ChatPageInner() {
 
   const persistMessages = (next: ChatTurn[]) => {
     setMessages(next);
-    sessionStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(next));
   };
 
   const handleSend = async (e: FormEvent) => {

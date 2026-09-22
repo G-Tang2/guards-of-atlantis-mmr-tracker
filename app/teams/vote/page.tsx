@@ -265,7 +265,7 @@ function TeamsVotePageInner() {
   const voteConfirmActionRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(RANKED_VOTE_STORAGE_KEY);
+    const raw = localStorage.getItem(RANKED_VOTE_STORAGE_KEY);
     if (!raw) {
       router.replace("/teams");
       return;
@@ -385,7 +385,7 @@ function TeamsVotePageInner() {
   }, [router]);
 
   const persistBanProgress = (nextBanVotes: number[], nextBanVotesCast: number) => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       RANKED_VOTE_STORAGE_KEY,
       JSON.stringify({
         playerIds,
@@ -397,14 +397,14 @@ function TeamsVotePageInner() {
   };
 
   const persistBanResult = (nextBannedIndices: number[]) => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       RANKED_VOTE_STORAGE_KEY,
       JSON.stringify({ playerIds, wantsBan: true, bannedIndices: nextBannedIndices }),
     );
   };
 
   const persistProgress = (nextVotes: number[], nextVotesCast: number) => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       RANKED_VOTE_STORAGE_KEY,
       JSON.stringify({
         playerIds,
@@ -533,7 +533,7 @@ function TeamsVotePageInner() {
     // read wantsBan off state) — setWantsBan above won't be visible to
     // those helpers until the next render, so this transition's own
     // write has to include the true value itself.
-    sessionStorage.setItem(
+    localStorage.setItem(
       RANKED_VOTE_STORAGE_KEY,
       JSON.stringify({ playerIds, wantsBan: true, banVotes: freshBanVotes, banVotesCast: 0 }),
     );
@@ -548,7 +548,7 @@ function TeamsVotePageInner() {
     // Same reasoning as startBanRound above — written directly rather
     // than via persistProgress, which wouldn't see today's setWantsBan
     // update yet.
-    sessionStorage.setItem(
+    localStorage.setItem(
       RANKED_VOTE_STORAGE_KEY,
       JSON.stringify({ playerIds, wantsBan: false, votes: freshVotes, votesCast: 0 }),
     );
@@ -576,9 +576,9 @@ function TeamsVotePageInner() {
   const finish = () => {
     if (winnerIndex === null) return;
     const winner = splits[winnerIndex];
-    const raw = sessionStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
+    const raw = localStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
     const prev = raw ? JSON.parse(raw) : {};
-    sessionStorage.setItem(
+    localStorage.setItem(
       TEAMS_DRAFT_STORAGE_KEY,
       JSON.stringify({
         ...prev,
@@ -588,7 +588,7 @@ function TeamsVotePageInner() {
         method: "ranked_balanced",
       }),
     );
-    sessionStorage.removeItem(RANKED_VOTE_STORAGE_KEY);
+    localStorage.removeItem(RANKED_VOTE_STORAGE_KEY);
     router.replace("/teams");
   };
 
