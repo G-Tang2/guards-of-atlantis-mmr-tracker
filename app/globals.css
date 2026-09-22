@@ -2340,6 +2340,16 @@
   .goa-hero-player-row:hover {
     background: rgba(42, 39, 32, 0.6);
   }
+  .goa-hero-player-row.selected {
+    background: rgba(201, 151, 58, 0.15);
+    border-bottom-color: rgba(201, 151, 58, 0.25);
+  }
+  .goa-hero-player-row.selected .goa-hero-player-name {
+    color: var(--gold-light);
+  }
+  .goa-hero-player-row.selected .goa-hero-player-toggle {
+    color: var(--gold-light);
+  }
   .goa-hero-player-name {
     flex: 1;
     font-family: "Crimson Pro", serif;
@@ -2355,10 +2365,50 @@
     font-size: 0.62rem;
     color: var(--text-muted);
   }
-  .goa-hero-player-arrow {
-    font-family: "Cinzel", serif;
-    font-size: 0.55rem;
+  .goa-hero-player-toggle {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
     color: var(--text-muted);
+  }
+
+  /* Hero Matchups list — same row shape/behavior as .goa-hero-player-row
+     above (toggle-to-filter, gold when selected), just with an opposing
+     hero's icon/name instead of a player's avatar/name. */
+  .goa-hero-matchup-list {
+    padding: 0.25rem 0;
+  }
+  .goa-hero-matchup-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.45rem 0.85rem;
+    border-bottom: 1px solid rgba(201, 151, 58, 0.07);
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .goa-hero-matchup-row:hover {
+    background: rgba(42, 39, 32, 0.6);
+  }
+  .goa-hero-matchup-row.selected {
+    background: rgba(201, 151, 58, 0.15);
+    border-bottom-color: rgba(201, 151, 58, 0.25);
+  }
+  .goa-hero-matchup-row.selected .goa-hero-matchup-name {
+    color: var(--gold-light);
+  }
+  .goa-hero-matchup-row.selected .goa-hero-player-toggle {
+    color: var(--gold-light);
+  }
+  .goa-hero-matchup-icon {
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .goa-hero-matchup-name {
+    flex: 1;
+    font-family: "Crimson Pro", serif;
+    font-size: 1rem;
+    color: var(--text-primary);
   }
   .goa-stats-head {
     padding: 0.55rem 0.85rem;
@@ -2685,6 +2735,38 @@
   }
   .goa-match-history-header.lg {
     font-size: 0.9rem;
+  }
+  .goa-hero-filter-note {
+    margin: -0.3rem 0.75rem 0.6rem;
+    padding: 0.4rem 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    background: rgba(201, 151, 58, 0.1);
+    border: 1px solid rgba(201, 151, 58, 0.25);
+    border-radius: 4px;
+    font-family: "Crimson Pro", serif;
+    font-size: 0.85rem;
+    color: var(--gold-light);
+  }
+  .goa-hero-filter-clear {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .goa-hero-filter-clear:hover {
+    color: var(--gold-light);
   }
   .goa-hero-used-by-banner {
     padding: 0.3rem 0.75rem;

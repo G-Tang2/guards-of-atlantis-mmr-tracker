@@ -8,7 +8,7 @@ import { Hero } from "@/lib/heroes";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import Image from "next/image";
 import { didWin, formatDate, getHero, renderStars } from "@/lib/match";
-import { Swords, ScrollText, BookUser } from "lucide-react";
+import { Swords, ScrollText, BookUser, CheckCircle2, Circle, X } from "lucide-react";
 
 type Player = {
   id: string;
@@ -149,6 +149,34 @@ export default function HeroDetailPage() {
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+  // Players toggled on in the "Played by" list — when non-empty, match
+  // history below is filtered to matches where at least one of them
+  // played this specific hero. Multiple players can be highlighted at
+  // once (an OR filter, not narrowed to only matches with all of them).
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set());
+
+  const togglePlayerFilter = (playerId: string) => {
+    setSelectedPlayerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(playerId)) next.delete(playerId);
+      else next.add(playerId);
+      return next;
+    });
+  };
+
+  // Opposing heroes toggled on in the "Hero Matchups" list — same OR-filter
+  // shape as selectedPlayerIds above, but narrows to matches where this
+  // hero faced one of the highlighted heroes on the other team.
+  const [selectedMatchupHeroIds, setSelectedMatchupHeroIds] = useState<Set<string>>(new Set());
+
+  const toggleMatchupFilter = (opponentHeroId: string) => {
+    setSelectedMatchupHeroIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(opponentHeroId)) next.delete(opponentHeroId);
+      else next.add(opponentHeroId);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!heroId) return;
@@ -261,6 +289,74 @@ export default function HeroDetailPage() {
 
     return { wins, losses, draws, played, winRate, players };
   }, [matches, heroId]);
+
+  // How this hero has fared against every opposing hero it's actually
+  // faced — one datapoint per opposing team's hero pick in each match this
+  // hero was played, counted from this hero's own side's result (so a
+  // 2v2 match where the enemy team picked two heroes counts as a game
+  // against each of those two, not split half a game each).
+  const matchupStats = useMemo(() => {
+    const map = new Map<string, { wins: number; losses: number; draws: number }>();
+    matches.forEach((m) => {
+      const heroPlayers = m.match_players.filter((mp) => mp.hero_id === heroId);
+      heroPlayers.forEach((hp) => {
+        const opposingTeam = hp.team === "atlantis" ? "titans" : "atlantis";
+        const opposingHeroIds = m.match_players
+          .filter((mp) => mp.team === opposingTeam && mp.hero_id)
+          .map((mp) => mp.hero_id as string);
+        const isDraw = m.winner === "none";
+        const won = didWin(hp.team, m.winner);
+        opposingHeroIds.forEach((oppHeroId) => {
+          if (!map.has(oppHeroId)) map.set(oppHeroId, { wins: 0, losses: 0, draws: 0 });
+          const entry = map.get(oppHeroId)!;
+          if (isDraw) entry.draws++;
+          else if (won) entry.wins++;
+          else entry.losses++;
+        });
+      });
+    });
+
+    return Array.from(map.entries())
+      .map(([opponentHeroId, rec]) => ({ opponentHeroId, ...rec }))
+      .sort(
+        (a, b) =>
+          b.wins + b.losses + b.draws - (a.wins + a.losses + a.draws),
+      );
+  }, [matches, heroId]);
+
+  // Whether `match` pitted this hero against `opponentHeroId` on the
+  // other team — shared by the matchup filter below.
+  const matchHasMatchup = (m: Match, opponentHeroId: string): boolean =>
+    m.match_players
+      .filter((mp) => mp.hero_id === heroId)
+      .some((hp) => {
+        const opposingTeam = hp.team === "atlantis" ? "titans" : "atlantis";
+        return m.match_players.some(
+          (mp) => mp.team === opposingTeam && mp.hero_id === opponentHeroId,
+        );
+      });
+
+  // Matches actually rendered below — every match when neither filter is
+  // active, otherwise narrowed by whichever of the "Played by" and "Hero
+  // Matchups" filters are in use (each an OR across its own selections,
+  // combined with the other as an AND).
+  const visibleMatches = useMemo(() => {
+    let list = matches;
+    if (selectedPlayerIds.size > 0) {
+      list = list.filter((m) =>
+        m.match_players.some(
+          (mp) => mp.hero_id === heroId && selectedPlayerIds.has(mp.player_id),
+        ),
+      );
+    }
+    if (selectedMatchupHeroIds.size > 0) {
+      list = list.filter((m) =>
+        Array.from(selectedMatchupHeroIds).some((oppId) => matchHasMatchup(m, oppId)),
+      );
+    }
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches, heroId, selectedPlayerIds, selectedMatchupHeroIds]);
 
   if (!hero) {
     return (
@@ -385,11 +481,12 @@ export default function HeroDetailPage() {
             {stats.players.map(({ player, wins, losses, draws }) => {
               const played = wins + losses + draws;
               const pr = played === 0 ? 0 : Math.round((wins / played) * 100);
+              const selected = selectedPlayerIds.has(player.id);
               return (
                 <div
                   key={player.id}
-                  className="goa-hero-player-row"
-                  onClick={() => router.push(`/players/${player.id}`)}
+                  className={`goa-hero-player-row${selected ? " selected" : ""}`}
+                  onClick={() => togglePlayerFilter(player.id)}
                 >
                   <PlayerAvatar
                     avatarUrl={player.avatar_url}
@@ -409,7 +506,58 @@ export default function HeroDetailPage() {
                       <>/<span className="goa-text-draw">{draws}D</span></>
                     )}
                   </span>
-                  <span className="goa-hero-player-arrow">›</span>
+                  <span className="goa-hero-player-toggle">
+                    {selected ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Win rate against every opposing hero this hero has actually faced */}
+      {matchupStats.length > 0 && (
+        <div className="goa-stats-card tight-top">
+          <div className="goa-stats-head">
+            <Swords size={14} /> Hero Matchups
+          </div>
+          <div className="goa-hero-matchup-list">
+            {matchupStats.map(({ opponentHeroId, wins, losses, draws }) => {
+              const opponentHero = getHero(opponentHeroId);
+              if (!opponentHero) return null;
+              const played = wins + losses + draws;
+              const wr = played === 0 ? 0 : Math.round((wins / played) * 100);
+              const selected = selectedMatchupHeroIds.has(opponentHeroId);
+              return (
+                <div
+                  key={opponentHeroId}
+                  className={`goa-hero-matchup-row${selected ? " selected" : ""}`}
+                  onClick={() => toggleMatchupFilter(opponentHeroId)}
+                >
+                  <Image
+                    src={opponentHero.icon}
+                    alt={opponentHero.name}
+                    width={28}
+                    height={28}
+                    className="goa-hero-matchup-icon"
+                  />
+                  <span className="goa-hero-matchup-name">{opponentHero.name}</span>
+                  <span
+                    className={`goa-hero-player-pr ${wr >= 50 ? "goa-text-gain" : "goa-text-loss"}`}
+                  >
+                    {wr}%
+                  </span>
+                  <span className="goa-hero-player-wl">
+                    <span className="goa-text-gain">{wins}W</span>/
+                    <span className="goa-text-loss">{losses}L</span>
+                    {draws > 0 && (
+                      <>/<span className="goa-text-draw">{draws}D</span></>
+                    )}
+                  </span>
+                  <span className="goa-hero-player-toggle">
+                    {selected ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                  </span>
                 </div>
               );
             })}
@@ -422,17 +570,57 @@ export default function HeroDetailPage() {
         <ScrollText size={14} /> Match History
       </div>
 
+      {(selectedPlayerIds.size > 0 || selectedMatchupHeroIds.size > 0) && (
+        <div className="goa-hero-filter-note">
+          <span>
+            Showing matches
+            {selectedPlayerIds.size > 0 && (
+              <>
+                {" "}for{" "}
+                {stats.players
+                  .filter(({ player }) => selectedPlayerIds.has(player.id))
+                  .map(({ player }) => player.name)
+                  .join(", ")}
+              </>
+            )}
+            {selectedMatchupHeroIds.size > 0 && (
+              <>
+                {" "}vs{" "}
+                {Array.from(selectedMatchupHeroIds)
+                  .map((id) => getHero(id)?.name)
+                  .filter(Boolean)
+                  .join(", ")}
+              </>
+            )}
+          </span>
+          <button
+            type="button"
+            className="goa-hero-filter-clear"
+            onClick={() => {
+              setSelectedPlayerIds(new Set());
+              setSelectedMatchupHeroIds(new Set());
+            }}
+          >
+            <X size={12} /> Clear
+          </button>
+        </div>
+      )}
+
       <div className="goa-matches">
-        {matches.length === 0 && (
+        {visibleMatches.length === 0 && (
           <div className="goa-empty">
             <div className="goa-empty-icon">
               <Swords size={34} />
             </div>
-            <p>No matches recorded</p>
+            <p>
+              {selectedPlayerIds.size > 0 || selectedMatchupHeroIds.size > 0
+                ? "No matches for the highlighted filter(s)"
+                : "No matches recorded"}
+            </p>
           </div>
         )}
 
-        {matches.map((match) => {
+        {visibleMatches.map((match) => {
           const atlantis = match.match_players.filter(
             (p) => p.team === "atlantis",
           );
