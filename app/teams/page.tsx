@@ -628,31 +628,33 @@ export default function TeamSplitterPage() {
   if (resumeStep) {
     return (
       <PasswordGate>
-        <div className="draft-overlay">
-          <div className="draft-sheet">
-            <div className="draft-head">
-              <span className="draft-head-title">Continue your last battle?</span>
-            </div>
-            <div className="draft-body">
-              <p className="draft-note" style={{ textAlign: "left" }}>
-                You left off {BATTLE_STEP_LABELS[resumeStep]}. Continue where
-                you left off, or start a new battle?
-              </p>
-              <div className="goa-btn-wrap" style={{ margin: 0 }}>
-                <button
-                  className="goa-btn sm inline-flex items-center justify-center gap-2"
-                  onClick={continueBattle}
-                >
-                  Continue
-                </button>
+        <div className="goa-root">
+          <div className="draft-overlay">
+            <div className="draft-sheet">
+              <div className="draft-head">
+                <span className="draft-head-title">Continue your last battle?</span>
               </div>
-              <div className="goa-btn-wrap" style={{ margin: 0 }}>
-                <button
-                  className="goa-btn outline sm inline-flex items-center justify-center gap-2"
-                  onClick={startFreshBattle}
-                >
-                  Start Fresh
-                </button>
+              <div className="draft-body">
+                <p className="draft-note" style={{ textAlign: "left" }}>
+                  You left off {BATTLE_STEP_LABELS[resumeStep]}. Continue where
+                  you left off, or start a new battle?
+                </p>
+                <div className="goa-btn-wrap" style={{ margin: 0 }}>
+                  <button
+                    className="goa-btn sm inline-flex items-center justify-center gap-2"
+                    onClick={continueBattle}
+                  >
+                    Continue
+                  </button>
+                </div>
+                <div className="goa-btn-wrap" style={{ margin: 0 }}>
+                  <button
+                    className="goa-btn outline sm inline-flex items-center justify-center gap-2"
+                    onClick={startFreshBattle}
+                  >
+                    Start Fresh
+                  </button>
+                </div>
               </div>
             </div>
           </div>

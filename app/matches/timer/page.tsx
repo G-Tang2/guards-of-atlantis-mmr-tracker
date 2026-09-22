@@ -13,6 +13,7 @@ import {
   Timer as TimerIcon,
   Pause,
   Play,
+  Square,
   CheckCircle2,
   Swords,
   ScrollText,
@@ -91,25 +92,21 @@ function formatMinutesSeconds(totalSeconds: number) {
 
 // ─── Bonus timer button (per-team 30s timer on the action phase) ───────────
 
+// No "paused" state — this timer only ever starts (idle, always exactly
+// BONUS_TIMER_SECONDS) or runs (counting down, then past zero, overtime);
+// stopping it resets straight back to idle rather than freezing partway.
 function bonusButtonStateClass(remaining: number, running: boolean): string {
-  if (remaining <= 0) return " overtime";
-  if (running) return " running";
-  if (remaining < BONUS_TIMER_SECONDS) return " paused";
-  return "";
+  if (!running) return "";
+  return remaining <= 0 ? " overtime" : " running";
 }
 
 function bonusButtonLabel(remaining: number, running: boolean): string {
-  if (remaining <= 0) return "Overtime";
-  if (!running && remaining === BONUS_TIMER_SECONDS) return "30s Timer";
-  if (!running) return `Paused ${formatActionTime(remaining)}`;
-  return formatActionTime(remaining);
+  if (!running) return "30s Timer";
+  return remaining <= 0 ? "Overtime — Stop" : formatActionTime(remaining);
 }
 
-function bonusButtonIcon(remaining: number, running: boolean) {
-  if (remaining <= 0) return <TimerIcon size={12} />;
-  if (running) return <Pause size={12} />;
-  if (remaining < BONUS_TIMER_SECONDS) return <Play size={12} />;
-  return <TimerIcon size={12} />;
+function bonusButtonIcon(running: boolean) {
+  return running ? <Square size={12} /> : <TimerIcon size={12} />;
 }
 
 // ─── Sound ──────────────────────────────────────────────────────────────────
@@ -430,6 +427,14 @@ function tickStep(
   }
 
   if (s.phase === "action" && s.actingPlayerId) {
+    // Either team's own 30s timer, while running, calls a full timeout on
+    // the acting player's clock — the whole action-phase countdown (and
+    // its own reserve overtime) is frozen until that 30s timer is
+    // stopped. tickBonusTimers (called separately, once per tick with the
+    // full elapsed delta) is what keeps counting during this freeze.
+    if (s.atlantisBonusRunning || s.titansBonusRunning) {
+      return { state: s, consumed: 0 };
+    }
     const team = teamOf(s.actingPlayerId);
     if (!s.actionDraining) {
       const use = Math.min(budget, s.phaseTimeRemaining);
@@ -817,15 +822,21 @@ function MatchTimerPageInner() {
     });
   };
 
-  // Starts a team's own 30s timer, or pauses/resumes it if already
-  // (partway) running — see SessionState's atlantisBonusRunning.
+  // Starts a team's own 30s timer, or fully stops it if already running —
+  // it has no pause/resume of its own (see SessionState's
+  // atlantisBonusRunning): stopping resets it back to a fresh 30s rather
+  // than freezing partway through, and while it's running it's what's
+  // pausing the acting player's own clock (see tickStep's action branch).
   const handleToggleBonusTimer = (team: Team) => {
     unlockAudioContext();
     setSession((prev) => {
       if (!prev || prev.phase !== "action") return prev;
-      return team === "atlantis"
-        ? { ...prev, atlantisBonusRunning: !prev.atlantisBonusRunning }
-        : { ...prev, titansBonusRunning: !prev.titansBonusRunning };
+      const runningKey = team === "atlantis" ? "atlantisBonusRunning" : "titansBonusRunning";
+      const remainingKey = team === "atlantis" ? "atlantisBonusRemaining" : "titansBonusRemaining";
+      if (prev[runningKey]) {
+        return { ...prev, [runningKey]: false, [remainingKey]: BONUS_TIMER_SECONDS };
+      }
+      return { ...prev, [runningKey]: true };
     });
   };
 
@@ -1088,7 +1099,7 @@ function MatchTimerPageInner() {
                   )}`}
                   onClick={() => handleToggleBonusTimer("atlantis")}
                 >
-                  {bonusButtonIcon(session.atlantisBonusRemaining, session.atlantisBonusRunning)}
+                  {bonusButtonIcon(session.atlantisBonusRunning)}
                   {bonusButtonLabel(session.atlantisBonusRemaining, session.atlantisBonusRunning)}
                 </button>
               )}
@@ -1111,7 +1122,7 @@ function MatchTimerPageInner() {
                   )}`}
                   onClick={() => handleToggleBonusTimer("titans")}
                 >
-                  {bonusButtonIcon(session.titansBonusRemaining, session.titansBonusRunning)}
+                  {bonusButtonIcon(session.titansBonusRunning)}
                   {bonusButtonLabel(session.titansBonusRemaining, session.titansBonusRunning)}
                 </button>
               )}
