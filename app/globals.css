@@ -2325,6 +2325,25 @@
   .goa-stats-card.tight-top {
     margin-top: 0;
   }
+  /* .goa-profile-tabs is normally its own free-floating row (see the
+     player page), so it carries its own side margins/gap — flush those
+     out here since this card's border already provides the edge, and the
+     player/matchup rows directly below it are already flush with it too,
+     leaving an inconsistent gap otherwise. */
+  .goa-stats-card > .goa-profile-tabs {
+    margin: 0;
+    gap: 0;
+  }
+  .goa-stats-card > .goa-profile-tabs .goa-profile-tab {
+    border-radius: 0;
+    border-top: none;
+  }
+  .goa-stats-card > .goa-profile-tabs .goa-profile-tab:first-child {
+    border-left: none;
+  }
+  .goa-stats-card > .goa-profile-tabs .goa-profile-tab:last-child {
+    border-right: none;
+  }
   .goa-hero-players-list {
     padding: 0.25rem 0;
   }

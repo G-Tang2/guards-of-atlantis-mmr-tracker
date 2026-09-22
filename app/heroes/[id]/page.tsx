@@ -152,8 +152,26 @@ export default function HeroDetailPage() {
   // Scroll target for the floating "Jump to Match History" button that
   // appears once a Played by/Hero Matchups filter is active — those lists
   // can run long, so reaching the (now-filtered) results below otherwise
-  // means scrolling past all of it by hand.
+  // means scrolling past all of it by hand. The button itself hides again
+  // once that section has actually scrolled into view (see the
+  // IntersectionObserver effect below) — its whole purpose is getting the
+  // user there, so it has nothing left to do once they've arrived.
   const matchHistoryRef = useRef<HTMLDivElement>(null);
+  const [historyInView, setHistoryInView] = useState(false);
+
+  useEffect(() => {
+    const el = matchHistoryRef.current;
+    if (!el) return;
+    // Shrinks the observed viewport to its top half, so this only flips
+    // once Match History has meaningfully scrolled into view — not the
+    // instant its top pixel first peeks over the bottom edge.
+    const observer = new IntersectionObserver(
+      ([entry]) => setHistoryInView(entry.isIntersecting),
+      { rootMargin: "0px 0px -50% 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading]);
   // Players toggled on in the "Played by" list — when non-empty, match
   // history below is filtered to matches where at least one of them
   // played this specific hero. Multiple players can be highlighted at
@@ -596,7 +614,7 @@ export default function HeroDetailPage() {
       {/* Floating shortcut to the (now-filtered) results below, since the
           Played by/Hero Matchups lists above can run long enough that
           reaching them otherwise means scrolling past by hand. */}
-      {(selectedPlayerIds.size > 0 || selectedMatchupHeroIds.size > 0) && (
+      {(selectedPlayerIds.size > 0 || selectedMatchupHeroIds.size > 0) && !historyInView && (
         <button
           type="button"
           className="goa-hero-jump-btn"
