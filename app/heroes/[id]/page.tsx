@@ -164,6 +164,10 @@ export default function HeroDetailPage() {
     });
   };
 
+  // Which of the two toggle-to-filter lists is showing — "Played by" is
+  // the default; switching tabs never clears either list's own selection.
+  const [statsTab, setStatsTab] = useState<"players" | "matchups">("players");
+
   // Opposing heroes toggled on in the "Hero Matchups" list — same OR-filter
   // shape as selectedPlayerIds above, but narrows to matches where this
   // hero faced one of the highlighted heroes on the other team.
@@ -471,97 +475,112 @@ export default function HeroDetailPage() {
         )}
       </div>
 
-      {/* Players who used this hero */}
-      {stats.players.length > 0 && (
+      {/* Played by / Hero Matchups — tabbed, since both are just
+          different ways of narrowing the same Match History below. */}
+      {(stats.players.length > 0 || matchupStats.length > 0) && (
         <div className="goa-stats-card tight-top">
-          <div className="goa-stats-head">
-            <Swords size={14} /> Played by
+          <div className="goa-profile-tabs">
+            <button
+              className={`goa-profile-tab ${statsTab === "players" ? "active" : ""}`}
+              onClick={() => setStatsTab("players")}
+            >
+              Played by
+            </button>
+            <button
+              className={`goa-profile-tab ${statsTab === "matchups" ? "active" : ""}`}
+              onClick={() => setStatsTab("matchups")}
+            >
+              Hero Matchups
+            </button>
           </div>
-          <div className="goa-hero-players-list">
-            {stats.players.map(({ player, wins, losses, draws }) => {
-              const played = wins + losses + draws;
-              const pr = played === 0 ? 0 : Math.round((wins / played) * 100);
-              const selected = selectedPlayerIds.has(player.id);
-              return (
-                <div
-                  key={player.id}
-                  className={`goa-hero-player-row${selected ? " selected" : ""}`}
-                  onClick={() => togglePlayerFilter(player.id)}
-                >
-                  <PlayerAvatar
-                    avatarUrl={player.avatar_url}
-                    name={player.name}
-                    size={28}
-                  />
-                  <span className="goa-hero-player-name">{player.name}</span>
-                  <span
-                    className={`goa-hero-player-pr ${pr >= 50 ? "goa-text-gain" : "goa-text-loss"}`}
-                  >
-                    {pr}%
-                  </span>
-                  <span className="goa-hero-player-wl">
-                    <span className="goa-text-gain">{wins}W</span>/
-                    <span className="goa-text-loss">{losses}L</span>
-                    {draws > 0 && (
-                      <>/<span className="goa-text-draw">{draws}D</span></>
-                    )}
-                  </span>
-                  <span className="goa-hero-player-toggle">
-                    {selected ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
-      {/* Win rate against every opposing hero this hero has actually faced */}
-      {matchupStats.length > 0 && (
-        <div className="goa-stats-card tight-top">
-          <div className="goa-stats-head">
-            <Swords size={14} /> Hero Matchups
-          </div>
-          <div className="goa-hero-matchup-list">
-            {matchupStats.map(({ opponentHeroId, wins, losses, draws }) => {
-              const opponentHero = getHero(opponentHeroId);
-              if (!opponentHero) return null;
-              const played = wins + losses + draws;
-              const wr = played === 0 ? 0 : Math.round((wins / played) * 100);
-              const selected = selectedMatchupHeroIds.has(opponentHeroId);
-              return (
-                <div
-                  key={opponentHeroId}
-                  className={`goa-hero-matchup-row${selected ? " selected" : ""}`}
-                  onClick={() => toggleMatchupFilter(opponentHeroId)}
-                >
-                  <Image
-                    src={opponentHero.icon}
-                    alt={opponentHero.name}
-                    width={28}
-                    height={28}
-                    className="goa-hero-matchup-icon"
-                  />
-                  <span className="goa-hero-matchup-name">{opponentHero.name}</span>
-                  <span
-                    className={`goa-hero-player-pr ${wr >= 50 ? "goa-text-gain" : "goa-text-loss"}`}
-                  >
-                    {wr}%
-                  </span>
-                  <span className="goa-hero-player-wl">
-                    <span className="goa-text-gain">{wins}W</span>/
-                    <span className="goa-text-loss">{losses}L</span>
-                    {draws > 0 && (
-                      <>/<span className="goa-text-draw">{draws}D</span></>
-                    )}
-                  </span>
-                  <span className="goa-hero-player-toggle">
-                    {selected ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          {statsTab === "players" &&
+            (stats.players.length === 0 ? (
+              <p className="goa-pool-empty">No players recorded</p>
+            ) : (
+              <div className="goa-hero-players-list">
+                {stats.players.map(({ player, wins, losses, draws }) => {
+                  const played = wins + losses + draws;
+                  const pr = played === 0 ? 0 : Math.round((wins / played) * 100);
+                  const selected = selectedPlayerIds.has(player.id);
+                  return (
+                    <div
+                      key={player.id}
+                      className={`goa-hero-player-row${selected ? " selected" : ""}`}
+                      onClick={() => togglePlayerFilter(player.id)}
+                    >
+                      <PlayerAvatar
+                        avatarUrl={player.avatar_url}
+                        name={player.name}
+                        size={28}
+                      />
+                      <span className="goa-hero-player-name">{player.name}</span>
+                      <span
+                        className={`goa-hero-player-pr ${pr >= 50 ? "goa-text-gain" : "goa-text-loss"}`}
+                      >
+                        {pr}%
+                      </span>
+                      <span className="goa-hero-player-wl">
+                        <span className="goa-text-gain">{wins}W</span>/
+                        <span className="goa-text-loss">{losses}L</span>
+                        {draws > 0 && (
+                          <>/<span className="goa-text-draw">{draws}D</span></>
+                        )}
+                      </span>
+                      <span className="goa-hero-player-toggle">
+                        {selected ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+          {statsTab === "matchups" &&
+            (matchupStats.length === 0 ? (
+              <p className="goa-pool-empty">No matchups recorded</p>
+            ) : (
+              <div className="goa-hero-matchup-list">
+                {matchupStats.map(({ opponentHeroId, wins, losses, draws }) => {
+                  const opponentHero = getHero(opponentHeroId);
+                  if (!opponentHero) return null;
+                  const played = wins + losses + draws;
+                  const wr = played === 0 ? 0 : Math.round((wins / played) * 100);
+                  const selected = selectedMatchupHeroIds.has(opponentHeroId);
+                  return (
+                    <div
+                      key={opponentHeroId}
+                      className={`goa-hero-matchup-row${selected ? " selected" : ""}`}
+                      onClick={() => toggleMatchupFilter(opponentHeroId)}
+                    >
+                      <Image
+                        src={opponentHero.icon}
+                        alt={opponentHero.name}
+                        width={28}
+                        height={28}
+                        className="goa-hero-matchup-icon"
+                      />
+                      <span className="goa-hero-matchup-name">{opponentHero.name}</span>
+                      <span
+                        className={`goa-hero-player-pr ${wr >= 50 ? "goa-text-gain" : "goa-text-loss"}`}
+                      >
+                        {wr}%
+                      </span>
+                      <span className="goa-hero-player-wl">
+                        <span className="goa-text-gain">{wins}W</span>/
+                        <span className="goa-text-loss">{losses}L</span>
+                        {draws > 0 && (
+                          <>/<span className="goa-text-draw">{draws}D</span></>
+                        )}
+                      </span>
+                      <span className="goa-hero-player-toggle">
+                        {selected ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
         </div>
       )}
 
