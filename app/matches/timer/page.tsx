@@ -14,6 +14,7 @@ import {
   Pause,
   Play,
   Square,
+  Plus,
   CheckCircle2,
   Swords,
   ScrollText,
@@ -72,6 +73,10 @@ const RESERVE_OPTIONS = [60, 120, 180, 240, 300];
 // Length of each team's optional self-service timer on the action phase —
 // see SessionState's atlantisBonusRemaining/titansBonusRemaining.
 const BONUS_TIMER_SECONDS = 30;
+
+// How much the "+30s Reserve" control (see handleAddReserveTime) tops up
+// both teams' reserve banks by, each time it's tapped.
+const RESERVE_BONUS_SECONDS = 30;
 
 // Assumed real-world overhead per player action phase — picking the next
 // player, everyone glancing at the screen, etc. — on top of their actual
@@ -802,6 +807,11 @@ function MatchTimerPageInner() {
   const handleSelectPlayer = (playerId: string) => {
     if (!config) return;
     unlockAudioContext();
+    // A pause taken during one player's action phase shouldn't silently
+    // carry into the next one's — Complete Turn can be tapped while
+    // paused (it's not gated on it), so without this the next player's
+    // clock would sit frozen with no obvious sign why.
+    setPaused(false);
     setSession((prev) => {
       if (!prev || prev.phase !== "select_player") return prev;
       return {
@@ -844,6 +854,23 @@ function MatchTimerPageInner() {
     if (!config) return;
     unlockAudioContext();
     setSession((prev) => (prev ? commitAction(prev, config, allPlayerIds) : prev));
+  };
+
+  // Manual top-up for both teams' reserve banks at once (e.g. a rules
+  // dispute or interruption that isn't really either team's own overtime)
+  // — available from any phase, so it doesn't matter whose reserve is
+  // currently draining or whether one's already hit zero.
+  const handleAddReserveTime = () => {
+    unlockAudioContext();
+    setSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            atlantisReserve: prev.atlantisReserve + RESERVE_BONUS_SECONDS,
+            titansReserve: prev.titansReserve + RESERVE_BONUS_SECONDS,
+          }
+        : prev,
+    );
   };
 
   // Undoes an accidental pick — back to select-player with nothing
@@ -1258,6 +1285,13 @@ function MatchTimerPageInner() {
             >
               {paused ? <Play size={16} /> : <Pause size={16} />}
               {paused ? "Resume" : "Pause"}
+            </button>
+            <button
+              className="goa-timer-control-btn"
+              onClick={handleAddReserveTime}
+            >
+              <Plus size={14} />
+              +30s Reserve (Both)
             </button>
             <button
               className="goa-timer-control-btn danger"
