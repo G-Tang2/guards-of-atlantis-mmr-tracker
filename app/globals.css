@@ -6063,6 +6063,48 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* A team's own optional 30s timer on the action phase — sits under its
+     reserve value inside the same card, so its accent colors follow the
+     card's atl/tit variant already established above. */
+  .goa-timer-bonus-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.15rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.25);
+    font-family: "Cinzel", serif;
+    font-size: clamp(0.62rem, 1.3vw, 0.82rem);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-variant-numeric: tabular-nums;
+  }
+  .goa-timer-bonus-btn.atl {
+    color: var(--atlantis-light);
+  }
+  .goa-timer-bonus-btn.tit {
+    color: var(--titans-light);
+  }
+  .goa-timer-bonus-btn.running {
+    border-color: var(--gold);
+    background: rgba(201, 151, 58, 0.15);
+    color: var(--gold-light);
+  }
+  .goa-timer-bonus-btn.paused {
+    border-color: var(--border-bright);
+  }
+  .goa-timer-bonus-btn.overtime {
+    border-color: var(--loss);
+    background: rgba(196, 74, 74, 0.2);
+    color: var(--loss);
+    animation: timerPulse 1s ease-in-out infinite;
+  }
+
   .goa-timer-main-count {
     text-align: center;
     font-family: "Cinzel", serif;
@@ -6082,12 +6124,38 @@
     padding: 0.25rem 0;
   }
 
+  .goa-timer-ready-wrap {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 0.5rem;
+    padding: 0 1rem;
+  }
   .goa-timer-ready-row {
     display: grid;
-    flex-shrink: 0;
     grid-template-columns: 1fr 1fr;
     gap: 0.6rem;
-    padding: 0 1rem;
+  }
+  .goa-timer-both-ready-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: clamp(0.5rem, 1.5vw, 0.9rem) 0.5rem;
+    border-radius: 4px;
+    border: 1px dashed var(--border-bright);
+    background: transparent;
+    font-family: "Cinzel", serif;
+    font-size: clamp(0.68rem, 1.6vw, 1rem);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--gold-light);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .goa-timer-both-ready-btn:hover {
+    border-style: solid;
+    background: rgba(201, 151, 58, 0.1);
   }
   .goa-timer-ready-btn {
     display: flex;
@@ -6116,10 +6184,6 @@
     border-color: var(--gain);
     background: rgba(93, 187, 138, 0.15);
     color: var(--gain);
-    cursor: default;
-  }
-  .goa-timer-ready-btn:disabled {
-    opacity: 0.85;
   }
 
 
@@ -6327,6 +6391,10 @@
     .goa-timer-page .goa-timer-reserve-value {
       font-size: clamp(1.6rem, 3.2vw, 3rem);
     }
+    .goa-timer-page .goa-timer-bonus-btn {
+      font-size: clamp(0.8rem, 1.2vw, 1rem);
+      padding: 0.35rem 0.8rem;
+    }
     .goa-timer-page .goa-timer-main-count {
       font-size: clamp(4rem, 10vw, 9.5rem);
     }
@@ -6336,6 +6404,10 @@
     .goa-timer-page .goa-timer-ready-btn {
       font-size: clamp(1rem, 1.8vw, 1.5rem);
       padding: clamp(1rem, 2.2vw, 1.9rem) 0.7rem;
+    }
+    .goa-timer-page .goa-timer-both-ready-btn {
+      font-size: clamp(0.85rem, 1.4vw, 1.15rem);
+      padding: clamp(0.6rem, 1.4vw, 1rem) 0.7rem;
     }
 
     .goa-timer-page .goa-timer-select-teams .goa-section-title {

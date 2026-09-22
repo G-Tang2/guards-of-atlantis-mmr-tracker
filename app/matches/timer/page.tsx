@@ -48,6 +48,17 @@ type SessionState = {
   actionDraining: boolean;
   actionElapsed: number;
   actionSeconds: Record<string, number>;
+  // A per-team, optional 30s timer a team can start for itself on the
+  // action phase — independent of whichever player is actually acting.
+  // Once its own 30s runs out it keeps going by eating into that team's
+  // reserve, same as any other overtime in this app. Reset to a fresh,
+  // unstarted 30s every time a new action phase begins (see
+  // handleSelectPlayer) regardless of whether it was left running/paused
+  // in the previous one.
+  atlantisBonusRemaining: number;
+  atlantisBonusRunning: boolean;
+  titansBonusRemaining: number;
+  titansBonusRunning: boolean;
 };
 
 // ─── Config options ─────────────────────────────────────────────────────────
@@ -56,6 +67,10 @@ const STRATEGY_OPTIONS = [30, 60, 90, 120, 150];
 const ACTION_OPTIONS = [15, 30, 45, 60, 75];
 const EOR_OPTIONS = [90, 120, 150, 180, 210];
 const RESERVE_OPTIONS = [60, 120, 180, 240, 300];
+
+// Length of each team's optional self-service timer on the action phase —
+// see SessionState's atlantisBonusRemaining/titansBonusRemaining.
+const BONUS_TIMER_SECONDS = 30;
 
 // Assumed real-world overhead per player action phase — picking the next
 // player, everyone glancing at the screen, etc. — on top of their actual
@@ -72,6 +87,29 @@ function formatMinutesSeconds(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+// ─── Bonus timer button (per-team 30s timer on the action phase) ───────────
+
+function bonusButtonStateClass(remaining: number, running: boolean): string {
+  if (remaining <= 0) return " overtime";
+  if (running) return " running";
+  if (remaining < BONUS_TIMER_SECONDS) return " paused";
+  return "";
+}
+
+function bonusButtonLabel(remaining: number, running: boolean): string {
+  if (remaining <= 0) return "Overtime";
+  if (!running && remaining === BONUS_TIMER_SECONDS) return "30s Timer";
+  if (!running) return `Paused ${formatActionTime(remaining)}`;
+  return formatActionTime(remaining);
+}
+
+function bonusButtonIcon(remaining: number, running: boolean) {
+  if (remaining <= 0) return <TimerIcon size={12} />;
+  if (running) return <Pause size={12} />;
+  if (remaining < BONUS_TIMER_SECONDS) return <Play size={12} />;
+  return <TimerIcon size={12} />;
 }
 
 // ─── Sound ──────────────────────────────────────────────────────────────────
@@ -254,6 +292,10 @@ function freshRound(
     actionDraining: false,
     actionElapsed: 0,
     actionSeconds: {},
+    atlantisBonusRemaining: BONUS_TIMER_SECONDS,
+    atlantisBonusRunning: false,
+    titansBonusRemaining: BONUS_TIMER_SECONDS,
+    titansBonusRunning: false,
   };
 }
 
@@ -422,6 +464,36 @@ function tickStep(
   return { state: s, consumed: 0 };
 }
 
+// Spends `delta` seconds of a team's own bonus timer, first against its
+// own remaining 30s and then, once that hits 0, against the team's
+// reserve — mirroring how the main phase/action countdowns above already
+// overflow into reserve once they run out.
+function applyBonusDelta(s: SessionState, team: Team, delta: number): SessionState {
+  const remainingKey = team === "atlantis" ? "atlantisBonusRemaining" : "titansBonusRemaining";
+  const reserveKey = team === "atlantis" ? "atlantisReserve" : "titansReserve";
+  let left = delta;
+  let remaining = s[remainingKey];
+  if (remaining > 0) {
+    const use = Math.min(left, remaining);
+    remaining -= use;
+    left -= use;
+  }
+  const reserve = left > 0 ? Math.max(0, s[reserveKey] - left) : s[reserveKey];
+  return { ...s, [remainingKey]: remaining, [reserveKey]: reserve };
+}
+
+// Bonus timers only ever run during the action phase (see the buttons
+// themselves, rendered only there) and don't affect phase transitions, so
+// unlike tickStep above they're applied once per real elapsed second
+// rather than replayed hop-by-hop through tick's loop.
+function tickBonusTimers(s: SessionState, deltaSeconds: number): SessionState {
+  if (s.phase !== "action" || deltaSeconds <= 0) return s;
+  let next = s;
+  if (next.atlantisBonusRunning) next = applyBonusDelta(next, "atlantis", deltaSeconds);
+  if (next.titansBonusRunning) next = applyBonusDelta(next, "titans", deltaSeconds);
+  return next;
+}
+
 // Advances the session clock by `deltaSeconds` of real elapsed time,
 // generalized from "exactly 1 second" so a tick that runs late (the tab
 // was backgrounded, the screen locked, etc.) catches the session up to
@@ -444,7 +516,7 @@ function tick(
     if (consumed <= 0) break;
     remaining -= consumed;
   }
-  return state;
+  return tickBonusTimers(state, deltaSeconds);
 }
 
 // ─── Page ───────────────────────────────────────────────────────────────────
@@ -592,6 +664,12 @@ function MatchTimerPageInner() {
         });
       }
     }
+    if (session.phase === "action") {
+      if (session.atlantisBonusRunning && session.atlantisBonusRemaining > 0)
+        list.push({ id: "atlantis-bonus", value: session.atlantisBonusRemaining });
+      if (session.titansBonusRunning && session.titansBonusRemaining > 0)
+        list.push({ id: "titans-bonus", value: session.titansBonusRemaining });
+    }
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, stage]);
@@ -641,8 +719,11 @@ function MatchTimerPageInner() {
   // needs to keep signalling for the whole stretch, not just once.
   useEffect(() => {
     if (stage !== "running" || !session) return;
+    const bonusOvertime =
+      (session.atlantisBonusRunning && session.atlantisBonusRemaining <= 0) ||
+      (session.titansBonusRunning && session.titansBonusRemaining <= 0);
     const draining =
-      session.atlantisDraining || session.titansDraining || session.actionDraining;
+      session.atlantisDraining || session.titansDraining || session.actionDraining || bonusOvertime;
     if (!draining) return;
     playReservePulse();
     const id = setInterval(playReservePulse, 5000);
@@ -653,6 +734,10 @@ function MatchTimerPageInner() {
     session?.atlantisDraining,
     session?.titansDraining,
     session?.actionDraining,
+    session?.atlantisBonusRunning,
+    session?.atlantisBonusRemaining,
+    session?.titansBonusRunning,
+    session?.titansBonusRemaining,
   ]);
 
   // ── Handlers ────────────────────────────────────────────────────────────
@@ -669,15 +754,42 @@ function MatchTimerPageInner() {
     setStage("running");
   };
 
+  // Toggles a team's ready state on or off — un-readying is only ever
+  // possible while still waiting on the other side (the phase itself
+  // advances the instant both are ready, taking these buttons off screen).
+  // Un-readying after the main phase timer already hit zero puts that
+  // team straight back into draining its reserve, same as if it had
+  // simply never readied up in time.
   const handleReady = (team: Team) => {
     if (!config) return;
     unlockAudioContext();
     setSession((prev) => {
       if (!prev) return prev;
+      const wasReady = team === "atlantis" ? prev.atlantisReady : prev.titansReady;
+      const ready = !wasReady;
+      const draining = !ready && prev.phaseTimeRemaining <= 0;
       const next =
         team === "atlantis"
-          ? { ...prev, atlantisReady: true, atlantisDraining: false }
-          : { ...prev, titansReady: true, titansDraining: false };
+          ? { ...prev, atlantisReady: ready, atlantisDraining: draining }
+          : { ...prev, titansReady: ready, titansDraining: draining };
+      return resolveReadyPhase(next, config);
+    });
+  };
+
+  // Convenience for the common case where both sides are ready at once —
+  // equivalent to tapping both Ready Up buttons in a row.
+  const handleBothReady = () => {
+    if (!config) return;
+    unlockAudioContext();
+    setSession((prev) => {
+      if (!prev) return prev;
+      const next = {
+        ...prev,
+        atlantisReady: true,
+        titansReady: true,
+        atlantisDraining: false,
+        titansDraining: false,
+      };
       return resolveReadyPhase(next, config);
     });
   };
@@ -694,7 +806,26 @@ function MatchTimerPageInner() {
         phaseTimeRemaining: config.actionTime,
         actionDraining: false,
         actionElapsed: 0,
+        // Always a fresh, unstarted 30s for both teams on every new action
+        // phase — never carries over a running/paused state from whoever
+        // last used it.
+        atlantisBonusRemaining: BONUS_TIMER_SECONDS,
+        atlantisBonusRunning: false,
+        titansBonusRemaining: BONUS_TIMER_SECONDS,
+        titansBonusRunning: false,
       };
+    });
+  };
+
+  // Starts a team's own 30s timer, or pauses/resumes it if already
+  // (partway) running — see SessionState's atlantisBonusRunning.
+  const handleToggleBonusTimer = (team: Team) => {
+    unlockAudioContext();
+    setSession((prev) => {
+      if (!prev || prev.phase !== "action") return prev;
+      return team === "atlantis"
+        ? { ...prev, atlantisBonusRunning: !prev.atlantisBonusRunning }
+        : { ...prev, titansBonusRunning: !prev.titansBonusRunning };
     });
   };
 
@@ -939,13 +1070,51 @@ function MatchTimerPageInner() {
           </div>
 
           <div className="goa-timer-reserves">
-            <div className={`goa-timer-reserve atl${session.atlantisDraining ? " draining" : ""}`}>
+            <div
+              className={`goa-timer-reserve atl${
+                session.atlantisDraining || (session.atlantisBonusRunning && session.atlantisBonusRemaining <= 0)
+                  ? " draining"
+                  : ""
+              }`}
+            >
               <span className="goa-timer-reserve-label">Atlantis Reserve</span>
               <span className="goa-timer-reserve-value">{formatActionTime(session.atlantisReserve)}</span>
+              {session.phase === "action" && (
+                <button
+                  type="button"
+                  className={`goa-timer-bonus-btn atl${bonusButtonStateClass(
+                    session.atlantisBonusRemaining,
+                    session.atlantisBonusRunning,
+                  )}`}
+                  onClick={() => handleToggleBonusTimer("atlantis")}
+                >
+                  {bonusButtonIcon(session.atlantisBonusRemaining, session.atlantisBonusRunning)}
+                  {bonusButtonLabel(session.atlantisBonusRemaining, session.atlantisBonusRunning)}
+                </button>
+              )}
             </div>
-            <div className={`goa-timer-reserve tit${session.titansDraining ? " draining" : ""}`}>
+            <div
+              className={`goa-timer-reserve tit${
+                session.titansDraining || (session.titansBonusRunning && session.titansBonusRemaining <= 0)
+                  ? " draining"
+                  : ""
+              }`}
+            >
               <span className="goa-timer-reserve-label">Titans Reserve</span>
               <span className="goa-timer-reserve-value">{formatActionTime(session.titansReserve)}</span>
+              {session.phase === "action" && (
+                <button
+                  type="button"
+                  className={`goa-timer-bonus-btn tit${bonusButtonStateClass(
+                    session.titansBonusRemaining,
+                    session.titansBonusRunning,
+                  )}`}
+                  onClick={() => handleToggleBonusTimer("titans")}
+                >
+                  {bonusButtonIcon(session.titansBonusRemaining, session.titansBonusRunning)}
+                  {bonusButtonLabel(session.titansBonusRemaining, session.titansBonusRunning)}
+                </button>
+              )}
             </div>
           </div>
 
@@ -958,22 +1127,26 @@ function MatchTimerPageInner() {
           )}
 
           {(session.phase === "strategy" || session.phase === "end_of_round") && (
-            <div className="goa-timer-ready-row">
-              <button
-                className={`goa-timer-ready-btn atl${session.atlantisReady ? " ready" : ""}`}
-                onClick={() => handleReady("atlantis")}
-                disabled={session.atlantisReady}
-              >
+            <div className="goa-timer-ready-wrap">
+              <div className="goa-timer-ready-row">
+                <button
+                  className={`goa-timer-ready-btn atl${session.atlantisReady ? " ready" : ""}`}
+                  onClick={() => handleReady("atlantis")}
+                >
+                  <CheckCircle2 size={16} />
+                  {session.atlantisReady ? "Atlantis Ready" : "Ready Up: Atlantis"}
+                </button>
+                <button
+                  className={`goa-timer-ready-btn tit${session.titansReady ? " ready" : ""}`}
+                  onClick={() => handleReady("titans")}
+                >
+                  <CheckCircle2 size={16} />
+                  {session.titansReady ? "Titans Ready" : "Ready Up: Titans"}
+                </button>
+              </div>
+              <button className="goa-timer-both-ready-btn" onClick={handleBothReady}>
                 <CheckCircle2 size={16} />
-                {session.atlantisReady ? "Atlantis Ready" : "Ready Up: Atlantis"}
-              </button>
-              <button
-                className={`goa-timer-ready-btn tit${session.titansReady ? " ready" : ""}`}
-                onClick={() => handleReady("titans")}
-                disabled={session.titansReady}
-              >
-                <CheckCircle2 size={16} />
-                {session.titansReady ? "Titans Ready" : "Ready Up: Titans"}
+                Both Ready
               </button>
             </div>
           )}
