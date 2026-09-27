@@ -15,7 +15,8 @@ import {
   Team,
   WinCondition,
 } from "@/lib/match";
-import { ScrollText, Swords, MessageCircle, Loader2, RotateCw } from "lucide-react";
+import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Ban } from "lucide-react";
+import { RankedBalanceResult } from "@/lib/rankedBalanceResult";
 import {
   buildFirstHeroWinMap,
   isFirstHeroWinMatch,
@@ -48,6 +49,7 @@ type Match = {
   atlantis_life_counter: number | null;
   titans_life_counter: number | null;
   draft_analysis: string | null;
+  ranked_balance_result: RankedBalanceResult | null;
   match_players: MatchPlayer[];
 };
 
@@ -86,6 +88,7 @@ type RawMatch = {
   atlantis_life_counter: number | null;
   titans_life_counter: number | null;
   draft_analysis: string | null;
+  ranked_balance_result: RankedBalanceResult | null;
   match_players: RawMatchPlayer[] | null;
 };
 
@@ -108,6 +111,7 @@ const MATCH_SELECT = `
   atlantis_life_counter,
   titans_life_counter,
   draft_analysis,
+  ranked_balance_result,
   match_players (
     player_id,
     team,
@@ -177,6 +181,7 @@ const normalizeMatch = (match: RawMatch): Match => {
     atlantis_life_counter: match.atlantis_life_counter,
     titans_life_counter: match.titans_life_counter,
     draft_analysis: match.draft_analysis,
+    ranked_balance_result: match.ranked_balance_result,
     match_players: normalizedMatchPlayers,
   };
 };
@@ -252,6 +257,83 @@ function DetailTable({ rows }: { rows: DetailRow[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+// Collapsed by default (a plain <details>, no `open`) — the full vote
+// breakdown is useful to dig into but not something most visits to a
+// match's own detail page need to see right away, unlike the outcome
+// itself further up. See lib/rankedBalanceResult.ts for what's captured.
+function RankedBalanceResultSection({ result }: { result: RankedBalanceResult }) {
+  const summaryNote = result.skippedVoting
+    ? "Only one balanced split was possible for this group — it was applied automatically, with no vote held."
+    : result.chooseRoundSkipped
+      ? "Options were banned first; only one option survived, so it was applied automatically."
+      : `${result.totalVotes} vote${result.totalVotes === 1 ? "" : "s"} cast${
+          result.wantsBan ? ", after a ban round" : ""
+        }.`;
+
+  return (
+    <details className="goa-section">
+      <summary className="goa-sec-head clickable goa-ranked-result-summary">
+        <Star size={13} />
+        Ranked Balance Vote
+        <ChevronDown size={14} className="goa-ranked-result-chevron" />
+      </summary>
+      <div className="draft-body">
+        <p className="draft-note" style={{ textAlign: "left" }}>
+          {summaryNote}
+        </p>
+        <div className="goa-vote-options">
+          {result.options.map((option, i) => (
+            <div
+              key={i}
+              className={`ranked-option${i === result.winnerIndex ? " winner" : ""}${
+                option.banned ? " banned" : ""
+              }`}
+            >
+              <div className="ranked-option-head">
+                <span className="ranked-option-head-left">
+                  Option {i + 1}
+                  {option.banned && (
+                    <span className="goa-vote-banned-tag">
+                      <Ban size={11} /> Banned
+                    </span>
+                  )}
+                </span>
+                {!result.skippedVoting && !result.chooseRoundSkipped && !option.banned && (
+                  <span className="vote-results-count">
+                    {option.votes} of {result.totalVotes} votes
+                  </span>
+                )}
+                {result.wantsBan && option.banVotes !== undefined && (
+                  <span className="vote-results-count">
+                    {option.banVotes} of {result.totalVotes} ban votes
+                  </span>
+                )}
+              </div>
+              <div className="draft-live-teams">
+                {(
+                  [
+                    ["atl", "Atlantis", option.atlantis],
+                    ["tit", "Titans", option.titans],
+                  ] as const
+                ).map(([faction, label, players]) => (
+                  <div key={faction} className="draft-live-team">
+                    <span className={`draft-faction-label ${faction}`}>{label}</span>
+                    {players.map((p) => (
+                      <div key={p.id} className="draft-live-row">
+                        <span className="draft-live-name">{p.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -511,6 +593,10 @@ export default function MatchDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {match.ranked_balance_result && (
+        <RankedBalanceResultSection result={match.ranked_balance_result} />
       )}
 
       {/* Post-Match — what was left of the shared wave counter and each

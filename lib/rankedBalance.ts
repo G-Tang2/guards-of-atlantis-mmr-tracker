@@ -23,6 +23,7 @@ const SKILL_RANK_POINTS: Record<string, number> = {
   han: 6,
   amy: 6,
   gordon: 6,
+  peter: 5,
   sam: 4,
   dave: 4,
   vincent: 4,
@@ -32,6 +33,12 @@ const SKILL_RANK_POINTS: Record<string, number> = {
 
 const skillPointsOf = (p: SkillPlayer) =>
   SKILL_RANK_POINTS[p.name.toLowerCase()] ?? 0;
+
+// A split whose two sides differ by this many skill points or more isn't
+// offered at all — better to hand back fewer options (down to none) than
+// one so lopsided on paper it isn't a real "ranked balanced" choice.
+// Exported so callers can explain *why* to a group that gets none at all.
+export const MAX_SKILL_POINT_DIFF = 4;
 
 // A pair of players who keep landing on the same side across most of the
 // offered options isn't really giving anyone a meaningful choice — this
@@ -69,6 +76,46 @@ function pairsTogether(mask: number, n: number): string[] {
     }
   }
   return pairs;
+}
+
+// Orders an already-chosen set of splits so a split introducing pairings
+// not yet seen is listed before one that repeats pairs an earlier option
+// in the list already used — separate from (and after) bestDiverseCombination
+// above, which only picks the *set* of options; this decides the *order*
+// they're shown in, so a genuinely different pairing reads as "Option 1/2"
+// rather than being buried behind a repeat just because both happen to
+// share the same point difference. Greedy: at each step, picks whichever
+// remaining split shares the fewest pairs already used by options placed
+// earlier, ties broken by lower point difference — so with no repeats
+// generated yet (the very first pick) this is equivalent to today's plain
+// most-balanced-first ordering.
+function orderByNovelty<C extends { mask: number; diff: number }>(
+  selected: C[],
+  n: number,
+): C[] {
+  const remaining = selected.map((c) => ({ c, pairs: pairsTogether(c.mask, n) }));
+  const usedPairs = new Set<string>();
+  const ordered: C[] = [];
+
+  while (remaining.length > 0) {
+    let bestIdx = 0;
+    let bestRepeats = Infinity;
+    remaining.forEach((entry, idx) => {
+      const repeats = entry.pairs.reduce((s, p) => s + (usedPairs.has(p) ? 1 : 0), 0);
+      const better =
+        repeats < bestRepeats ||
+        (repeats === bestRepeats && entry.c.diff < remaining[bestIdx].c.diff);
+      if (better) {
+        bestRepeats = repeats;
+        bestIdx = idx;
+      }
+    });
+    const [picked] = remaining.splice(bestIdx, 1);
+    picked.pairs.forEach((p) => usedPairs.add(p));
+    ordered.push(picked.c);
+  }
+
+  return ordered;
 }
 
 // Finds the `count`-sized combination (from `candidates`, already sorted
@@ -143,16 +190,21 @@ function bestDiverseCombination(
   return result.best ? result.best.indices : null;
 }
 
-// The `count` most-balanced Atlantis/Titans splits by total skill points
-// (lowest point difference first), while also trying to keep any single
-// pair of players from sharing a side across more than MIN_PAIR_TOGETHER_CAP
-// of the returned options (relaxed upward only if that's not achievable —
-// see its own comment). Unlike a plain MMR-balanced split (which just
-// wants the single best split), this hands back several options since
-// which specific players end up together can vary a lot between splits
-// that are otherwise equally balanced on paper — worth letting players
-// vote on rather than always taking the first ones found, and worth
-// making those choices actually different from each other.
+// Up to `count` most-balanced Atlantis/Titans splits by total skill points
+// (lowest point difference first) — fewer than `count`, or none at all,
+// when fewer than `count` splits (or none) actually keep both sides within
+// MAX_SKILL_POINT_DIFF points of each other; callers need to handle an
+// empty result as "no ranked-balanced split is possible for this group"
+// rather than assuming at least one option always comes back. Among
+// whatever qualifies, this also tries to keep any single pair of players
+// from sharing a side across more than MIN_PAIR_TOGETHER_CAP of the
+// returned options (relaxed upward only if that's not achievable — see its
+// own comment). Unlike a plain MMR-balanced split (which just wants the
+// single best split), this hands back several options since which specific
+// players end up together can vary a lot between splits that are otherwise
+// equally balanced on paper — worth letting players vote on rather than
+// always taking the first ones found, and worth making those choices
+// actually different from each other.
 //
 // Enumerates all 2^n subsets (fine for the small rosters this splitter
 // handles) and folds each partition's Atlantis/Titans-swapped mirror into a
@@ -179,7 +231,9 @@ export const rankedBalancedSplits = <T extends SkillPlayer>(
       }
     }
     if (Math.abs(sizeA - (n - sizeA)) > 1) continue;
-    candidates.push({ mask, diff: Math.abs(weightA - (total - weightA)) });
+    const diff = Math.abs(weightA - (total - weightA));
+    if (diff >= MAX_SKILL_POINT_DIFF) continue;
+    candidates.push({ mask, diff });
   }
 
   candidates.sort((a, b) => a.diff - b.diff);
@@ -199,9 +253,10 @@ export const rankedBalancedSplits = <T extends SkillPlayer>(
       break;
     }
   }
-  const selected = selectedIndices
-    .map((i) => candidates[i])
-    .sort((a, b) => a.diff - b.diff);
+  const selected = orderByNovelty(
+    selectedIndices.map((i) => candidates[i]),
+    n,
+  );
 
   return selected.map(({ mask }) => {
     const atlantis: T[] = [];

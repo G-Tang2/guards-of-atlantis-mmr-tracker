@@ -13,7 +13,6 @@ import { fetchRelevantHeroCards } from "@/lib/heroCardContext";
 import { fetchRelevantHeroGuides } from "@/lib/heroGuides";
 import { GENERAL_STRATEGY_GUIDES } from "@/lib/generalStrategy";
 import { HEROES } from "@/lib/heroes";
-import { formatWinCondition } from "@/lib/match";
 
 // Bounded the same way app/api/chat/route.ts bounds its own first-chunk
 // wait — this route has no streaming UI to keep feeling responsive while
@@ -58,7 +57,7 @@ export async function POST(
     .from("matches")
     .select(
       `
-      id, winner, win_condition, draft_analysis,
+      id, draft_analysis,
       match_players ( team, hero_id, players ( name ) )
       `,
     )
@@ -102,13 +101,6 @@ export async function POST(
   const heroNameList = (roster: typeof atlantisRoster) =>
     roster.map((p) => p.heroName).join(", ") || "no hero picks recorded";
 
-  const resultLine =
-    match.winner === "none"
-      ? "The match ended in a draw."
-      : `${match.winner === "atlantis" ? "Atlantis" : "Titans"} won this match${
-          match.win_condition ? ` ${formatWinCondition(match.win_condition).toLowerCase()}` : ""
-        }.`;
-
   const heroCardContext = fetchRelevantHeroCards(allHeroIds, HERO_CONTEXT_TOKEN_BUDGET);
   const heroGuideContext = fetchRelevantHeroGuides(allHeroIds, HERO_CONTEXT_TOKEN_BUDGET);
   const generalStrategyContext = Object.values(GENERAL_STRATEGY_GUIDES).join("\n\n---\n\n");
@@ -126,9 +118,8 @@ export async function POST(
 MATCH CONTEXT
 Atlantis picks: ${formatRoster(atlantisRoster)}
 Titans picks: ${formatRoster(titansRoster)}
-${resultLine}
 
-TASK: Analyze which team drafted the stronger overall TEAM COMPOSITION — not simply whichever team happened to win the actual game. The match result above is context only: a team can win despite a weaker draft, or lose despite a stronger one — say so plainly if that's the case.
+TASK: Analyze which team drafted the stronger overall TEAM COMPOSITION, purely on the picks above — you are not told who actually won this game, and shouldn't need to be: judge the draft entirely on its own merits, not on a result.
 
 Ignore each hero's Tier 4/PURPLE ultimate card when weighing the draft — it's rarely actually reached in a real match, so basing the analysis on it would overstate a hero whose ultimate is strong but who is otherwise weaker, or understate one whose ultimate is weak but who is strong everywhere else. Judge the draft on each hero's basic (Gold/Silver) and Tier 1-3 (Red/Blue/Green) cards only.
 
@@ -150,8 +141,6 @@ If there is a real, identifiable edge, name that team and grade the gap using ex
 - "slightly better" — a real but narrow edge; the other team is still very much in it purely on draft strength.
 - "better" — a clear, meaningful advantage that should tell in most games.
 - "exceptionally better" — a lopsided draft where one side's composition heavily outclasses the other's.
-
-Reconcile this verdict with the actual match result above — if the team you judge to have drafted better didn't win (or vice versa), say so explicitly rather than leaving the two unaddressed.
 
 Ground every specific claim (card names, numbers, effects) in the hero card details and strategy guides below — don't invent numbers or effects that aren't there. Never annotate a card name with its color in parentheses (e.g. write "Raging Stream", not "Raging Stream (Red)") — the app already shows each card's color visually wherever its name appears.
 

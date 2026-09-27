@@ -23,6 +23,10 @@ import { applyBadgeRewards, getOwnedBadgeIds } from "@/lib/badgeRewards";
 import { DraftMethod, didWin } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { TIMER_LOG_STORAGE_KEY } from "@/lib/timerLog";
+import {
+  RANKED_BALANCE_RESULT_STORAGE_KEY,
+  RankedBalanceResult,
+} from "@/lib/rankedBalanceResult";
 import { LAST_BATTLE_STEP_STORAGE_KEY } from "@/lib/battleSession";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
@@ -443,6 +447,35 @@ function NewMatchPageInner() {
       const atlantisFinal = applyRookieBonus(badgeRewards.atlantis, "atlantis");
       const titansFinal = applyRookieBonus(badgeRewards.titans, "titans");
 
+      const matchParticipantIds = new Set([
+        ...atlantisFinal.map((p) => p.id),
+        ...titansFinal.map((p) => p.id),
+      ]);
+
+      // Only attach the stashed Ranked Balance vote breakdown (see
+      // /teams/vote's finish()) when this really is the match it was
+      // stashed for — a "back" to redo the draft with different players
+      // (or a different method entirely) after voting would otherwise
+      // leave a stale, mismatched vote history sitting in localStorage.
+      let rankedBalanceResult: RankedBalanceResult | null = null;
+      if (draftMethod === "ranked_balanced") {
+        try {
+          const raw = localStorage.getItem(RANKED_BALANCE_RESULT_STORAGE_KEY);
+          const parsed = raw ? (JSON.parse(raw) as RankedBalanceResult) : null;
+          const winningOption = parsed?.options[parsed.winnerIndex];
+          const optionPlayerIds = winningOption
+            ? new Set([...winningOption.atlantis, ...winningOption.titans].map((p) => p.id))
+            : null;
+          const matches =
+            optionPlayerIds &&
+            optionPlayerIds.size === matchParticipantIds.size &&
+            [...optionPlayerIds].every((id) => matchParticipantIds.has(id));
+          if (matches) rankedBalanceResult = parsed;
+        } catch {
+          // Corrupt/stale entry — just skip attaching it.
+        }
+      }
+
       const { data: match, error } = await supabaseClient
         .from("matches")
         .insert({
@@ -454,6 +487,7 @@ function NewMatchPageInner() {
           titans_mmr_change: result.meta.titansDelta,
           expected_atlantis_win: result.meta.expectedA,
           draft_method: draftMethod,
+          ranked_balance_result: rankedBalanceResult,
           starting_wave_counter: startingWaveCounter
             ? Number(startingWaveCounter)
             : null,
@@ -480,10 +514,6 @@ function NewMatchPageInner() {
       if (error) throw error;
 
       const newMatchNumber = match.match_number;
-      const matchParticipantIds = new Set([
-        ...atlantisFinal.map((p) => p.id),
-        ...titansFinal.map((p) => p.id),
-      ]);
       const teamByPlayerId = new Map<string, Team>([
         ...atlantis.map((e): [string, Team] => [e.player.id, "atlantis"]),
         ...titans.map((e): [string, Team] => [e.player.id, "titans"]),
@@ -682,6 +712,7 @@ function NewMatchPageInner() {
       setStartingLifeCounter("");
       localStorage.removeItem(TEAMS_DRAFT_STORAGE_KEY);
       localStorage.removeItem(LAST_BATTLE_STEP_STORAGE_KEY);
+      localStorage.removeItem(RANKED_BALANCE_RESULT_STORAGE_KEY);
 
       if (newlyEarnedBadges.length > 0) {
         // Redirect is deferred to the overlay's dismissal instead of firing

@@ -549,6 +549,22 @@
     justify-content: space-between;
     cursor: pointer;
   }
+  /* <summary>'s own marker is hidden in favor of the explicit chevron
+     child, which flips via the parent <details>'s [open] state instead of
+     any JS — see RankedBalanceResultSection in app/matches/[id]/page.tsx. */
+  .goa-ranked-result-summary {
+    list-style: none;
+  }
+  .goa-ranked-result-summary::-webkit-details-marker {
+    display: none;
+  }
+  .goa-ranked-result-chevron {
+    flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+  details[open] > .goa-ranked-result-summary .goa-ranked-result-chevron {
+    transform: rotate(180deg);
+  }
 
   .goa-section-title {
     font-family: "Cinzel", serif;
@@ -6823,12 +6839,11 @@
     margin-top: 0.75rem;
   }
 
-  /* Shown for VOTE_CONFIRM_MS after every tap (ban or choose round) — a
-     small floating pop-up rather than a full-screen takeover, so it
-     reads as a brief confirmation rather than blocking the page. Fixed
-     dead-center so it's the first thing the next voter sees when the
-     device is handed over, and dismissible early via its own close
-     button (see VoteConfirmPopup's onClose). */
+  /* Shown after every tap (ban or choose round) — a small floating pop-up
+     rather than a full-screen takeover, so it reads as a brief confirmation
+     rather than blocking the page. Fixed dead-center so it's the first
+     thing the next voter sees when the device is handed over. Stays up
+     until Continue or Undo is tapped (see VoteConfirmPopup). */
   .goa-vote-confirm-popup {
     position: fixed;
     top: 50%;
@@ -6882,23 +6897,46 @@
     font-size: 0.8rem;
     color: var(--text-muted);
   }
-  .goa-vote-confirm-close {
-    position: absolute;
-    top: 0.4rem;
-    right: 0.4rem;
-    width: 20px;
-    height: 20px;
+  .goa-vote-confirm-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    width: 100%;
+    margin-top: 0.3rem;
+  }
+  .goa-vote-confirm-undo,
+  .goa-vote-confirm-continue {
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
+    gap: 0.35rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 6px;
+    font-family: "Cinzel", serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
     cursor: pointer;
+    transition: all 0.15s;
   }
-  .goa-vote-confirm-close:hover {
-    color: var(--text-primary);
+  .goa-vote-confirm-undo {
+    background: transparent;
+    border: 1px solid var(--border-bright);
+    color: var(--text-muted);
+  }
+  .goa-vote-confirm-undo:hover {
+    color: var(--loss);
+    border-color: var(--loss);
+  }
+  .goa-vote-confirm-continue {
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    border: 1px solid var(--gold);
+    color: #1c1a14;
+  }
+  .goa-vote-confirm-continue:hover {
+    box-shadow: 0 0 14px rgba(201, 151, 58, 0.4);
   }
 
   /* ── iPad+ scale-up (/teams/vote only, via .goa-vote-page) ── same

@@ -7,15 +7,20 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
+import {
+  RANKED_BALANCE_RESULT_STORAGE_KEY,
+  RankedBalanceResult,
+} from "@/lib/rankedBalanceResult";
 import { LAST_BATTLE_STEP_STORAGE_KEY } from "@/lib/battleSession";
-import { rankedBalancedSplits, Split } from "@/lib/rankedBalance";
+import { rankedBalancedSplits, MAX_SKILL_POINT_DIFF, Split } from "@/lib/rankedBalance";
 import { previewWinGain } from "@/lib/mmr";
 import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
-import { Star, Crown, ScrollText, Swords, Ban, CheckCircle2, X } from "lucide-react";
+import { Star, Crown, ScrollText, Swords, Ban, CheckCircle2, Undo2 } from "lucide-react";
 
 type Player = { id: string; name: string; mmr: number; avatar_url?: string | null };
 type Stage =
+  | "impossible"
   | "setup"
   | "ban_ballot"
   | "ban_results"
@@ -40,11 +45,6 @@ const FACTIONS = ["atlantis", "titans"] as const;
 // copy). Only ever offered when there are enough options for this to
 // still leave something to vote on afterward (see canBan below).
 const BAN_COUNT = 2;
-
-// How long the "your vote has been counted" pop-up stays up after any tap
-// (ban or choose round) before the app moves on — can also be dismissed
-// early with its own close button (see VoteConfirmPopup).
-const VOTE_CONFIRM_MS = 3000;
 
 const avg = (players: Player[]) =>
   players.length === 0
@@ -198,25 +198,39 @@ function VoteDots({
   );
 }
 
-// Shown for VOTE_CONFIRM_MS after every single tap (ban or choose round)
-// — a small pop-up rather than a full-screen takeover, dismissible early
-// with its own close button (onClose skips the rest of the wait and
-// proceeds immediately, same as letting the timer run out).
-function VoteConfirmPopup({ onClose }: { onClose: () => void }) {
+// Shown after every single tap (ban or choose round) — a small pop-up
+// rather than a full-screen takeover. Stays up until the group explicitly
+// taps Continue (proceeding, including settling the tally on the very
+// last vote) or Undo (cancelling the tap that raised this popup instead).
+function VoteConfirmPopup({
+  onContinue,
+  onUndo,
+}: {
+  onContinue: () => void;
+  onUndo: () => void;
+}) {
   return (
     <div className="goa-vote-confirm-popup">
-      <button
-        type="button"
-        className="goa-vote-confirm-close"
-        onClick={onClose}
-        aria-label="Dismiss"
-      >
-        <X size={14} />
-      </button>
       <CheckCircle2 size={24} className="goa-vote-confirm-icon" />
       <div className="goa-vote-confirm-text">
         <span className="goa-vote-confirm-title">Vote counted</span>
         <span className="goa-vote-confirm-sub">Pass the device to the next person.</span>
+      </div>
+      <div className="goa-vote-confirm-actions">
+        <button
+          type="button"
+          className="goa-vote-confirm-undo"
+          onClick={onUndo}
+        >
+          <Undo2 size={14} /> Undo
+        </button>
+        <button
+          type="button"
+          className="goa-vote-confirm-continue"
+          onClick={onContinue}
+        >
+          Continue
+        </button>
       </div>
     </div>
   );
@@ -258,12 +272,11 @@ function TeamsVotePageInner() {
   const [tieActiveIndex, setTieActiveIndex] = useState<number | null>(null);
 
   const [voteConfirmVisible, setVoteConfirmVisible] = useState(false);
-  // Holds whatever showConfirmationThen's timer would otherwise run once
-  // VOTE_CONFIRM_MS elapses, so the popup's own close button can run it
-  // immediately instead and cancel the pending timer — closing early
-  // should still proceed, just without the rest of the wait.
-  const voteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // What Continue/Undo on the currently-shown popup should each do — set
+  // together by showConfirmationThen for whichever tap is being confirmed,
+  // and both cleared once either one runs.
   const voteConfirmActionRef = useRef<(() => void) | null>(null);
+  const voteConfirmUndoRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem(RANKED_VOTE_STORAGE_KEY);
@@ -317,6 +330,14 @@ function TeamsVotePageInner() {
           setSplits(computedSplits);
           setTotalVotes(computedTotalVotes);
           localStorage.setItem(LAST_BATTLE_STEP_STORAGE_KEY, "/teams/vote");
+
+          if (computedSplits.length === 0) {
+            // No split keeps both sides within the skill-point threshold —
+            // there's nothing to vote on at all, not even a single option.
+            setStage("impossible");
+            setLoading(false);
+            return;
+          }
 
           if (computedSplits.length <= 1) {
             // Nothing to vote on — apply the one possible split directly.
@@ -418,28 +439,31 @@ function TeamsVotePageInner() {
     );
   };
 
-  // A tap commits immediately, then a brief pop-up (VoteConfirmPopup)
-  // appears for VOTE_CONFIRM_MS before anything else happens — including
-  // settling the tally on the very last tap, so the group always gets
-  // that same "pass the device" beat before a reveal, not just between
-  // voters. Its own close button (dismissVoteConfirm below) can cut the
-  // wait short and run `after` immediately instead.
-  const showConfirmationThen = (after: () => void) => {
+  // A tap commits immediately, then a pop-up (VoteConfirmPopup) covers the
+  // options until the group explicitly answers it — nothing else happens
+  // in the meantime, including settling the tally on the very last tap, so
+  // that always waits on the same explicit "pass the device" beat as every
+  // other vote rather than a timed reveal. `after` runs on Continue; `undo`
+  // (a full revert of the tap that raised this popup) runs instead if the
+  // group taps Undo.
+  const showConfirmationThen = (after: () => void, undo: () => void) => {
     voteConfirmActionRef.current = after;
+    voteConfirmUndoRef.current = undo;
     setVoteConfirmVisible(true);
-    voteConfirmTimerRef.current = setTimeout(() => {
-      voteConfirmTimerRef.current = null;
-      setVoteConfirmVisible(false);
-      after();
-    }, VOTE_CONFIRM_MS);
   };
 
-  const dismissVoteConfirm = () => {
-    if (voteConfirmTimerRef.current) clearTimeout(voteConfirmTimerRef.current);
-    voteConfirmTimerRef.current = null;
+  const continueVoteConfirm = () => {
     setVoteConfirmVisible(false);
     voteConfirmActionRef.current?.();
     voteConfirmActionRef.current = null;
+    voteConfirmUndoRef.current = null;
+  };
+
+  const undoVoteConfirm = () => {
+    setVoteConfirmVisible(false);
+    voteConfirmUndoRef.current?.();
+    voteConfirmActionRef.current = null;
+    voteConfirmUndoRef.current = null;
   };
 
   const runTieBreak = (tied: number[]) => {
@@ -476,14 +500,23 @@ function TeamsVotePageInner() {
   };
 
   const castVote = (index: number) => {
+    const prevVotes = votes;
+    const prevVotesCast = votesCast;
     const nextVotes = votes.map((v, i) => (i === index ? v + 1 : v));
     const nextVotesCast = votesCast + 1;
     setVotes(nextVotes);
     setVotesCast(nextVotesCast);
     persistProgress(nextVotes, nextVotesCast);
-    showConfirmationThen(() => {
-      if (nextVotesCast >= totalVotes) settleTally(nextVotes);
-    });
+    showConfirmationThen(
+      () => {
+        if (nextVotesCast >= totalVotes) settleTally(nextVotes);
+      },
+      () => {
+        setVotes(prevVotes);
+        setVotesCast(prevVotesCast);
+        persistProgress(prevVotes, prevVotesCast);
+      },
+    );
   };
 
   const finishBan = (finalBanned: number[]) => {
@@ -516,14 +549,23 @@ function TeamsVotePageInner() {
   };
 
   const castBanVote = (index: number) => {
+    const prevBanVotes = banVotes;
+    const prevBanVotesCast = banVotesCast;
     const nextBanVotes = banVotes.map((v, i) => (i === index ? v + 1 : v));
     const nextBanVotesCast = banVotesCast + 1;
     setBanVotes(nextBanVotes);
     setBanVotesCast(nextBanVotesCast);
     persistBanProgress(nextBanVotes, nextBanVotesCast);
-    showConfirmationThen(() => {
-      if (nextBanVotesCast >= totalVotes) settleBanTally(nextBanVotes);
-    });
+    showConfirmationThen(
+      () => {
+        if (nextBanVotesCast >= totalVotes) settleBanTally(nextBanVotes);
+      },
+      () => {
+        setBanVotes(prevBanVotes);
+        setBanVotesCast(prevBanVotesCast);
+        persistBanProgress(prevBanVotes, prevBanVotesCast);
+      },
+    );
   };
 
   const startBanRound = () => {
@@ -590,6 +632,31 @@ function TeamsVotePageInner() {
         method: "ranked_balanced",
       }),
     );
+
+    // The vote itself is about to be discarded (see the removeItem right
+    // below) — stash its full breakdown separately so /matches/new can
+    // save it onto the match row for the detail page to show later.
+    const result: RankedBalanceResult = {
+      totalVotes,
+      wantsBan: wantsBan === true,
+      skippedVoting,
+      chooseRoundSkipped,
+      winnerIndex,
+      options: splits.map((split, i) => ({
+        atlantis: split.atlantis.map((p) => ({ id: p.id, name: p.name })),
+        titans: split.titans.map((p) => ({ id: p.id, name: p.name })),
+        votes: votes[i] ?? 0,
+        banVotes: wantsBan ? (banVotes[i] ?? 0) : undefined,
+        banned: bannedIndices.includes(i),
+      })),
+    };
+    localStorage.setItem(RANKED_BALANCE_RESULT_STORAGE_KEY, JSON.stringify(result));
+
+    localStorage.removeItem(RANKED_VOTE_STORAGE_KEY);
+    router.replace("/teams");
+  };
+
+  const backToTeams = () => {
     localStorage.removeItem(RANKED_VOTE_STORAGE_KEY);
     router.replace("/teams");
   };
@@ -620,6 +687,31 @@ function TeamsVotePageInner() {
         <h1 className="goa-title">Ranked Balance Vote</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
+
+      {stage === "impossible" && (
+        <div className="goa-card">
+          <div className="goa-card-head">
+            <Ban size={16} /> Ranked Balance Not Possible
+          </div>
+          <div className="draft-body">
+            <p className="draft-note">
+              No split of this group keeps both sides within{" "}
+              {MAX_SKILL_POINT_DIFF} skill points of each other — try
+              Balanced or Custom teams instead.
+            </p>
+            <div className="goa-btn-wrap" style={{ margin: 0 }}>
+              <button
+                type="button"
+                className="goa-btn inline-flex items-center justify-center gap-2"
+                onClick={backToTeams}
+              >
+                <Swords size={18} />
+                Back to Teams
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {stage === "setup" && (
         <div className="goa-vote-live-body">
@@ -818,7 +910,9 @@ function TeamsVotePageInner() {
         </div>
       )}
 
-      {voteConfirmVisible && <VoteConfirmPopup onClose={dismissVoteConfirm} />}
+      {voteConfirmVisible && (
+        <VoteConfirmPopup onContinue={continueVoteConfirm} onUndo={undoVoteConfirm} />
+      )}
     </main>
   );
 }
