@@ -20,6 +20,7 @@ import {
   computeVoteAllowance,
   totalVotesFromAllowance,
   sortBannedLast,
+  votedFully,
   incrementBanVote,
   undoBanVote,
   settleBanIfComplete,
@@ -32,7 +33,7 @@ import {
 } from "@/lib/rankedVoteSession";
 import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
-import { Star, Crown, ScrollText, Swords, Ban, Share2 } from "lucide-react";
+import { Star, Crown, ScrollText, Swords, Ban, Share2, CheckCircle2 } from "lucide-react";
 
 type Player = VoteSessionPlayer;
 
@@ -448,6 +449,15 @@ function TeamsVotePageInner() {
   const isLiveStage = stage === "ballot" || stage === "ban_ballot" || stage === "setup";
   const showingTieReveal = stage === "results" && revealPhase === "revealing";
 
+  // Every option includes every player, just assigned to a different side
+  // — session.splits[0] alone already has the full roster.
+  const roster = [...session.splits[0].atlantis, ...session.splits[0].titans];
+  // Only ever reflects players who voted through the shareable link (see
+  // ban_voters/voters' own column comments) — a tap on this device itself
+  // stays fully anonymous, exactly as it always has.
+  const votedNames = (votersMap: Record<string, number>): string[] =>
+    roster.filter((p) => votedFully(votersMap, session.vote_allowance, p.id)).map((p) => p.name);
+
   return (
     <main
       className={`goa-root goa-vote-page${isLiveStage ? " goa-vote-live" : ""}`}
@@ -535,6 +545,11 @@ function TeamsVotePageInner() {
             <span className="goa-vote-ballot-title">Vote to Ban</span>
             <VoteDots total={session.total_votes} cast={session.ban_votes_cast} variant="ban" />
           </div>
+          {votedNames(session.ban_voters).length > 0 && (
+            <p className="goa-vote-voted-note">
+              <CheckCircle2 size={12} /> Voted via link: {votedNames(session.ban_voters).join(", ")}
+            </p>
+          )}
           <p className="draft-note">
             Tap the option you'd most like to remove, then pass the device
             on. If you have two votes from the Base badge, use them on two
@@ -602,6 +617,11 @@ function TeamsVotePageInner() {
             <span className="goa-vote-ballot-title">Cast Your Vote</span>
             <VoteDots total={session.total_votes} cast={session.votes_cast} />
           </div>
+          {votedNames(session.voters).length > 0 && (
+            <p className="goa-vote-voted-note">
+              <CheckCircle2 size={12} /> Voted via link: {votedNames(session.voters).join(", ")}
+            </p>
+          )}
           <p className="draft-note">
             Tap an option to cast your vote, then pass the device on. If you
             have two votes from the Base badge, use them on two different

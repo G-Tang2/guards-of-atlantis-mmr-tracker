@@ -18,6 +18,7 @@ import { OptionCard, VoteDots, VoteConfirmPopup } from "@/components/RankedVoteU
 import {
   VoteSessionRow,
   sortBannedLast,
+  votedFully,
   incrementBanVote,
   undoBanVote,
   settleBanIfComplete,
@@ -193,8 +194,26 @@ export default function RemoteVotePage() {
   const banUsed = voterId ? (session.ban_voters[voterId] ?? 0) : 0;
   const choiceUsed = voterId ? (session.voters[voterId] ?? 0) : 0;
 
+  // Whoever's picking their name gets to see who's already gone — the
+  // current round's own voters map, or nobody-done for a stage where no
+  // round is actively open (setup/ban_results/results/impossible).
+  const votedInCurrentRound = (playerId: string): boolean => {
+    if (session.stage === "ban_ballot") return votedFully(session.ban_voters, session.vote_allowance, playerId);
+    if (session.stage === "ballot") return votedFully(session.voters, session.vote_allowance, playerId);
+    return false;
+  };
+
+  // .goa-vote-live caps the page to one fixed-height scroll container —
+  // right for the ballot stages (the sticky vote-dots header needs that),
+  // but wrong for "results", which shows every option (host or remote)
+  // and needs to grow/scroll with the page like a normal card, not be
+  // squeezed into a single viewport-height box. See app/teams/vote/page.tsx's
+  // own isLiveStage for the same distinction.
+  const isLiveStage =
+    session.stage === "setup" || session.stage === "ban_ballot" || session.stage === "ballot";
+
   return (
-    <main className="goa-root goa-vote-page goa-vote-live">
+    <main className={`goa-root goa-vote-page${isLiveStage ? " goa-vote-live" : ""}`}>
       <header className="goa-header">
         <div className="goa-crown">
           <Star size={30} />
@@ -211,17 +230,21 @@ export default function RemoteVotePage() {
           <div className="draft-body">
             <p className="draft-note">Pick your name to cast your vote.</p>
             <div className="goa-vote-identity-list">
-              {roster.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className="goa-vote-identity-btn"
-                  onClick={() => selectIdentity(p.id)}
-                >
-                  <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={24} />
-                  {p.name}
-                </button>
-              ))}
+              {roster.map((p) => {
+                const done = votedInCurrentRound(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`goa-vote-identity-btn${done ? " voted" : ""}`}
+                    onClick={() => selectIdentity(p.id)}
+                  >
+                    <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={24} />
+                    <span className="goa-vote-identity-name">{p.name}</span>
+                    {done && <CheckCircle2 size={16} className="goa-vote-identity-check" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

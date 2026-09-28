@@ -129,6 +129,20 @@ export function sortBannedLast<T>(splits: T[], bannedIndices: number[]): number[
   return [...indices.filter((i) => !banned.has(i)), ...indices.filter((i) => banned.has(i))];
 }
 
+// Whether `playerId` has cast every vote they're entitled to in whichever
+// round `votersMap` is for (ban_voters or voters — see the migration's own
+// column comments) — shared by the shareable-link page's own "you've
+// already voted" tick and the match creator's "who has voted" list, so
+// both agree on what "done" means (their full allowance used, not just
+// "at least one" for a Base-badge owner with two).
+export function votedFully(
+  votersMap: Record<string, number>,
+  voteAllowance: Record<string, number>,
+  playerId: string,
+): boolean {
+  return (votersMap[playerId] ?? 0) >= (voteAllowance[playerId] ?? 1);
+}
+
 // ── DB access ────────────────────────────────────────────────────────────
 // Every write below is guarded on the vote-count column it's changing
 // still matching what the caller last saw — two devices completing a tap

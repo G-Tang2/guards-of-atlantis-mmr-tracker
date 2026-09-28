@@ -6897,6 +6897,30 @@
     background: rgba(42, 39, 32, 0.8);
     border-color: var(--border-bright);
   }
+  .goa-vote-identity-name {
+    flex: 1;
+  }
+  .goa-vote-identity-btn.voted {
+    border-color: rgba(93, 187, 138, 0.4);
+    background: rgba(93, 187, 138, 0.08);
+  }
+  .goa-vote-identity-check {
+    flex-shrink: 0;
+    color: var(--gain);
+  }
+  /* "Who has voted" note on the match creator's own page (see
+     app/teams/vote/page.tsx) — only ever lists shareable-link voters, per
+     its own comment, so it reads as a supplementary note rather than a
+     full roster/tally like .vote-results-count. */
+  .goa-vote-voted-note {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0 0.9rem;
+    font-family: "Crimson Pro", serif;
+    font-size: 0.8rem;
+    color: var(--gain);
+  }
   .goa-vote-identity-banner {
     display: flex;
     align-items: center;
