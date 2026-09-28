@@ -30,6 +30,7 @@ import {
   startBanRound as startBanRoundDb,
   skipBanRound as skipBanRoundDb,
   continueAfterBan as continueAfterBanDb,
+  forceChooseWinner,
 } from "@/lib/rankedVoteSession";
 import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
@@ -74,6 +75,11 @@ function TeamsVotePageInner() {
   // and both cleared once either one runs.
   const voteConfirmActionRef = useRef<(() => void) | null>(null);
   const voteConfirmUndoRef = useRef<(() => void) | null>(null);
+
+  // Set while the "hold to pick this option directly" confirmation is up
+  // (see OptionCard's onHoldComplete) — an option index, not a boolean,
+  // since the dialog needs to say which option it's about to lock in.
+  const [forceWinnerIndex, setForceWinnerIndex] = useState<number | null>(null);
 
   // React (in dev, under StrictMode) runs a fresh-mount effect twice —
   // harmless for an effect that only reads, but this one can *create* a
@@ -356,6 +362,14 @@ function TeamsVotePageInner() {
     );
   };
 
+  const confirmForceWinner = async () => {
+    if (!session || forceWinnerIndex === null) return;
+    const index = forceWinnerIndex;
+    setForceWinnerIndex(null);
+    const updated = await forceChooseWinner(session, index);
+    if (updated) setSession(updated);
+  };
+
   const startBanRound = async () => {
     if (!session) return;
     const updated = await startBanRoundDb(session);
@@ -457,6 +471,17 @@ function TeamsVotePageInner() {
   // stays fully anonymous, exactly as it always has.
   const votedNames = (votersMap: Record<string, number>): string[] =>
     roster.filter((p) => votedFully(votersMap, session.vote_allowance, p.id)).map((p) => p.name);
+
+  // settleChooseIfComplete (the only other way winner_index ever gets set)
+  // never runs until votes_cast reaches total_votes — so seeing a winner
+  // with the tally still short of that can only mean the match creator
+  // locked it in directly with a press-and-hold instead of letting the
+  // vote finish (see forceChooseWinner in lib/rankedVoteSession.ts).
+  const wasForced =
+    stage === "results" &&
+    !session.skipped_voting &&
+    !session.choose_round_skipped &&
+    session.votes_cast < session.total_votes;
 
   return (
     <main
@@ -627,6 +652,10 @@ function TeamsVotePageInner() {
             have two votes from the Base badge, use them on two different
             options.
           </p>
+          <p className="draft-note subtle">
+            Match creator: press and hold an option for 2 seconds to pick it
+            directly and skip the rest of the vote.
+          </p>
           <div className="goa-vote-options">
             {session.active_indices.map((i) => (
               <OptionCard
@@ -636,6 +665,7 @@ function TeamsVotePageInner() {
                 className="ranked-option vote-option-card"
                 onClick={() => castVote(i)}
                 disabled={voteConfirmVisible}
+                onHoldComplete={() => setForceWinnerIndex(i)}
               />
             ))}
           </div>
@@ -678,6 +708,10 @@ function TeamsVotePageInner() {
                 Only one option remained after banning — applying it
                 automatically.
               </p>
+            ) : wasForced ? (
+              <p className="draft-note">
+                The match creator picked this option directly.
+              </p>
             ) : null}
             <div className="goa-vote-options">
               {sortBannedLast(session.splits, session.banned_indices).map((i) => (
@@ -692,7 +726,8 @@ function TeamsVotePageInner() {
                   headExtra={
                     !session.skipped_voting &&
                     !session.banned_indices.includes(i) &&
-                    !session.choose_round_skipped ? (
+                    !session.choose_round_skipped &&
+                    !wasForced ? (
                       <span className="vote-results-count">
                         {session.votes[i]} of {session.total_votes} votes
                       </span>
@@ -716,6 +751,51 @@ function TeamsVotePageInner() {
 
       {voteConfirmVisible && (
         <VoteConfirmPopup onContinue={continueVoteConfirm} onUndo={undoVoteConfirm} />
+      )}
+
+      {forceWinnerIndex !== null && (
+        <div
+          className="draft-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setForceWinnerIndex(null);
+          }}
+        >
+          <div className="draft-sheet">
+            <div className="draft-head">
+              <span className="draft-head-title inline-flex items-center gap-1.5">
+                <Crown size={16} />
+                Pick Option {forceWinnerIndex + 1}?
+              </span>
+              <button className="draft-close" onClick={() => setForceWinnerIndex(null)}>
+                ✕
+              </button>
+            </div>
+            <div className="draft-body">
+              <p className="draft-note" style={{ textAlign: "left" }}>
+                This locks in Option {forceWinnerIndex + 1} as the winner
+                right now and skips the rest of the vote. The current tally
+                is discarded.
+              </p>
+              <div className="goa-btn-wrap" style={{ margin: 0 }}>
+                <button
+                  className="goa-btn inline-flex items-center justify-center gap-2"
+                  onClick={confirmForceWinner}
+                >
+                  <Crown size={18} />
+                  Pick Option {forceWinnerIndex + 1}
+                </button>
+              </div>
+              <div className="goa-btn-wrap" style={{ margin: 0 }}>
+                <button
+                  className="goa-btn outline inline-flex items-center justify-center gap-2"
+                  onClick={() => setForceWinnerIndex(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

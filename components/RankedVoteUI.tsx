@@ -3,7 +3,7 @@
 // option cards, vote dots, and "vote counted" pop-up render identically on
 // both, so they live here once instead of twice.
 
-import { ReactNode } from "react";
+import { ReactNode, useRef } from "react";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { previewWinGain } from "@/lib/mmr";
 import { Split } from "@/lib/rankedBalance";
@@ -25,6 +25,8 @@ export function OptionCard({
   headExtra,
   banned,
   disabled,
+  onHoldComplete,
+  holdMs = 2000,
 }: {
   index: number;
   split: Split<VoteSessionPlayer>;
@@ -33,7 +35,64 @@ export function OptionCard({
   headExtra?: ReactNode;
   banned?: boolean;
   disabled?: boolean;
+  // Host-only press-and-hold override (see app/teams/vote/page.tsx) — omit
+  // it and this card behaves exactly as a plain tap-to-vote button always
+  // has, so the shareable-link page (which never passes it) is unaffected.
+  onHoldComplete?: () => void;
+  holdMs?: number;
 }) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const holdFrameRef = useRef<number | null>(null);
+  const holdStartRef = useRef<number | null>(null);
+  // Set true the instant a hold completes, so the click event the browser
+  // still fires on release (same press, same element) doesn't *also* land
+  // as a normal vote tap while a confirmation for the held option is
+  // already coming up. Cleared again shortly after — not on next click —
+  // since a real mouse click can end up targeting a now-open confirmation
+  // dialog instead of this button at all, leaving nothing to clear it.
+  const holdFiredRef = useRef(false);
+
+  const setHoldProgress = (value: number) => {
+    buttonRef.current?.style.setProperty("--hold-progress", String(value));
+  };
+
+  const cancelHold = () => {
+    if (holdFrameRef.current !== null) cancelAnimationFrame(holdFrameRef.current);
+    holdFrameRef.current = null;
+    holdStartRef.current = null;
+    setHoldProgress(0);
+  };
+
+  const tickHold = () => {
+    if (holdStartRef.current === null) return;
+    const progress = Math.min(1, (Date.now() - holdStartRef.current) / holdMs);
+    setHoldProgress(progress * 100);
+    if (progress >= 1) {
+      holdFiredRef.current = true;
+      cancelHold();
+      onHoldComplete?.();
+      setTimeout(() => {
+        holdFiredRef.current = false;
+      }, 500);
+      return;
+    }
+    holdFrameRef.current = requestAnimationFrame(tickHold);
+  };
+
+  const startHold = () => {
+    if (!onHoldComplete || disabled) return;
+    holdStartRef.current = Date.now();
+    holdFrameRef.current = requestAnimationFrame(tickHold);
+  };
+
+  const handleClick = () => {
+    if (holdFiredRef.current) {
+      holdFiredRef.current = false;
+      return;
+    }
+    onClick?.();
+  };
+
   const body = (
     <>
       <div className="ranked-option-head">
@@ -81,7 +140,17 @@ export function OptionCard({
     return <div className={className}>{body}</div>;
   }
   return (
-    <button type="button" className={className} onClick={onClick} disabled={disabled}>
+    <button
+      ref={buttonRef}
+      type="button"
+      className={`${className}${onHoldComplete ? " holdable" : ""}`}
+      onClick={handleClick}
+      disabled={disabled}
+      onPointerDown={onHoldComplete ? startHold : undefined}
+      onPointerUp={onHoldComplete ? cancelHold : undefined}
+      onPointerLeave={onHoldComplete ? cancelHold : undefined}
+      onPointerCancel={onHoldComplete ? cancelHold : undefined}
+    >
       {body}
     </button>
   );

@@ -5497,6 +5497,11 @@
     color: var(--muted);
     text-align: center;
   }
+  .draft-note.subtle {
+    opacity: 0.6;
+    font-size: 0.58rem;
+    margin-top: -0.35rem;
+  }
   .draft-note.highlight {
     color: var(--gold-light);
   }
@@ -6742,6 +6747,35 @@
   .vote-option-card.ban:active {
     border-color: var(--loss);
     background: rgba(196, 74, 74, 0.1);
+  }
+
+  /* Press-and-hold override ring (see onHoldComplete in
+     components/RankedVoteUI.tsx) — --hold-progress (0-100) is written
+     straight to the button's own style by rAF, not animated in CSS,
+     since a hold can let go at any instant and the ring has to freeze
+     exactly there rather than run out a fixed timeline. The conic-
+     gradient + mask pair traces just the border ring (not the whole
+     card) clockwise from the top, and drop-shadow gives it its glow. */
+  .vote-option-card.holdable {
+    position: relative;
+  }
+  .vote-option-card.holdable::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 8px;
+    padding: 2px;
+    background: conic-gradient(
+      from -90deg,
+      var(--gold-light) calc(var(--hold-progress, 0) * 1%),
+      transparent calc(var(--hold-progress, 0) * 1%)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    filter: drop-shadow(0 0 5px var(--gold-light));
+    pointer-events: none;
   }
 
   /* A banned option, shown in the ban-results reveal and again (for

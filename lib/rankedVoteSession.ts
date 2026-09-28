@@ -293,6 +293,22 @@ export function settleChooseIfComplete(session: VoteSessionRow): Promise<VoteSes
 // comment). Guarded on `stage` instead of a vote count, since that's
 // what's actually changing.
 
+// The match creator's own device can skip the rest of the choose round
+// entirely and declare a winner directly (press-and-hold on an option, see
+// OptionCard's onHoldComplete in components/RankedVoteUI.tsx and its use in
+// app/teams/vote/page.tsx) — not a vote tap, so this isn't guarded on a vote
+// count like incrementChooseVote, just like the other flow transitions here.
+export function forceChooseWinner(
+  session: VoteSessionRow,
+  optionIndex: number,
+): Promise<VoteSessionRow | null> {
+  return guardedUpdate(session.id, "stage", session.stage, {
+    winner_index: optionIndex,
+    tied_indices: [],
+    stage: "results",
+  });
+}
+
 export function startBanRound(session: VoteSessionRow): Promise<VoteSessionRow | null> {
   const freshBanVotes = new Array(session.splits.length).fill(0);
   return guardedUpdate(session.id, "stage", session.stage, {
