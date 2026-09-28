@@ -35,10 +35,18 @@ export type VoteSessionRow = {
   ban_votes: number[];
   ban_votes_cast: number;
   ban_voters: Record<string, number>;
+  // Which option index(es) each shareable-link voter picked in the ban
+  // round, in the order they cast them — same voterId keys as ban_voters,
+  // but this is what lets the remote page show a per-option "voted by"
+  // list and let a voter find/retract their own specific pick, which a
+  // bare vote *count* per voter can't answer on its own.
+  ban_picks: Record<string, number[]>;
   banned_indices: number[];
   votes: number[];
   votes_cast: number;
   voters: Record<string, number>;
+  // Same shape/purpose as ban_picks, for the choose round.
+  choice_picks: Record<string, number[]>;
   winner_index: number | null;
   tied_indices: number[];
   skipped_voting: boolean;
@@ -143,6 +151,20 @@ export function votedFully(
   return (votersMap[playerId] ?? 0) >= (voteAllowance[playerId] ?? 1);
 }
 
+// Named shareable-link voters (see ban_picks/choice_picks column comments)
+// who picked `optionIndex` — used by the remote page's waiting screen to
+// show each option's own "voted by" list.
+export function votersWhoPicked(
+  picks: Record<string, number[]>,
+  optionIndex: number,
+  roster: VoteSessionPlayer[],
+): string[] {
+  return Object.entries(picks)
+    .filter(([, indices]) => indices.includes(optionIndex))
+    .map(([voterId]) => roster.find((p) => p.id === voterId)?.name)
+    .filter((name): name is string => !!name);
+}
+
 // ── DB access ────────────────────────────────────────────────────────────
 // Every write below is guarded on the vote-count column it's changing
 // still matching what the caller last saw — two devices completing a tap
@@ -174,6 +196,31 @@ async function guardedUpdate(
   return error ? null : (data as VoteSessionRow | null);
 }
 
+// Shared by increment/undoBanVote and incrementChoose/undoChooseVote below
+// to keep each voter's own per-option pick list (ban_picks/choice_picks) in
+// lockstep with their vote count (ban_voters/voters) — removePick always
+// drops the *last* occurrence of `index`, since an undo always targets the
+// specific tap that raised its own confirm pop-up, not an arbitrary one of
+// a voter's several picks.
+function addPick(
+  picks: Record<string, number[]>,
+  voterId: string,
+  index: number,
+): Record<string, number[]> {
+  return { ...picks, [voterId]: [...(picks[voterId] ?? []), index] };
+}
+
+function removePick(
+  picks: Record<string, number[]>,
+  voterId: string,
+  index: number,
+): Record<string, number[]> {
+  const existing = picks[voterId] ?? [];
+  const at = existing.lastIndexOf(index);
+  if (at === -1) return picks;
+  return { ...picks, [voterId]: [...existing.slice(0, at), ...existing.slice(at + 1)] };
+}
+
 // A tap commits its vote count immediately (so it's visible to every other
 // device watching the live dots right away) but deliberately does *not*
 // settle the round even if this happens to be the completing vote — that
@@ -201,6 +248,7 @@ export function incrementBanVote(
   };
   if (voterId) {
     patch.ban_voters = { ...session.ban_voters, [voterId]: (session.ban_voters[voterId] ?? 0) + 1 };
+    patch.ban_picks = addPick(session.ban_picks, voterId, optionIndex);
   }
   return guardedUpdate(session.id, "ban_votes_cast", session.ban_votes_cast, patch);
 }
@@ -222,6 +270,7 @@ export function undoBanVote(
       ...session.ban_voters,
       [voterId]: Math.max(0, (session.ban_voters[voterId] ?? 1) - 1),
     };
+    patch.ban_picks = removePick(session.ban_picks, voterId, optionIndex);
   }
   return guardedUpdate(session.id, "ban_votes_cast", session.ban_votes_cast, patch);
 }
@@ -252,6 +301,7 @@ export function incrementChooseVote(
   const patch: Record<string, unknown> = { votes: nextVotes, votes_cast: session.votes_cast + 1 };
   if (voterId) {
     patch.voters = { ...session.voters, [voterId]: (session.voters[voterId] ?? 0) + 1 };
+    patch.choice_picks = addPick(session.choice_picks, voterId, optionIndex);
   }
   return guardedUpdate(session.id, "votes_cast", session.votes_cast, patch);
 }
@@ -271,6 +321,7 @@ export function undoChooseVote(
       ...session.voters,
       [voterId]: Math.max(0, (session.voters[voterId] ?? 1) - 1),
     };
+    patch.choice_picks = removePick(session.choice_picks, voterId, optionIndex);
   }
   return guardedUpdate(session.id, "votes_cast", session.votes_cast, patch);
 }
@@ -317,6 +368,7 @@ export function startBanRound(session: VoteSessionRow): Promise<VoteSessionRow |
     ban_votes: freshBanVotes,
     ban_votes_cast: 0,
     ban_voters: {},
+    ban_picks: {},
   });
 }
 
@@ -328,6 +380,7 @@ export function skipBanRound(session: VoteSessionRow): Promise<VoteSessionRow | 
     votes: freshVotes,
     votes_cast: 0,
     voters: {},
+    choice_picks: {},
   });
 }
 
@@ -350,5 +403,6 @@ export function continueAfterBan(session: VoteSessionRow): Promise<VoteSessionRo
     votes: freshVotes,
     votes_cast: 0,
     voters: {},
+    choice_picks: {},
   });
 }

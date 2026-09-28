@@ -23,6 +23,7 @@ export function OptionCard({
   onClick,
   className,
   headExtra,
+  footer,
   banned,
   disabled,
   onHoldComplete,
@@ -33,6 +34,10 @@ export function OptionCard({
   onClick?: () => void;
   className?: string;
   headExtra?: ReactNode;
+  // Extra content below the team breakdown — the remote page's waiting
+  // screen uses it for "your vote"/"voted by" lines per option, which
+  // don't fit alongside the compact head row the way headExtra does.
+  footer?: ReactNode;
   banned?: boolean;
   disabled?: boolean;
   // Host-only press-and-hold override (see app/teams/vote/page.tsx) — omit
@@ -133,6 +138,7 @@ export function OptionCard({
           ));
         })()}
       </div>
+      {footer}
     </>
   );
 

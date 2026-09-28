@@ -19,6 +19,7 @@ import {
   VoteSessionRow,
   sortBannedLast,
   votedFully,
+  votersWhoPicked,
   incrementBanVote,
   undoBanVote,
   settleBanIfComplete,
@@ -134,6 +135,26 @@ export default function RemoteVotePage() {
     );
   };
 
+  // Retracting one of the voter's own already-cast picks — no confirm
+  // pop-up (that's reserved for the "vote counted" moment of casting a
+  // fresh vote), and never settles the round itself: a retraction only
+  // ever moves votes_cast *down*, so it can't be the tap that completes a
+  // tally. Once it goes through, this voter drops back below their
+  // allowance and the ballot's own active-voting view reappears, letting
+  // them tap a different option the normal way — that's the whole "change
+  // your selection" flow, just two ordinary taps instead of one.
+  const retractBan = async (index: number) => {
+    if (!session || !voterId) return;
+    const updated = await undoBanVote(session, index, voterId);
+    if (updated) setSession(updated);
+  };
+
+  const retractChoice = async (index: number) => {
+    if (!session || !voterId) return;
+    const updated = await undoChooseVote(session, index, voterId);
+    if (updated) setSession(updated);
+  };
+
   const castChoose = async (index: number) => {
     if (!session || !voterId) return;
     const before = session;
@@ -193,6 +214,14 @@ export default function RemoteVotePage() {
   const allowance = voterId ? (session.vote_allowance[voterId] ?? 1) : 1;
   const banUsed = voterId ? (session.ban_voters[voterId] ?? 0) : 0;
   const choiceUsed = voterId ? (session.voters[voterId] ?? 0) : 0;
+  const myBanPicks = voterId ? (session.ban_picks[voterId] ?? []) : [];
+  const myChoicePicks = voterId ? (session.choice_picks[voterId] ?? []) : [];
+
+  // Other voters who picked an option — the current voter's own pick is
+  // already called out separately ("Your vote — tap to remove"), so it'd
+  // be redundant to also list their own name here.
+  const otherVotersWhoPicked = (picks: Record<string, number[]>, index: number): string[] =>
+    votersWhoPicked(picks, index, roster.filter((p) => p.id !== voterId));
 
   // Whoever's picking their name gets to see who's already gone — the
   // current round's own voters map, or nobody-done for a stage where no
@@ -290,10 +319,47 @@ export default function RemoteVotePage() {
             <VoteDots total={session.total_votes} cast={session.ban_votes_cast} variant="ban" />
           </div>
           {banUsed >= allowance ? (
-            <p className="draft-note">
-              You've cast your ban vote{allowance > 1 ? "s" : ""} — waiting
-              for everyone else…
-            </p>
+            <>
+              <p className="draft-note">
+                You've cast your ban vote{allowance > 1 ? "s" : ""} — waiting
+                for everyone else. Tap your own pick below to change it.
+              </p>
+              <div className="goa-vote-options">
+                {session.splits.map((split, i) => {
+                  const isMine = myBanPicks.includes(i);
+                  const pickedBy = otherVotersWhoPicked(session.ban_picks, i);
+                  return (
+                    <OptionCard
+                      key={i}
+                      index={i}
+                      split={split}
+                      className={`ranked-option vote-option-card ban${isMine ? " your-pick" : ""}`}
+                      onClick={() => retractBan(i)}
+                      disabled={voteConfirmVisible || !isMine}
+                      headExtra={
+                        <span className="vote-results-count">
+                          {session.ban_votes[i] ?? 0} of {session.total_votes} ban votes
+                        </span>
+                      }
+                      footer={
+                        <>
+                          {isMine && (
+                            <p className="goa-vote-your-pick">
+                              <CheckCircle2 size={12} /> Your ban vote — tap to remove
+                            </p>
+                          )}
+                          {pickedBy.length > 0 && (
+                            <p className="goa-vote-option-voters">
+                              <CheckCircle2 size={12} /> Voted by: {pickedBy.join(", ")}
+                            </p>
+                          )}
+                        </>
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </>
           ) : (
             <>
               <p className="draft-note">
@@ -357,10 +423,47 @@ export default function RemoteVotePage() {
             <VoteDots total={session.total_votes} cast={session.votes_cast} />
           </div>
           {choiceUsed >= allowance ? (
-            <p className="draft-note">
-              You've cast your vote{allowance > 1 ? "s" : ""} — waiting for
-              everyone else…
-            </p>
+            <>
+              <p className="draft-note">
+                You've cast your vote{allowance > 1 ? "s" : ""} — waiting for
+                everyone else. Tap your own pick below to change it.
+              </p>
+              <div className="goa-vote-options">
+                {session.active_indices.map((i) => {
+                  const isMine = myChoicePicks.includes(i);
+                  const pickedBy = otherVotersWhoPicked(session.choice_picks, i);
+                  return (
+                    <OptionCard
+                      key={i}
+                      index={i}
+                      split={session.splits[i]}
+                      className={`ranked-option vote-option-card${isMine ? " your-pick" : ""}`}
+                      onClick={() => retractChoice(i)}
+                      disabled={voteConfirmVisible || !isMine}
+                      headExtra={
+                        <span className="vote-results-count">
+                          {session.votes[i] ?? 0} of {session.total_votes} votes
+                        </span>
+                      }
+                      footer={
+                        <>
+                          {isMine && (
+                            <p className="goa-vote-your-pick">
+                              <CheckCircle2 size={12} /> Your vote — tap to remove
+                            </p>
+                          )}
+                          {pickedBy.length > 0 && (
+                            <p className="goa-vote-option-voters">
+                              <CheckCircle2 size={12} /> Voted by: {pickedBy.join(", ")}
+                            </p>
+                          )}
+                        </>
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </>
           ) : (
             <>
               <p className="draft-note">

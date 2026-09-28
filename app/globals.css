@@ -6955,6 +6955,31 @@
     font-size: 0.8rem;
     color: var(--gain);
   }
+
+  /* Remote voter's waiting screen (app/vote/[id]/page.tsx) — once someone
+     has used their whole allowance, every option reappears (instead of a
+     bare "waiting" message) so they can see the live tally, see who
+     picked what, and tap their own pick to retract it and choose again. */
+  .ranked-option.your-pick {
+    border-color: var(--gain);
+    background: rgba(93, 187, 138, 0.06);
+  }
+  .goa-vote-your-pick {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: "Crimson Pro", serif;
+    font-size: 0.72rem;
+    color: var(--gain);
+  }
+  .goa-vote-option-voters {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: "Crimson Pro", serif;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
   .goa-vote-identity-banner {
     display: flex;
     align-items: center;
