@@ -1,10 +1,10 @@
 "use client";
 
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
+import { OptionCard, VoteDots, VoteConfirmPopup } from "@/components/RankedVoteUI";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { RANKED_VOTE_STORAGE_KEY } from "@/lib/rankedVote";
 import {
@@ -12,264 +12,60 @@ import {
   RankedBalanceResult,
 } from "@/lib/rankedBalanceResult";
 import { LAST_BATTLE_STEP_STORAGE_KEY } from "@/lib/battleSession";
-import { rankedBalancedSplits, MAX_SKILL_POINT_DIFF, Split } from "@/lib/rankedBalance";
-import { previewWinGain } from "@/lib/mmr";
+import { rankedBalancedSplits, MAX_SKILL_POINT_DIFF } from "@/lib/rankedBalance";
+import {
+  VoteSessionRow,
+  VoteSessionPlayer,
+  BAN_COUNT,
+  computeVoteAllowance,
+  totalVotesFromAllowance,
+  sortBannedLast,
+  incrementBanVote,
+  undoBanVote,
+  settleBanIfComplete,
+  incrementChooseVote,
+  undoChooseVote,
+  settleChooseIfComplete,
+  startBanRound as startBanRoundDb,
+  skipBanRound as skipBanRoundDb,
+  continueAfterBan as continueAfterBanDb,
+} from "@/lib/rankedVoteSession";
 import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
-import { Star, Crown, ScrollText, Swords, Ban, CheckCircle2, Undo2 } from "lucide-react";
+import { Star, Crown, ScrollText, Swords, Ban, Share2 } from "lucide-react";
 
-type Player = { id: string; name: string; mmr: number; avatar_url?: string | null };
-type Stage =
-  | "impossible"
-  | "setup"
-  | "ban_ballot"
-  | "ban_results"
-  | "ballot"
-  | "tie_reveal"
-  | "results";
+type Player = VoteSessionPlayer;
 
-type StoredVote = {
-  playerIds: string[];
-  wantsBan?: boolean;
-  banVotes?: number[];
-  banVotesCast?: number;
-  bannedIndices?: number[];
-  votes?: number[];
-  votesCast?: number;
-};
-
-const FACTIONS = ["atlantis", "titans"] as const;
-
-// How many options get banned before the final choice — fixed at 2 per
-// the group's own house rule for this vote (see the setup stage's own
-// copy). Only ever offered when there are enough options for this to
-// still leave something to vote on afterward (see canBan below).
-const BAN_COUNT = 2;
-
-const avg = (players: Player[]) =>
-  players.length === 0
-    ? 0
-    : Math.round(players.reduce((s, p) => s + p.mmr, 0) / players.length);
+type StoredVoteRef = { playerIds: string[]; sessionId?: string };
 
 // Pure, module-level (mirrors shuffle() in app/teams/page.tsx) so the
-// random pick lives outside the component's closures — kept in a plain
-// function called from an event handler rather than nested inside one.
-function buildTieBreak(tied: number[]) {
-  const winner = tied[Math.floor(Math.random() * tied.length)];
+// random pick lives outside the component's closures. Purely a *cosmetic*
+// reveal on whichever device happens to be showing it — the actual winner
+// among `tied` was already decided, identically, for every device (see
+// resolveChooseWinner in lib/rankedVoteSession.ts) the instant the
+// completing vote settled; this just plays back that decision dramatically
+// on this one screen instead of an instant, dry read of session.winner_index.
+function buildTieBreak(tied: number[], winner: number) {
   const steps = 14;
   const sequence = Array.from({ length: steps }, (_, i) => tied[i % tied.length]);
   sequence[steps - 1] = winner;
-  return { winner, sequence };
-}
-
-// Randomly resolves a boundary tie during banning (more than one option
-// can tie for a spot among the top BAN_COUNT most banned) — no reveal
-// animation, unlike buildTieBreak above; see settleBanTally's own
-// comment for why.
-function buildEliminationTieBreak(tiedPool: number[], neededFromTied: number) {
-  const shuffled = [...tiedPool].sort(() => Math.random() - 0.5);
-  return { eliminated: shuffled.slice(0, neededFromTied) };
-}
-
-// Works out exactly which `countToEliminate` indices (by ban-vote count,
-// most-banned first) should be removed. Splits the answer into `locked`
-// (unambiguously in — strictly more ban votes than the cutoff) and
-// `tiedPool` (tied at the cutoff value, contested for whatever slots
-// `locked` didn't already fill) so the caller only needs to run a random
-// tie-break when tiedPool has more entries than it actually needs to
-// fill — an exact fit (or no tie at all) needs no randomness.
-function computeElimination(
-  voteCounts: number[],
-  indices: number[],
-  countToEliminate: number,
-): { locked: number[]; tiedPool: number[]; neededFromTied: number } {
-  const sorted = [...indices].sort((a, b) => voteCounts[b] - voteCounts[a]);
-  const cutoffValue = voteCounts[sorted[countToEliminate - 1]];
-  const locked = indices.filter((i) => voteCounts[i] > cutoffValue);
-  const tiedPool = indices.filter((i) => voteCounts[i] === cutoffValue);
-  const neededFromTied = countToEliminate - locked.length;
-  return { locked, tiedPool, neededFromTied };
-}
-
-// Display order for a list that includes banned options — everything
-// still in the running first (in its original order), banned options
-// pushed to the bottom (also keeping their own relative order) rather
-// than staying wherever they originally landed, so a scan down the list
-// reads as "what's left" before "what got cut".
-function sortBannedLast<T>(splits: T[], bannedIndices: number[]): number[] {
-  const banned = new Set(bannedIndices);
-  const indices = splits.map((_, i) => i);
-  return [...indices.filter((i) => !banned.has(i)), ...indices.filter((i) => banned.has(i))];
-}
-
-function OptionCard({
-  index,
-  split,
-  onClick,
-  className,
-  headExtra,
-  banned,
-  disabled,
-}: {
-  index: number;
-  split: Split<Player>;
-  onClick?: () => void;
-  className?: string;
-  headExtra?: ReactNode;
-  banned?: boolean;
-  disabled?: boolean;
-}) {
-  const body = (
-    <>
-      <div className="ranked-option-head">
-        <span className="ranked-option-head-left">
-          Option {index + 1}
-          {banned && (
-            <span className="goa-vote-banned-tag">
-              <Ban size={11} /> Banned
-            </span>
-          )}
-        </span>
-        {headExtra}
-      </div>
-      <div className="draft-live-teams">
-        {(() => {
-          const gain = previewWinGain(avg(split.atlantis), avg(split.titans));
-          return FACTIONS.map((faction) => (
-            <div key={faction} className="draft-live-team">
-              <div className="flex justify-between align-center">
-                <span
-                  className={`draft-faction-label ${faction === "atlantis" ? "atl" : "tit"}`}
-                >
-                  {faction === "atlantis" ? "Atlantis" : "Titans"}
-                </span>
-                <span className="draft-live-team-avg">
-                  AVG MMR: {avg(split[faction])}
-                </span>
-              </div>
-              <div className="draft-live-team-gain">+{gain[faction]} MMR for the win</div>
-              {split[faction].map((p) => (
-                <div key={p.id} className="draft-live-row">
-                  <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={18} />
-                  <span className="draft-live-name">{p.name}</span>
-                  <span className="draft-live-mmr sm">{p.mmr} MMR</span>
-                </div>
-              ))}
-            </div>
-          ));
-        })()}
-      </div>
-    </>
-  );
-
-  if (!onClick) {
-    return <div className={className}>{body}</div>;
-  }
-  return (
-    <button type="button" className={className} onClick={onClick} disabled={disabled}>
-      {body}
-    </button>
-  );
-}
-
-// Empty dots for players who haven't voted yet, filled for those who
-// have — the only signal shown during voting, so nobody's specific pick
-// leaks before every player has gone. Red during a ban round (voting for
-// what to remove) instead of the usual green (voting for what to keep),
-// so the two kinds of ballot are never visually confusable at a glance.
-function VoteDots({
-  total,
-  cast,
-  variant = "choose",
-}: {
-  total: number;
-  cast: number;
-  variant?: "choose" | "ban";
-}) {
-  return (
-    <div className="goa-vote-dots" aria-label={`${cast} of ${total} voted`}>
-      {Array.from({ length: total }, (_, i) => (
-        <span
-          key={i}
-          className={`goa-vote-dot${i < cast ? ` voted${variant === "ban" ? " ban" : ""}` : ""}`}
-        />
-      ))}
-    </div>
-  );
-}
-
-// Shown after every single tap (ban or choose round) — a small pop-up
-// rather than a full-screen takeover. Stays up until the group explicitly
-// taps Continue (proceeding, including settling the tally on the very
-// last vote) or Undo (cancelling the tap that raised this popup instead).
-function VoteConfirmPopup({
-  onContinue,
-  onUndo,
-}: {
-  onContinue: () => void;
-  onUndo: () => void;
-}) {
-  return (
-    <div className="goa-vote-confirm-popup">
-      <CheckCircle2 size={24} className="goa-vote-confirm-icon" />
-      <div className="goa-vote-confirm-text">
-        <span className="goa-vote-confirm-title">Vote counted</span>
-        <span className="goa-vote-confirm-sub">Pass the device to the next person.</span>
-      </div>
-      <div className="goa-vote-confirm-actions">
-        <button
-          type="button"
-          className="goa-vote-confirm-undo"
-          onClick={onUndo}
-        >
-          <Undo2 size={14} /> Undo
-        </button>
-        <button
-          type="button"
-          className="goa-vote-confirm-continue"
-          onClick={onContinue}
-        >
-          Continue
-        </button>
-      </div>
-    </div>
-  );
+  return sequence;
 }
 
 function TeamsVotePageInner() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [playerIds, setPlayerIds] = useState<string[]>([]);
-  const [splits, setSplits] = useState<Split<Player>[]>([]);
-  const [skippedVoting, setSkippedVoting] = useState(false);
-  // Total expected taps, not total voters — a player who already owns the
-  // Base badge gets a second vote (see lib/badges.ts), so this can exceed
-  // playerIds.length. Applies the same way to both the ban round and the
-  // choose round. Voting itself stays fully anonymous: this number is
-  // computed once up front purely so the app knows when everyone's done,
-  // never used to track who cast which tap.
-  const [totalVotes, setTotalVotes] = useState(0);
+  const [session, setSession] = useState<VoteSessionRow | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
 
-  const [stage, setStage] = useState<Stage>("ballot");
-  // Explicitly tracks the setup stage's own answer (undefined until
-  // answered) — persisted verbatim on every save so a refresh mid-choose-
-  // round (after skipping the ban round) still resumes into "ballot"
-  // instead of being asked the setup question again.
-  const [wantsBan, setWantsBan] = useState<boolean | undefined>(undefined);
-  // Which option indices (into `splits`) are still being voted on in the
-  // *choose* round — every index until a ban round removes some.
-  const [activeIndices, setActiveIndices] = useState<number[]>([]);
-  const [chooseRoundSkipped, setChooseRoundSkipped] = useState(false);
-
-  const [banVotes, setBanVotes] = useState<number[]>([]);
-  const [banVotesCast, setBanVotesCast] = useState(0);
-  const [bannedIndices, setBannedIndices] = useState<number[]>([]);
-
-  const [votes, setVotes] = useState<number[]>([]);
-  const [votesCast, setVotesCast] = useState(0);
-  const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
-  const [tieCandidates, setTieCandidates] = useState<number[]>([]);
+  // The choose-round tie-break reveal is purely a cosmetic flourish this
+  // device plays back once, right after *observing* a live transition into
+  // "results" with more than one tied option — never on first load already
+  // sitting in "results" (nothing to reveal, just show it), and never
+  // twice for the same result. See buildTieBreak's own comment.
+  const [revealPhase, setRevealPhase] = useState<"idle" | "revealing" | "done">("done");
   const [tieActiveIndex, setTieActiveIndex] = useState<number | null>(null);
+  const prevStageRef = useRef<string | null>(null);
 
   const [voteConfirmVisible, setVoteConfirmVisible] = useState(false);
   // What Continue/Undo on the currently-shown popup should each do — set
@@ -278,174 +74,231 @@ function TeamsVotePageInner() {
   const voteConfirmActionRef = useRef<(() => void) | null>(null);
   const voteConfirmUndoRef = useRef<(() => void) | null>(null);
 
+  // React (in dev, under StrictMode) runs a fresh-mount effect twice —
+  // harmless for an effect that only reads, but this one can *create* a
+  // brand new session row (a real POST) when there's nothing to resume
+  // yet. Without this guard, both invocations race to create their own
+  // session with their own independently-randomized splits, and whichever
+  // one's callback resolves last wins localStorage's sessionId — while
+  // anything already done against the *other* one (e.g. a tap that landed
+  // before the race resolved) is silently orphaned on a row nobody's
+  // looking at anymore. The ref (unlike a state flag) is stable across
+  // both invocations, since StrictMode replays effects on the same
+  // mounted instance rather than remounting it.
+  const initializedRef = useRef(false);
+
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     const raw = localStorage.getItem(RANKED_VOTE_STORAGE_KEY);
     if (!raw) {
       router.replace("/teams");
       return;
     }
+    let saved: StoredVoteRef;
     try {
-      const saved = JSON.parse(raw) as StoredVote;
-      if (!saved.playerIds || saved.playerIds.length < 2) {
-        router.replace("/teams");
-        return;
-      }
-      Promise.all([
-        supabaseClient
-          .from("players")
-          .select("id, name, mmr, avatar_url")
-          .in("id", saved.playerIds),
-        // Base badge ownership — every hero any of tonight's players has
-        // ever won with, used only to work out how many of them get a
-        // second vote (see totalVotes above). Not scoped to didWin here;
-        // buildWonHeroesByPlayer already applies that filter itself.
-        supabaseClient
-          .from("match_players")
-          .select("player_id, hero_id, team, match_number, matches!inner(winner)")
-          .in("player_id", saved.playerIds)
-          .not("hero_id", "is", null),
-      ]).then(([{ data, error }, { data: heroHistory }]) => {
+      saved = JSON.parse(raw) as StoredVoteRef;
+    } catch {
+      router.replace("/teams");
+      return;
+    }
+    if (!saved.playerIds || saved.playerIds.length < 2) {
+      router.replace("/teams");
+      return;
+    }
+
+    if (saved.sessionId) {
+      // Resume an existing session — never recompute splits here, since
+      // rankedBalancedSplits has real randomness in its own tie-breaking
+      // and every device (this refresh included) needs to see the exact
+      // same options a remote voter might already be looking at.
+      supabaseClient
+        .from("ranked_vote_sessions")
+        .select("*")
+        .eq("id", saved.sessionId)
+        .maybeSingle()
+        .then(({ data, error }) => {
           if (error || !data) {
             router.replace("/teams");
             return;
           }
-          const byId = new Map<string, Player>(data.map((p) => [p.id, p]));
-          const resolved = saved.playerIds
-            .map((id) => byId.get(id))
-            .filter((p): p is Player => !!p);
-          if (resolved.length !== saved.playerIds.length) {
+          const row = data as VoteSessionRow;
+          prevStageRef.current = row.stage;
+          setRevealPhase("done");
+          setSession(row);
+          setLoading(false);
+        });
+      return;
+    }
+
+    // Brand new vote — compute everything once and create the session row
+    // that this device and every remote voter from here on will share.
+    Promise.all([
+      supabaseClient
+        .from("players")
+        .select("id, name, mmr, avatar_url")
+        .in("id", saved.playerIds),
+      // Base badge ownership — every hero any of tonight's players has
+      // ever won with, used only to work out who gets a second vote (see
+      // lib/rankedVoteSession.ts's computeVoteAllowance). Not scoped to
+      // didWin here; buildWonHeroesByPlayer already applies that filter.
+      supabaseClient
+        .from("match_players")
+        .select("player_id, hero_id, team, match_number, matches!inner(winner)")
+        .in("player_id", saved.playerIds)
+        .not("hero_id", "is", null),
+    ]).then(([{ data, error }, { data: heroHistory }]) => {
+      if (error || !data) {
+        router.replace("/teams");
+        return;
+      }
+      const byId = new Map<string, Player>(data.map((p) => [p.id, p]));
+      const resolved = saved.playerIds
+        .map((id) => byId.get(id))
+        .filter((p): p is Player => !!p);
+      if (resolved.length !== saved.playerIds.length) {
+        router.replace("/teams");
+        return;
+      }
+
+      const wonHeroesByPlayer = buildWonHeroesByPlayer(heroHistory ?? []);
+      const baseOwnerIds = new Set(
+        saved.playerIds.filter((id) =>
+          getOwnedBadgeIds(wonHeroesByPlayer.get(id) ?? new Set()).has("base"),
+        ),
+      );
+      const voteAllowance = computeVoteAllowance(saved.playerIds, baseOwnerIds);
+      const computedTotalVotes = totalVotesFromAllowance(voteAllowance);
+
+      const computedSplits = rankedBalancedSplits(resolved, 4);
+      const allIndices = computedSplits.map((_, i) => i);
+
+      const initial: Partial<VoteSessionRow> = {
+        player_ids: saved.playerIds,
+        vote_allowance: voteAllowance,
+        splits: computedSplits,
+        total_votes: computedTotalVotes,
+        active_indices: allIndices,
+      };
+
+      if (computedSplits.length === 0) {
+        // No split keeps both sides within the skill-point threshold —
+        // there's nothing to vote on at all, not even a single option.
+        initial.stage = "impossible";
+      } else if (computedSplits.length <= 1) {
+        // Nothing to vote on — apply the one possible split directly.
+        initial.stage = "results";
+        initial.skipped_voting = true;
+        initial.votes = [computedTotalVotes];
+        initial.winner_index = 0;
+      } else {
+        // Banning only makes sense with enough options left afterward to
+        // still hold a real vote — with exactly 2 or 3 options, removing
+        // BAN_COUNT would either remove everything or leave just one
+        // survivor with no vote needed, so the *offer* itself is reserved
+        // for 3+ options.
+        const offerBan = computedSplits.length > BAN_COUNT;
+        if (offerBan) {
+          initial.stage = "setup";
+        } else {
+          initial.stage = "ballot";
+          initial.wants_ban = false;
+          initial.votes = new Array(computedSplits.length).fill(0);
+        }
+      }
+
+      supabaseClient
+        .from("ranked_vote_sessions")
+        .insert(initial)
+        .select("*")
+        .single()
+        .then(({ data: created, error: insertError }) => {
+          if (insertError || !created) {
             router.replace("/teams");
             return;
           }
-
-          const wonHeroesByPlayer = buildWonHeroesByPlayer(heroHistory ?? []);
-          const baseOwnerCount = saved.playerIds.filter((id) =>
-            getOwnedBadgeIds(wonHeroesByPlayer.get(id) ?? new Set()).has("base"),
-          ).length;
-          const computedTotalVotes = saved.playerIds.length + baseOwnerCount;
-
-          const computedSplits = rankedBalancedSplits(resolved, 4);
-          const allIndices = computedSplits.map((_, i) => i);
-          setPlayerIds(saved.playerIds);
-          setSplits(computedSplits);
-          setTotalVotes(computedTotalVotes);
+          const row = created as VoteSessionRow;
+          localStorage.setItem(
+            RANKED_VOTE_STORAGE_KEY,
+            JSON.stringify({ playerIds: saved.playerIds, sessionId: row.id }),
+          );
           localStorage.setItem(LAST_BATTLE_STEP_STORAGE_KEY, "/teams/vote");
-
-          if (computedSplits.length === 0) {
-            // No split keeps both sides within the skill-point threshold —
-            // there's nothing to vote on at all, not even a single option.
-            setStage("impossible");
-            setLoading(false);
-            return;
-          }
-
-          if (computedSplits.length <= 1) {
-            // Nothing to vote on — apply the one possible split directly.
-            setSkippedVoting(true);
-            setVotes([computedTotalVotes]);
-            setActiveIndices(allIndices);
-            setWinnerIndex(0);
-            setStage("results");
-            setLoading(false);
-            return;
-          }
-
-          // Banning only makes sense with enough options left afterward
-          // to still hold a real vote — with exactly 2 or 3 options,
-          // removing BAN_COUNT would either remove everything or leave
-          // just one survivor with no vote needed, so the *offer* itself
-          // is reserved for 3+ options (a 3-option draft can still end
-          // up with one automatic survivor after banning, just not
-          // because the ban option was hidden).
-          const offerBan = computedSplits.length > BAN_COUNT;
-
-          const resumedBanned = saved.bannedIndices ?? [];
-          if (resumedBanned.length > 0) {
-            // Resuming after a ban round already completed.
-            setWantsBan(true);
-            const remaining = allIndices.filter((i) => !resumedBanned.includes(i));
-            setBannedIndices(resumedBanned);
-            setActiveIndices(remaining);
-            if (remaining.length <= 1) {
-              setChooseRoundSkipped(true);
-              setWinnerIndex(remaining[0] ?? null);
-              setStage("results");
-            } else {
-              const resumableVotes = saved.votes && saved.votes.length === computedSplits.length;
-              setVotes(resumableVotes ? saved.votes! : new Array(computedSplits.length).fill(0));
-              setVotesCast(resumableVotes ? (saved.votesCast ?? 0) : 0);
-              setStage("ballot");
-            }
-          } else if (saved.wantsBan) {
-            // Resuming mid-ban-round.
-            setWantsBan(true);
-            setActiveIndices(allIndices);
-            const resumableBanVotes =
-              saved.banVotes && saved.banVotes.length === computedSplits.length;
-            setBanVotes(resumableBanVotes ? saved.banVotes! : new Array(computedSplits.length).fill(0));
-            setBanVotesCast(resumableBanVotes ? (saved.banVotesCast ?? 0) : 0);
-            setStage("ban_ballot");
-          } else if (saved.wantsBan === false || !offerBan) {
-            // Either explicitly declined banning, or banning was never
-            // on offer for this many options — straight to the choose
-            // ballot, resuming an in-progress tally if there is one.
-            setWantsBan(false);
-            setActiveIndices(allIndices);
-            const resumableVotes = saved.votes && saved.votes.length === computedSplits.length;
-            setVotes(resumableVotes ? saved.votes! : new Array(computedSplits.length).fill(0));
-            setVotesCast(resumableVotes ? (saved.votesCast ?? 0) : 0);
-            setStage("ballot");
-          } else {
-            // Brand new vote with enough options to ask.
-            setActiveIndices(allIndices);
-            setStage("setup");
-          }
+          prevStageRef.current = row.stage;
+          setRevealPhase("done");
+          setSession(row);
           setLoading(false);
         });
-    } catch {
-      router.replace("/teams");
-    }
+    });
   }, [router]);
 
-  const persistBanProgress = (nextBanVotes: number[], nextBanVotesCast: number) => {
-    localStorage.setItem(
-      RANKED_VOTE_STORAGE_KEY,
-      JSON.stringify({
-        playerIds,
-        wantsBan: true,
-        banVotes: nextBanVotes,
-        banVotesCast: nextBanVotesCast,
-      }),
-    );
-  };
+  // Live sync — any other device (a remote voter via /vote/[id], or this
+  // same session reopened elsewhere) writing to this row shows up here
+  // within moments, no polling.
+  useEffect(() => {
+    if (!session?.id) return;
+    const channel = supabaseClient
+      .channel(`ranked-vote-${session.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "ranked_vote_sessions",
+          filter: `id=eq.${session.id}`,
+        },
+        (payload) => {
+          // Merged rather than replaced outright — belt-and-suspenders
+          // against a payload missing a column Postgres decided was
+          // unchanged (see migration 0012's own REPLICA IDENTITY FULL
+          // comment for why that shouldn't happen here, but a merge costs
+          // nothing and means it can never blank out part of the session
+          // even if some future column ends up exempt from that).
+          setSession((prev) => (prev ? { ...prev, ...(payload.new as VoteSessionRow) } : (payload.new as VoteSessionRow)));
+        },
+      )
+      .subscribe();
+    return () => {
+      supabaseClient.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
 
-  const persistBanResult = (nextBannedIndices: number[]) => {
-    localStorage.setItem(
-      RANKED_VOTE_STORAGE_KEY,
-      JSON.stringify({ playerIds, wantsBan: true, bannedIndices: nextBannedIndices }),
-    );
-  };
+  // Plays the tie-break flourish exactly once, only for a transition this
+  // device actually witnessed live (see revealPhase's own comment).
+  useEffect(() => {
+    if (!session) return;
+    const cameFromElsewhere = prevStageRef.current !== session.stage;
+    prevStageRef.current = session.stage;
+    if (!cameFromElsewhere) return;
+    if (session.stage !== "results" || session.tied_indices.length <= 1) return;
 
-  const persistProgress = (nextVotes: number[], nextVotesCast: number) => {
-    localStorage.setItem(
-      RANKED_VOTE_STORAGE_KEY,
-      JSON.stringify({
-        playerIds,
-        wantsBan,
-        bannedIndices,
-        votes: nextVotes,
-        votesCast: nextVotesCast,
-      }),
+    setRevealPhase("revealing");
+    const sequence = buildTieBreak(session.tied_indices, session.winner_index ?? session.tied_indices[0]);
+    let delay = 90;
+    let cumulative = 0;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    sequence.forEach((idx) => {
+      cumulative += delay;
+      delay = Math.round(delay * 1.18);
+      timers.push(setTimeout(() => setTieActiveIndex(idx), cumulative));
+    });
+    timers.push(
+      setTimeout(() => {
+        setTieActiveIndex(null);
+        setRevealPhase("done");
+      }, cumulative + 300),
     );
-  };
+    return () => timers.forEach(clearTimeout);
+  }, [session]);
 
-  // A tap commits immediately, then a pop-up (VoteConfirmPopup) covers the
-  // options until the group explicitly answers it — nothing else happens
-  // in the meantime, including settling the tally on the very last tap, so
-  // that always waits on the same explicit "pass the device" beat as every
-  // other vote rather than a timed reveal. `after` runs on Continue; `undo`
-  // (a full revert of the tap that raised this popup) runs instead if the
-  // group taps Undo.
+  // A tap commits immediately (see incrementChooseVote/incrementBanVote's
+  // own comment), then this pop-up covers the options until the group
+  // explicitly answers it — nothing else happens in the meantime,
+  // including settling the tally on the very last tap, so that always
+  // waits on the same explicit "pass the device" beat as every other vote.
+  // `after` runs on Continue; `undo` (a full revert of the tap that raised
+  // this popup) runs instead if the group taps Undo.
   const showConfirmationThen = (after: () => void, undo: () => void) => {
     voteConfirmActionRef.current = after;
     voteConfirmUndoRef.current = undo;
@@ -466,160 +319,63 @@ function TeamsVotePageInner() {
     voteConfirmUndoRef.current = null;
   };
 
-  const runTieBreak = (tied: number[]) => {
-    setTieCandidates(tied);
-    setStage("tie_reveal");
-
-    const { winner: finalWinner, sequence } = buildTieBreak(tied);
-
-    let delay = 90;
-    let cumulative = 0;
-    sequence.forEach((idx) => {
-      cumulative += delay;
-      delay = Math.round(delay * 1.18);
-      setTimeout(() => setTieActiveIndex(idx), cumulative);
-    });
-
-    setTimeout(() => {
-      setTieActiveIndex(null);
-      setWinnerIndex(finalWinner);
-    }, cumulative + 300);
-
-    setTimeout(() => setStage("results"), cumulative + 2900);
-  };
-
-  const settleTally = (finalVotes: number[]) => {
-    const max = Math.max(...activeIndices.map((i) => finalVotes[i]));
-    const tied = activeIndices.filter((i) => finalVotes[i] === max);
-    if (tied.length === 1) {
-      setWinnerIndex(tied[0]);
-      setStage("results");
-    } else {
-      runTieBreak(tied);
-    }
-  };
-
-  const castVote = (index: number) => {
-    const prevVotes = votes;
-    const prevVotesCast = votesCast;
-    const nextVotes = votes.map((v, i) => (i === index ? v + 1 : v));
-    const nextVotesCast = votesCast + 1;
-    setVotes(nextVotes);
-    setVotesCast(nextVotesCast);
-    persistProgress(nextVotes, nextVotesCast);
+  const castVote = async (index: number) => {
+    if (!session) return;
+    const before = session;
+    const updated = await incrementChooseVote(before, index);
+    if (updated) setSession(updated);
     showConfirmationThen(
-      () => {
-        if (nextVotesCast >= totalVotes) settleTally(nextVotes);
+      async () => {
+        const settled = await settleChooseIfComplete(updated ?? before);
+        if (settled) setSession(settled);
       },
-      () => {
-        setVotes(prevVotes);
-        setVotesCast(prevVotesCast);
-        persistProgress(prevVotes, prevVotesCast);
+      async () => {
+        if (!updated) return;
+        const reverted = await undoChooseVote(updated, index);
+        if (reverted) setSession(reverted);
       },
     );
   };
 
-  const finishBan = (finalBanned: number[]) => {
-    setBannedIndices(finalBanned);
-    persistBanResult(finalBanned);
-    setStage("ban_results");
-  };
-
-  const settleBanTally = (finalBanVotes: number[]) => {
-    // Never eliminate more options than actually got a ban vote — if
-    // everyone converged on banning the same single option and left
-    // every other option at 0, that's the group's real intent, not a
-    // reason to force a second, arbitrary elimination among untouched
-    // options just to hit BAN_COUNT.
-    const votedOptionCount = activeIndices.filter((i) => finalBanVotes[i] > 0).length;
-    const countToEliminate = Math.min(BAN_COUNT, splits.length - 1, votedOptionCount);
-    const { locked, tiedPool, neededFromTied } = computeElimination(
-      finalBanVotes,
-      activeIndices,
-      countToEliminate,
-    );
-    // A boundary tie is resolved silently (no reveal animation) — the
-    // ban-results screen right after already shows every option's own
-    // ban-vote count, which is all the transparency this needs.
-    const { eliminated } =
-      neededFromTied > 0 && tiedPool.length > neededFromTied
-        ? buildEliminationTieBreak(tiedPool, neededFromTied)
-        : { eliminated: tiedPool.slice(0, Math.max(neededFromTied, 0)) };
-    finishBan([...locked, ...eliminated]);
-  };
-
-  const castBanVote = (index: number) => {
-    const prevBanVotes = banVotes;
-    const prevBanVotesCast = banVotesCast;
-    const nextBanVotes = banVotes.map((v, i) => (i === index ? v + 1 : v));
-    const nextBanVotesCast = banVotesCast + 1;
-    setBanVotes(nextBanVotes);
-    setBanVotesCast(nextBanVotesCast);
-    persistBanProgress(nextBanVotes, nextBanVotesCast);
+  const castBanVoteTap = async (index: number) => {
+    if (!session) return;
+    const before = session;
+    const updated = await incrementBanVote(before, index);
+    if (updated) setSession(updated);
     showConfirmationThen(
-      () => {
-        if (nextBanVotesCast >= totalVotes) settleBanTally(nextBanVotes);
+      async () => {
+        const settled = await settleBanIfComplete(updated ?? before);
+        if (settled) setSession(settled);
       },
-      () => {
-        setBanVotes(prevBanVotes);
-        setBanVotesCast(prevBanVotesCast);
-        persistBanProgress(prevBanVotes, prevBanVotesCast);
+      async () => {
+        if (!updated) return;
+        const reverted = await undoBanVote(updated, index);
+        if (reverted) setSession(reverted);
       },
     );
   };
 
-  const startBanRound = () => {
-    setWantsBan(true);
-    const freshBanVotes = new Array(splits.length).fill(0);
-    setBanVotes(freshBanVotes);
-    setBanVotesCast(0);
-    // Written directly (not via persistBanProgress/persistProgress, which
-    // read wantsBan off state) — setWantsBan above won't be visible to
-    // those helpers until the next render, so this transition's own
-    // write has to include the true value itself.
-    localStorage.setItem(
-      RANKED_VOTE_STORAGE_KEY,
-      JSON.stringify({ playerIds, wantsBan: true, banVotes: freshBanVotes, banVotesCast: 0 }),
-    );
-    setStage("ban_ballot");
+  const startBanRound = async () => {
+    if (!session) return;
+    const updated = await startBanRoundDb(session);
+    if (updated) setSession(updated);
   };
 
-  const skipBanRound = () => {
-    setWantsBan(false);
-    const freshVotes = new Array(splits.length).fill(0);
-    setVotes(freshVotes);
-    setVotesCast(0);
-    // Same reasoning as startBanRound above — written directly rather
-    // than via persistProgress, which wouldn't see today's setWantsBan
-    // update yet.
-    localStorage.setItem(
-      RANKED_VOTE_STORAGE_KEY,
-      JSON.stringify({ playerIds, wantsBan: false, votes: freshVotes, votesCast: 0 }),
-    );
-    setStage("ballot");
+  const skipBanRound = async () => {
+    if (!session) return;
+    const updated = await skipBanRoundDb(session);
+    if (updated) setSession(updated);
   };
 
-  const continueAfterBan = () => {
-    const remaining = splits
-      .map((_, i) => i)
-      .filter((i) => !bannedIndices.includes(i));
-    setActiveIndices(remaining);
-    if (remaining.length <= 1) {
-      setChooseRoundSkipped(true);
-      setWinnerIndex(remaining[0] ?? null);
-      setStage("results");
-      return;
-    }
-    const freshVotes = new Array(splits.length).fill(0);
-    setVotes(freshVotes);
-    setVotesCast(0);
-    persistProgress(freshVotes, 0);
-    setStage("ballot");
+  const continueAfterBan = async () => {
+    if (!session) return;
+    const updated = await continueAfterBanDb(session);
+    if (updated) setSession(updated);
   };
 
   const finish = () => {
-    if (winnerIndex === null) return;
-    const winner = splits[winnerIndex];
+    if (!session || session.winner_index === null) return;
+    const winner = session.splits[session.winner_index];
     const raw = localStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
     const prev = raw ? JSON.parse(raw) : {};
     localStorage.setItem(
@@ -633,21 +389,21 @@ function TeamsVotePageInner() {
       }),
     );
 
-    // The vote itself is about to be discarded (see the removeItem right
-    // below) — stash its full breakdown separately so /matches/new can
-    // save it onto the match row for the detail page to show later.
+    // The vote session row is about to be left behind — stash its full
+    // breakdown separately so /matches/new can save it onto the match row
+    // for the detail page to show later.
     const result: RankedBalanceResult = {
-      totalVotes,
-      wantsBan: wantsBan === true,
-      skippedVoting,
-      chooseRoundSkipped,
-      winnerIndex,
-      options: splits.map((split, i) => ({
+      totalVotes: session.total_votes,
+      wantsBan: session.wants_ban === true,
+      skippedVoting: session.skipped_voting,
+      chooseRoundSkipped: session.choose_round_skipped,
+      winnerIndex: session.winner_index,
+      options: session.splits.map((split, i) => ({
         atlantis: split.atlantis.map((p) => ({ id: p.id, name: p.name })),
         titans: split.titans.map((p) => ({ id: p.id, name: p.name })),
-        votes: votes[i] ?? 0,
-        banVotes: wantsBan ? (banVotes[i] ?? 0) : undefined,
-        banned: bannedIndices.includes(i),
+        votes: session.votes[i] ?? 0,
+        banVotes: session.wants_ban ? (session.ban_votes[i] ?? 0) : undefined,
+        banned: session.banned_indices.includes(i),
       })),
     };
     localStorage.setItem(RANKED_BALANCE_RESULT_STORAGE_KEY, JSON.stringify(result));
@@ -661,7 +417,21 @@ function TeamsVotePageInner() {
     router.replace("/teams");
   };
 
-  if (loading) {
+  const copyShareLink = async () => {
+    if (!session) return;
+    const url = `${window.location.origin}/vote/${session.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable/denied on this device — nothing else to
+      // fall back to here; the group can still read the URL off another
+      // device that can copy, or the host can type it out manually.
+    }
+  };
+
+  if (loading || !session) {
     return (
       <div className="goa-root goa-vote-page goa-loading-screen">
         <div className="goa-loading-inner">
@@ -674,7 +444,9 @@ function TeamsVotePageInner() {
     );
   }
 
+  const stage = session.stage;
   const isLiveStage = stage === "ballot" || stage === "ban_ballot" || stage === "setup";
+  const showingTieReveal = stage === "results" && revealPhase === "revealing";
 
   return (
     <main
@@ -687,6 +459,15 @@ function TeamsVotePageInner() {
         <h1 className="goa-title">Ranked Balance Vote</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
+
+      {stage !== "impossible" && (
+        <div className="goa-vote-share">
+          <button type="button" className="goa-vote-share-btn" onClick={copyShareLink}>
+            <Share2 size={14} />
+            {shareCopied ? "Link Copied!" : "Share Vote Link"}
+          </button>
+        </div>
+      )}
 
       {stage === "impossible" && (
         <div className="goa-card">
@@ -724,7 +505,8 @@ function TeamsVotePageInner() {
                 Everyone can vote to ban the option they least want first —
                 the {BAN_COUNT} most-voted-to-ban options are removed, then
                 there's a second vote to choose between what's left. Or skip
-                straight to choosing from all {splits.length} options now.
+                straight to choosing from all {session.splits.length} options
+                now.
               </p>
               <div className="goa-vote-setup-actions">
                 <button
@@ -751,7 +533,7 @@ function TeamsVotePageInner() {
         <div className="goa-vote-live-body">
           <div className="goa-vote-ballot-head">
             <span className="goa-vote-ballot-title">Vote to Ban</span>
-            <VoteDots total={totalVotes} cast={banVotesCast} variant="ban" />
+            <VoteDots total={session.total_votes} cast={session.ban_votes_cast} variant="ban" />
           </div>
           <p className="draft-note">
             Tap the option you'd most like to remove, then pass the device
@@ -759,13 +541,13 @@ function TeamsVotePageInner() {
             different options.
           </p>
           <div className="goa-vote-options">
-            {splits.map((split, i) => (
+            {session.splits.map((split, i) => (
               <OptionCard
                 key={i}
                 index={i}
                 split={split}
                 className="ranked-option vote-option-card ban"
-                onClick={() => castBanVote(i)}
+                onClick={() => castBanVoteTap(i)}
                 disabled={voteConfirmVisible}
               />
             ))}
@@ -780,20 +562,22 @@ function TeamsVotePageInner() {
           </div>
           <div className="draft-body">
             <p className="draft-note">
-              These {bannedIndices.length} option(s) got the most votes to
-              ban and are out of the running.
+              These {session.banned_indices.length} option(s) got the most
+              votes to ban and are out of the running.
             </p>
             <div className="goa-vote-options">
-              {sortBannedLast(splits, bannedIndices).map((i) => (
+              {sortBannedLast(session.splits, session.banned_indices).map((i) => (
                 <OptionCard
                   key={i}
                   index={i}
-                  split={splits[i]}
-                  className={`ranked-option${bannedIndices.includes(i) ? " banned" : ""}`}
-                  banned={bannedIndices.includes(i)}
+                  split={session.splits[i]}
+                  className={`ranked-option${
+                    session.banned_indices.includes(i) ? " banned" : ""
+                  }`}
+                  banned={session.banned_indices.includes(i)}
                   headExtra={
                     <span className="vote-results-count">
-                      {banVotes[i]} of {totalVotes} ban votes
+                      {session.ban_votes[i]} of {session.total_votes} ban votes
                     </span>
                   }
                 />
@@ -816,7 +600,7 @@ function TeamsVotePageInner() {
         <div className="goa-vote-live-body">
           <div className="goa-vote-ballot-head">
             <span className="goa-vote-ballot-title">Cast Your Vote</span>
-            <VoteDots total={totalVotes} cast={votesCast} />
+            <VoteDots total={session.total_votes} cast={session.votes_cast} />
           </div>
           <p className="draft-note">
             Tap an option to cast your vote, then pass the device on. If you
@@ -824,11 +608,11 @@ function TeamsVotePageInner() {
             options.
           </p>
           <div className="goa-vote-options">
-            {activeIndices.map((i) => (
+            {session.active_indices.map((i) => (
               <OptionCard
                 key={i}
                 index={i}
-                split={splits[i]}
+                split={session.splits[i]}
                 className="ranked-option vote-option-card"
                 onClick={() => castVote(i)}
                 disabled={voteConfirmVisible}
@@ -838,21 +622,19 @@ function TeamsVotePageInner() {
         </div>
       )}
 
-      {stage === "tie_reveal" && (
+      {showingTieReveal && (
         <div className="vote-tie-scene">
           <p className="draft-coin-label">
             Multiple options tied — choosing randomly…
           </p>
           <div className="vote-tie-options">
-            {tieCandidates.map((i) => (
+            {session.tied_indices.map((i) => (
               <OptionCard
                 key={i}
                 index={i}
-                split={splits[i]}
+                split={session.splits[i]}
                 className={`ranked-option vote-tie-option${
                   tieActiveIndex === i ? " active" : ""
-                }${
-                  winnerIndex === i ? " winner" : winnerIndex !== null ? " loser" : ""
                 }`}
               />
             ))}
@@ -860,37 +642,39 @@ function TeamsVotePageInner() {
         </div>
       )}
 
-      {stage === "results" && winnerIndex !== null && (
+      {stage === "results" && !showingTieReveal && session.winner_index !== null && (
         <div className="goa-card">
           <div className="goa-card-head">
             <Crown size={16} /> Winning Split
           </div>
           <div className="draft-body">
-            {skippedVoting ? (
+            {session.skipped_voting ? (
               <p className="draft-note">
                 Only one balanced split is possible for this group —
                 applying it automatically.
               </p>
-            ) : chooseRoundSkipped ? (
+            ) : session.choose_round_skipped ? (
               <p className="draft-note">
                 Only one option remained after banning — applying it
                 automatically.
               </p>
             ) : null}
             <div className="goa-vote-options">
-              {sortBannedLast(splits, bannedIndices).map((i) => (
+              {sortBannedLast(session.splits, session.banned_indices).map((i) => (
                 <OptionCard
                   key={i}
                   index={i}
-                  split={splits[i]}
-                  className={`ranked-option${i === winnerIndex ? " winner" : ""}${
-                    bannedIndices.includes(i) ? " banned" : ""
-                  }`}
-                  banned={bannedIndices.includes(i)}
+                  split={session.splits[i]}
+                  className={`ranked-option${
+                    i === session.winner_index ? " winner" : ""
+                  }${session.banned_indices.includes(i) ? " banned" : ""}`}
+                  banned={session.banned_indices.includes(i)}
                   headExtra={
-                    !skippedVoting && !bannedIndices.includes(i) && !chooseRoundSkipped ? (
+                    !session.skipped_voting &&
+                    !session.banned_indices.includes(i) &&
+                    !session.choose_round_skipped ? (
                       <span className="vote-results-count">
-                        {votes[i]} of {totalVotes} votes
+                        {session.votes[i]} of {session.total_votes} votes
                       </span>
                     ) : undefined
                   }
