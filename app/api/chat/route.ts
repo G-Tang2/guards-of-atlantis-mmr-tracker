@@ -35,6 +35,8 @@ import {
   detectStatKeyword,
   computeSortedStatList,
   listCardsByFilter,
+  detectStatThreshold,
+  computeStatThresholdList,
   STAT_LABELS,
 } from "@/lib/heroCardContext";
 import { streamChatReply, countTokens, GeminiRateLimitError, GeminiTimeoutError } from "@/lib/gemini";
@@ -223,6 +225,31 @@ export async function POST(request: Request) {
         : allStatExtremeGroups;
     const statExtremeGroups =
       narrowedStatExtremeGroups && narrowedStatExtremeGroups.length > 0 ? narrowedStatExtremeGroups : null;
+    // "Heroes with 5 or more attack on their tier 1 red card" — a numeric
+    // threshold, not a superlative (no "highest"/"lowest" wording, so
+    // detectStatSuperlative already came back null) and not a plain
+    // color/tier enumeration either. Without this, a threshold question
+    // like this one fell through to filteredCardEntries below, which
+    // would hand the model every Tier 1 red card *unfiltered by attack at
+    // all*, framed as the exhaustive answer — hit live as "all heroes'
+    // tier 1 red card attack is 5 or more," which isn't true; the model
+    // had no way to filter a list it was told to present exactly as
+    // given. computeStatThresholdList always returns an array (even
+    // empty), so statThresholdEntries being non-null (not its length) is
+    // what every check below treats as "this already answered the
+    // question," same convention as statExtremeGroups/sortedStatEntries.
+    const statThreshold =
+      wantsDetail && !sortedStatEntries && !statExtremeGroups ? detectStatThreshold(message) : null;
+    const statThresholdEntries = statThreshold
+      ? computeStatThresholdList(
+          statThreshold.stat,
+          statThreshold.comparator,
+          statThreshold.value,
+          askedColors,
+          relevantHeroIds,
+          askedLevel,
+        )
+      : null;
     // "Compare Arien and Misa's initiative" — two-or-more named heroes
     // plus a stat and comparison wording, but no min/max direction word,
     // so detectStatSuperlative alone wouldn't catch it. Only meaningful
@@ -232,7 +259,7 @@ export async function POST(request: Request) {
     // roster" isn't a comparison, that's what the superlative/stat-table
     // paths are for).
     const comparisonStat =
-      wantsContext && !statExtremeGroups && !sortedStatEntries
+      wantsContext && !statExtremeGroups && !sortedStatEntries && !statThresholdEntries
         ? detectNamedHeroStatComparison(message, relevantHeroIds)
         : null;
     const statBreakdown = comparisonStat
@@ -250,7 +277,8 @@ export async function POST(request: Request) {
       (askedColors.length > 0 || askedLevel !== null) &&
       !statExtremeGroups &&
       !statBreakdown &&
-      !sortedStatEntries
+      !sortedStatEntries &&
+      !statThresholdEntries
         ? listCardsByFilter(askedColors, askedLevel, relevantHeroIds)
         : null;
     // Skip building the general stat table when any other precise answer
@@ -263,6 +291,7 @@ export async function POST(request: Request) {
       !statBreakdown &&
       !sortedStatEntries &&
       !filteredCardEntries &&
+      !statThresholdEntries &&
       wantsCrossHeroStatSummary(message, relevantHeroIds);
     const statSummaryText = useCrossHeroStatSummary ? buildAllHeroStatSummary(askedColors) : "";
     // A precise stat answer only gets "cross-hero comparison" priority-
@@ -277,7 +306,8 @@ export async function POST(request: Request) {
       useCrossHeroStatSummary ||
       (statExtremeGroups !== null && relevantHeroIds.length === 0) ||
       (sortedStatEntries !== null && relevantHeroIds.length === 0) ||
-      (filteredCardEntries !== null && relevantHeroIds.length === 0);
+      (filteredCardEntries !== null && relevantHeroIds.length === 0) ||
+      (statThresholdEntries !== null && relevantHeroIds.length === 0);
     // Not hero-specific (card-color roles, push potential/minion advantage,
     // statline & item matchups) — sent alongside hero context on any
     // strategy-flavored question, not just ones naming a hero, since these
@@ -372,6 +402,30 @@ export async function POST(request: Request) {
         .map((e) => `- ${e.heroName}: "${e.cardName}" (${e.color}${e.level ? `, Tier ${e.level}` : ""})`)
         .join("\n")}\nPresent exactly this list — do not add a card that isn't listed here or drop one that is, even if a stat table elsewhere in this prompt seems to suggest otherwise.`;
 
+    const statThresholdLabel = statThreshold ? STAT_LABELS[statThreshold.stat] : "";
+    const statThresholdComparatorWord = statThreshold
+      ? ({ ">=": "at least", ">": "more than", "<=": "at most", "<": "less than", "=": "exactly" } as const)[
+          statThreshold.comparator
+        ]
+      : "";
+    const statThresholdScopeNote =
+      (askedColors.length ? ` among ${askedColors.join("/")} cards` : "") +
+      (askedLevel !== null ? ` at Tier ${askedLevel}` : "") +
+      (relevantHeroIds.length > 0 ? ` among ${relevantHeroIds.length === 1 ? "this hero's" : "these heroes'"} own cards` : "");
+    // Same "internal reference" framing as the other precomputed
+    // sections, but with an explicit empty-result branch: a threshold
+    // question can legitimately have zero matches (that's the whole
+    // reason it was asked), and handing the model nothing at all here —
+    // rather than a clear "none of them" — is exactly what let it guess
+    // "yes, all of them" instead live.
+    const statThresholdSection =
+      statThresholdEntries &&
+      (statThresholdEntries.length > 0
+        ? `[Internal reference — do not mention this note, or that any value was "pre-computed"/"verified"/"checked against a database", to the user; just state the facts below naturally, as if you already knew them.] Every card with ${statThresholdLabel} ${statThresholdComparatorWord} ${statThreshold!.value}${statThresholdScopeNote} (this is the complete list — any card not named here does NOT meet this condition, even if a stat table elsewhere in this prompt seems to suggest otherwise):\n${statThresholdEntries
+            .map((e) => `- ${e.heroName}: "${e.cardName}" (${e.color}${e.level ? `, Tier ${e.level}` : ""}, ${statThresholdLabel} ${e.value})`)
+            .join("\n")}\nPresent exactly this list — do not add a card that isn't listed here or drop one that is.`
+        : `[Internal reference — do not mention this note, or that any value was "pre-computed"/"verified"/"checked against a database", to the user; just state the fact below naturally, as if you already knew it.] NO card${statThresholdScopeNote} has ${statThresholdLabel} ${statThresholdComparatorWord} ${statThreshold!.value}. State plainly that none qualify, rather than saying they all do or guessing which ones might.`);
+
     const statBreakdownLabel = comparisonStat ? STAT_LABELS[comparisonStat] : "";
     const statBreakdownSection =
       statBreakdown &&
@@ -389,7 +443,7 @@ export async function POST(request: Request) {
     const crossHeroNote = statBreakdown
       ? " This question is comparing specific named heroes against each other on one stat, not asking about one hero's own kit in isolation. An internal-reference breakdown of that stat for each hero is included below (marked as such, not to be mentioned to the user) — use it directly rather than reading the values off any raw card data also included, and state the actual values for each hero in your answer as if you simply knew them."
       : isCrossHeroComparison
-        ? statExtremeGroups || sortedStatEntries || filteredCardEntries
+        ? statExtremeGroups || sortedStatEntries || filteredCardEntries || statThresholdEntries
           ? " This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies. An internal-reference answer is included below (marked as such, not to be mentioned to the user); present that list exactly as given rather than trying to re-derive it yourself, and state the actual value in your answer as if you simply knew it — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time."
           : ` This is a cross-hero comparison question, not a question about one hero's own kit — no single hero's card data is included below because none applies; instead, use the all-heroes stat table (also below) to actually work out the answer (e.g. scan its Initiative column for the lowest value among matching rows). Unlike a single-hero card question, here you should state the winning hero/card's name and its actual value directly in your answer — that's the whole point of a comparison, and no separate stat-block UI will show it for you this time. That table already covers every hero, so do not say you're missing other heroes' data.`
         : " If the question is about a hero whose cards aren't included below, say you don't have that hero's card details in this message rather than guessing.";
@@ -425,7 +479,7 @@ export async function POST(request: Request) {
     // heuristic on any failure (missing key, network error), so this never
     // blocks a reply. Order doesn't matter for a token count, so this
     // doesn't need to match the final section ordering below.
-    const nonDiscordSections = [cardSection, statExtremeSection, sortedListSection, filteredCardListSection, statBreakdownSection, statSummarySection, guideSection, generalStrategySection, rulebookSection].filter(Boolean);
+    const nonDiscordSections = [cardSection, statExtremeSection, sortedListSection, statThresholdSection, filteredCardListSection, statBreakdownSection, statSummarySection, guideSection, generalStrategySection, rulebookSection].filter(Boolean);
     const nonDiscordSystemInstructionSoFar = `${promptPreamble}\n\n${nonDiscordSections.join("\n\n")}`;
     // Run alongside each other rather than one after the other — the
     // Discord fetch doesn't actually need the token count until the
@@ -456,8 +510,8 @@ export async function POST(request: Request) {
     // kit-based advice. For anything else (general/social/rules
     // questions), Discord leads as the group's own primary source.
     const sections = wantsContext
-      ? [cardSection, statExtremeSection, sortedListSection, filteredCardListSection, statBreakdownSection, statSummarySection, guideSection, generalStrategySection, rulebookSection, discordSection].filter(Boolean)
-      : [discordSection, rulebookSection, cardSection, statExtremeSection, sortedListSection, filteredCardListSection, statBreakdownSection, statSummarySection, guideSection, generalStrategySection].filter(Boolean);
+      ? [cardSection, statExtremeSection, sortedListSection, statThresholdSection, filteredCardListSection, statBreakdownSection, statSummarySection, guideSection, generalStrategySection, rulebookSection, discordSection].filter(Boolean)
+      : [discordSection, rulebookSection, cardSection, statExtremeSection, sortedListSection, statThresholdSection, filteredCardListSection, statBreakdownSection, statSummarySection, guideSection, generalStrategySection].filter(Boolean);
 
     const systemInstruction = `${promptPreamble}\n\n${sections.join("\n\n")}`;
     const trimmedHistory = trimHistoryToBudget(history);

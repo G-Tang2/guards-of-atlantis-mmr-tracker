@@ -27,6 +27,9 @@ import {
   detectStatKeyword,
   computeSortedStatList,
   listCardsByFilter,
+  detectStatThreshold,
+  computeStatThresholdList,
+  type StatKind,
 } from "./heroCardContext";
 
 describe("detectStatSuperlative", () => {
@@ -270,6 +273,101 @@ describe("computeSortedStatList", () => {
 
   it("returns null when nothing matches the filters", () => {
     expect(computeSortedStatList("range", "desc", [], [], 99)).toBeNull();
+  });
+});
+
+describe("detectStatThreshold / computeStatThresholdList", () => {
+  it("parses the exact question reported live", () => {
+    expect(detectStatThreshold("are there heroes with 5 or more attack on their tier 1 red card")).toEqual({
+      stat: "attack",
+      comparator: ">=",
+      value: 5,
+    });
+  });
+
+  it("filters out cards with no attack value at all, unlike the plain color/tier filter", () => {
+    // Ground truth from the computeSortedStatList test above: only 15
+    // Tier 1 RED cards have an attack value at all (1 at 9, 4 at 6, 10 at
+    // 5) — every other Tier 1 RED card has no attack stat whatsoever
+    // (it's a Skill/Defense/etc. card). Before this fix, "5 or more
+    // attack" had no dedicated handling and fell through to
+    // listCardsByFilter, which returns *every* Tier 1 RED card regardless
+    // of whether it even has an attack value at all, framed to the model
+    // as the exhaustive answer — that's what let it claim "all of them
+    // have 5+ attack" live, when most Tier 1 RED cards aren't attack
+    // cards in the first place.
+    const thresholdEntries = computeStatThresholdList("attack", ">=", 5, ["RED"], [], 1);
+    expect(thresholdEntries).toHaveLength(15);
+    expect(thresholdEntries.every((e) => e.value >= 5)).toBe(true);
+
+    const everyTier1Red = listCardsByFilter(["RED"], 1, []);
+    expect(everyTier1Red!.length).toBeGreaterThan(thresholdEntries.length);
+  });
+
+  it("returns an empty array (not null) when nothing meets the threshold — the caller needs to say 'none', not nothing", () => {
+    expect(computeStatThresholdList("attack", ">=", 999, ["RED"], [], 1)).toEqual([]);
+  });
+
+  it("supports every comparator wording", () => {
+    expect(detectStatThreshold("at least 5 attack")).toEqual({ stat: "attack", comparator: ">=", value: 5 });
+    expect(detectStatThreshold("5 or less defense")).toEqual({ stat: "defense", comparator: "<=", value: 5 });
+    expect(detectStatThreshold("at most 5 defense")).toEqual({ stat: "defense", comparator: "<=", value: 5 });
+    expect(detectStatThreshold("more than 5 initiative")).toEqual({ stat: "initiative", comparator: ">", value: 5 });
+    expect(detectStatThreshold("less than 5 range")).toEqual({ stat: "range", comparator: "<", value: 5 });
+    expect(detectStatThreshold("exactly 5 area")).toEqual({ stat: "area", comparator: "=", value: 5 });
+  });
+
+  it("returns null when there's no stat keyword at all", () => {
+    expect(detectStatThreshold("how do I play Arien")).toBeNull();
+  });
+
+  it("recognizes 'radius' as the players' own word for the area stat, not just the schema name 'area'", () => {
+    // Card rules text always says "in radius" (see any AREA-modifier
+    // card's own description) — "area" is only the internal field name
+    // (card.modifier === "AREA"), which a player would rarely say. Before
+    // this, "radius" wasn't recognized as a stat keyword at all, so a
+    // threshold question phrased the way players actually talk ("2 or
+    // more radius") wouldn't even be detected as being about a stat.
+    expect(detectStatThreshold("2 or more radius")).toEqual({ stat: "area", comparator: ">=", value: 2 });
+    expect(detectStatKeyword("cards with radius 2")).toBe("area");
+  });
+});
+
+// The attack-specific tests above already exercise every branch of
+// computeStatThresholdList's actual filtering logic (resolveStatValue,
+// cardMatchesFilters, the comparator switch) — these confirm the same
+// logic produces correct, self-consistent results for the other four
+// stats too, by cross-checking against computeStatExtremes (already
+// verified against real ground truth further up this file) rather than
+// hand-deriving a fresh set of expected numbers for each one: whatever
+// computeStatExtremes says the roster-wide max is, a ">=" threshold set
+// to exactly that value must return precisely the cards tied at that max,
+// and a "greater than" threshold at the same value must return none.
+describe("computeStatThresholdList — every stat, cross-checked against computeStatExtremes", () => {
+  const stats: StatKind[] = ["initiative", "movement", "defense", "attack", "range", "area"];
+
+  it.each(stats)("%s: >= the roster-wide max returns exactly the max-tied cards", (stat) => {
+    const maxGroups = computeStatExtremes(stat, "max", [], [], null, 1);
+    expect(maxGroups).not.toBeNull();
+    const [{ value: maxValue, matches }] = maxGroups!;
+    const thresholdEntries = computeStatThresholdList(stat, ">=", maxValue, [], [], null);
+    expect(thresholdEntries).toHaveLength(matches.length);
+    expect(thresholdEntries.every((e) => e.value === maxValue)).toBe(true);
+  });
+
+  it.each(stats)("%s: strictly greater than the roster-wide max returns nothing", (stat) => {
+    const maxGroups = computeStatExtremes(stat, "max", [], [], null, 1);
+    const maxValue = maxGroups![0].value;
+    expect(computeStatThresholdList(stat, ">", maxValue, [], [], null)).toEqual([]);
+  });
+
+  it.each(stats)("%s: <= the roster-wide min returns exactly the min-tied cards", (stat) => {
+    const minGroups = computeStatExtremes(stat, "min", [], [], null, 1);
+    expect(minGroups).not.toBeNull();
+    const [{ value: minValue, matches }] = minGroups!;
+    const thresholdEntries = computeStatThresholdList(stat, "<=", minValue, [], [], null);
+    expect(thresholdEntries).toHaveLength(matches.length);
+    expect(thresholdEntries.every((e) => e.value === minValue)).toBe(true);
   });
 });
 

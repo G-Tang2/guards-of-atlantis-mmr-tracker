@@ -57,7 +57,7 @@ function nonSpellCards(heroId: string): HeroCard[] {
 // this list.
 const EXTRA_STOP_WORDS = new Set([
   "card", "cards", "hero", "heroes",
-  "initiative", "movement", "defense", "defence", "attack", "range", "area",
+  "initiative", "movement", "defense", "defence", "attack", "range", "area", "radius",
   "tier", "level", "top",
   ...CARD_COLORS.map((c) => c.toLowerCase()),
   // Plain connector words that happen to sit inside a multi-word card
@@ -517,7 +517,11 @@ const STAT_KEYWORD_PATTERNS: { stat: StatKind; pattern: RegExp }[] = [
   // questions that otherwise worked fine once the word was recognized.
   { stat: "attack", pattern: /\b(attack|damage)\b/ },
   { stat: "range", pattern: /\brange\b/ },
-  { stat: "area", pattern: /\barea\b/ },
+  // "radius" is how the cards' own rules text actually phrases this stat
+  // ("target a unit in radius" — see any AREA-modifier card's
+  // description) — "area" is only the internal schema field name
+  // (card.modifier === "AREA"), which a player would rarely say aloud.
+  { stat: "area", pattern: /\b(area|radius)\b/ },
 ];
 
 export function detectStatKeyword(question: string): StatKind | null {
@@ -823,6 +827,102 @@ export function listCardsByFilter(
     }
   }
   return entries.length > 0 ? entries : null;
+}
+
+export type StatComparator = ">=" | ">" | "<=" | "<" | "=";
+
+// Order matters here — "5 or more" and "at least 5" both need to win over
+// a bare "more than 5" reading, and each pattern's capturing group is
+// positioned wherever the number actually falls in that phrasing (before
+// the keywords for "N or more", after them for "at least N"), so every
+// entry can be matched the same generic way below regardless of word
+// order.
+const THRESHOLD_PATTERNS: { comparator: StatComparator; pattern: RegExp }[] = [
+  { comparator: ">=", pattern: /\b(\d+)\s*(?:or\s+more|or\s+higher|or\s+above)\b/ },
+  { comparator: ">=", pattern: /\bat\s+least\s+(\d+)\b/ },
+  { comparator: ">=", pattern: /\b(\d+)\s*\+/ },
+  { comparator: "<=", pattern: /\b(\d+)\s*(?:or\s+less|or\s+fewer|or\s+lower|or\s+below)\b/ },
+  { comparator: "<=", pattern: /\bat\s+most\s+(\d+)\b/ },
+  { comparator: ">", pattern: /\b(?:more\s+than|greater\s+than|over|above)\s+(\d+)\b/ },
+  { comparator: "<", pattern: /\b(?:less\s+than|fewer\s+than|under|below)\s+(\d+)\b/ },
+  { comparator: "=", pattern: /\bexactly\s+(\d+)\b/ },
+];
+
+// "Are there heroes with 5 or more attack on their tier 1 red card" — a
+// numeric threshold, not a superlative (detectStatSuperlative only fires
+// on "highest"/"lowest"-style wording) and not a plain color/tier
+// enumeration (listCardsByFilter has no stat criterion at all). Without
+// this, a threshold question like this one fell all the way through to
+// listCardsByFilter, which handed the model every Tier 1 red card
+// (unfiltered by attack value at all) framed as "present exactly this
+// list" — the model then had no choice but to describe that whole,
+// un-thresholded set as if it were the answer, which is exactly how "is
+// there a tier 1 red card under 5 attack" got the wrong "no, they're all
+// 5+" answer live.
+export function detectStatThreshold(
+  question: string,
+): { stat: StatKind; comparator: StatComparator; value: number } | null {
+  const stat = detectStatKeyword(question);
+  if (!stat) return null;
+  const lower = question.toLowerCase();
+  for (const { comparator, pattern } of THRESHOLD_PATTERNS) {
+    const match = lower.match(pattern);
+    if (!match) continue;
+    const value = parseInt(match[1], 10);
+    if (Number.isFinite(value)) return { stat, comparator, value };
+  }
+  return null;
+}
+
+function compareValue(value: number, comparator: StatComparator, threshold: number): boolean {
+  switch (comparator) {
+    case ">=":
+      return value >= threshold;
+    case ">":
+      return value > threshold;
+    case "<=":
+      return value <= threshold;
+    case "<":
+      return value < threshold;
+    case "=":
+      return value === threshold;
+  }
+}
+
+// Every card meeting the threshold, sorted highest-value-first — reuses
+// SortedStatEntry's shape since both are just "cards, each with the one
+// stat value that matched." Always returns an array, even when empty
+// (unlike listCardsByFilter/computeStatExtremes' own null-for-"nothing
+// matched"): an empty result here is itself the answer ("no card meets
+// this"), not an absence of one, and the caller needs to tell the model
+// that explicitly rather than handing it nothing and risking a guess.
+export function computeStatThresholdList(
+  stat: StatKind,
+  comparator: StatComparator,
+  threshold: number,
+  colors: string[],
+  heroIds: string[] = [],
+  level: number | null = null,
+): SortedStatEntry[] {
+  const scopeIds = heroIds.length > 0 ? heroIds : Object.keys(HERO_CARDS);
+  const entries: SortedStatEntry[] = [];
+  for (const heroId of scopeIds) {
+    const heroName = HEROES.find((h) => h.id === heroId)?.name ?? heroId;
+    for (const card of nonSpellCards(heroId)) {
+      if (!cardMatchesFilters(card, colors, level)) continue;
+      const value = resolveStatValue(card, stat);
+      if (value === null || !compareValue(value, comparator, threshold)) continue;
+      entries.push({
+        heroName,
+        cardName: typeof card.name === "string" ? card.name : "",
+        color: typeof card.color === "string" ? card.color : "",
+        level: typeof card.level === "number" ? card.level : null,
+        value,
+      });
+    }
+  }
+  entries.sort((a, b) => b.value - a.value);
+  return entries;
 }
 
 // One compact line per card across every hero (not per-hero JSON, which
