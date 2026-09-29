@@ -7747,6 +7747,42 @@
   .goa-board-icon-btn-danger {
     color: var(--loss);
   }
+  .goa-board-icon-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  /* Sequence builder (see enterSequenceMode in HexBoard) — its own
+     bordered panel, like .goa-board-tip's help panel, so a turn-by-turn
+     walkthrough in progress reads as a distinct mode rather than just
+     more toolbar buttons. */
+  .goa-board-sequence-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 480px;
+    padding: 0.6rem;
+    border: 1px solid rgba(201, 151, 58, 0.25);
+    border-radius: 8px;
+    background: rgba(201, 151, 58, 0.05);
+  }
+  .goa-board-sequence-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+  }
+  .goa-board-sequence-step-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    color: var(--gold-light);
+    white-space: nowrap;
+    padding: 0 0.2rem;
+  }
   .goa-board-toolbar-divider {
     flex-shrink: 0;
     width: 1px;
@@ -7856,6 +7892,11 @@
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
+  }
+  /* Read-only sequence viewer only (components/BoardSequenceViewer.tsx) —
+     a hero token there has nothing to drag, just its own cards to open. */
+  .goa-board-token.clickable {
+    cursor: pointer;
   }
   .goa-piece-thumb {
     border-radius: 50%;

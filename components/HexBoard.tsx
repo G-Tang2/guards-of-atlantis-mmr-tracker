@@ -3,11 +3,27 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import Image from "next/image";
-import { X, Trash2, Save, RotateCcw, Grid3x3, ZoomOut, HelpCircle, ChevronDown } from "lucide-react";
+import {
+  X,
+  Trash2,
+  Save,
+  RotateCcw,
+  Grid3x3,
+  ZoomOut,
+  HelpCircle,
+  ChevronDown,
+  ListOrdered,
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  Share2,
+  Check,
+} from "lucide-react";
 import { HEROES } from "@/lib/heroes";
 import { HERO_CARDS } from "@/lib/heroCards";
 import { HeroActionCard } from "@/components/HeroActionCard";
 import { IMAGE_WIDTH, IMAGE_HEIGHT, BOARD_COLS, BOARD_ROWS, createHexGrid, coverScaleForRotation } from "@/lib/hexGrid";
+import { supabaseClient } from "@/lib/supabase/client";
 
 // The board's own photo sits behind the grid as a plain background
 // image; the hexes render as an outline-only overlay on top of it (see
@@ -28,7 +44,7 @@ const MINION_SHAPES: { shape: string; label: string; letter: string }[] = [
 ];
 // The two faction colors already defined in .goa-root (see globals.css)
 // — every minion comes in both, matching the actual teams.
-const MINION_TEAMS: { team: string; label: string; color: string }[] = [
+export const MINION_TEAMS: { team: string; label: string; color: string }[] = [
   { team: "titans", label: "Titans", color: "var(--titans)" },
   { team: "atlantis", label: "Atlantis", color: "var(--atlantis)" },
 ];
@@ -85,7 +101,7 @@ type PieceVisual = {
 // single id — this is the one place that knows how to turn any of them
 // into something paintable, so the board/palette/drag-ghost rendering
 // below doesn't need its own three-way branch repeated everywhere.
-function resolvePieceVisual(pieceId: string): PieceVisual | null {
+export function resolvePieceVisual(pieceId: string): PieceVisual | null {
   const hero = HEROES.find((h) => h.id === pieceId);
   if (hero) return { label: hero.name, hero };
   const minion = MINION_TYPES.find((m) => m.id === pieceId);
@@ -95,7 +111,7 @@ function resolvePieceVisual(pieceId: string): PieceVisual | null {
   return null;
 }
 
-function PieceThumb({
+export function PieceThumb({
   pieceId,
   size,
   className = "",
@@ -157,6 +173,7 @@ const LEGACY_LAYOUTS_STORAGE_KEY = "goa-board-layouts";
 const MAP_STORAGE_KEY = "goa-board-selected-map";
 const placementsKey = (mapId: string) => `goa-board-placements-${mapId}`;
 const layoutsKey = (mapId: string) => `goa-board-layouts-${mapId}`;
+const sequencesKey = (mapId: string) => `goa-board-sequences-${mapId}`;
 // How far the pointer has to move before a press counts as a drag rather
 // than a tap — shared by "tap a placed piece to remove it" and "tap a
 // palette piece does nothing" below.
@@ -176,9 +193,16 @@ const PALETTE_CANCEL_THRESHOLD_PX = 12;
 // Team is only ever meaningfully set on hero pieces (minions already
 // bake it into which colored variant was placed) — optional and unset
 // by default, assigned via the card drawer's team buttons.
-type PlacedToken = { id: string; pieceId: string; col: number; row: number; team?: string };
+export type PlacedToken = { id: string; pieceId: string; col: number; row: number; team?: string };
 
 type SavedLayout = { name: string; tokens: PlacedToken[] };
+
+// A turn-by-turn walkthrough — each step is its own full board snapshot
+// (not a diff from the previous one), same as SavedLayout's own tokens
+// field, just plural. `sharedId` is set once this exact saved sequence has
+// been published (see shareSequence) — re-sharing updates that same
+// board_sequences row instead of creating a new link every time.
+type SavedSequence = { name: string; steps: PlacedToken[][]; sharedId?: string };
 // A built-in entry in the "load layout" dropdown, alongside whatever the
 // user has actually saved for the current map — not itself a
 // SavedLayout (it isn't persisted and can't be deleted), just always
@@ -229,7 +253,7 @@ const FORGOTTEN_ISLAND_TOKENS: PlacedToken[] = [
   { id: "default-12", pieceId: "minion-heavy-atlantis", col: 15, row: 16 },
 ];
 
-type MapDef = {
+export type MapDef = {
   id: string;
   label: string;
   image: string;
@@ -259,7 +283,7 @@ type MapDef = {
   // it always had.
   gridCoverScale: number;
 };
-const MAPS: MapDef[] = [
+export const MAPS: MapDef[] = [
   {
     id: "across-the-river",
     label: "Across the River",
@@ -412,6 +436,23 @@ export function HexBoard() {
   const toggleSection = (key: keyof typeof openSections) =>
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
+  // Off by default — the board behaves exactly as it always has (a single
+  // live layout) until this is turned on. `sequenceSteps` is the sequence
+  // currently being built/reviewed (not necessarily saved yet — see
+  // saveSequence); each entry is a full board snapshot, same shape as a
+  // SavedLayout's own `tokens`. Stepping to a different index loads that
+  // step's tokens onto the live, still-editable board (see goToSequenceStep),
+  // so a step can be tweaked in place and then re-captured with
+  // updateSequenceStep instead of needing to delete and re-add it.
+  const [sequenceMode, setSequenceMode] = useState(false);
+  const [sequenceSteps, setSequenceSteps] = useState<PlacedToken[][]>([]);
+  const [sequenceStepIndex, setSequenceStepIndex] = useState(0);
+  const [savedSequences, setSavedSequences] = useState<SavedSequence[]>([]);
+  const [sequencesLoaded, setSequencesLoaded] = useState(false);
+  const [selectedSequenceName, setSelectedSequenceName] = useState("");
+  const [sharingSequence, setSharingSequence] = useState(false);
+  const [sequenceShareCopied, setSequenceShareCopied] = useState(false);
+
   const boardWrapRef = useRef<HTMLDivElement>(null);
   // The outer wrap element — separate from boardWrapRef (which points to
   // the inner grid-frame, for hit-testing) purely so the wheel-zoom
@@ -479,6 +520,16 @@ export function HexBoard() {
       setSavedLayouts([]);
     }
     setSelectedLayoutName(DEFAULT_LAYOUT_NAME);
+    try {
+      const raw = localStorage.getItem(sequencesKey(mapId));
+      setSavedSequences(raw ? JSON.parse(raw) : []);
+    } catch {
+      setSavedSequences([]);
+    }
+    setSelectedSequenceName("");
+    setSequenceSteps([]);
+    setSequenceStepIndex(0);
+    setSequenceMode(false);
   }, []);
 
   useEffect(() => {
@@ -502,6 +553,7 @@ export function HexBoard() {
     loadMapData(mapId);
     setLoaded(true);
     setLayoutsLoaded(true);
+    setSequencesLoaded(true);
     // Deliberately mount-only — switchMap (not this effect) handles
     // every subsequent map change, since it also needs to persist the
     // choice and reset the view, not just reload data.
@@ -569,6 +621,164 @@ export function HexBoard() {
     if (!window.confirm(`Delete saved layout "${selectedLayoutName}"?`)) return;
     setSavedLayouts((prev) => prev.filter((l) => l.name !== selectedLayoutName));
     setSelectedLayoutName(DEFAULT_LAYOUT_NAME);
+  };
+
+  useEffect(() => {
+    if (!sequencesLoaded) return;
+    try {
+      localStorage.setItem(sequencesKey(selectedMapId), JSON.stringify(savedSequences));
+    } catch {
+      // Nothing to do if storage isn't available.
+    }
+  }, [savedSequences, sequencesLoaded, selectedMapId]);
+
+  // Turning sequence mode on starts the sequence from whatever's on the
+  // board right now (rather than an empty list) so there's always at
+  // least one step to look at/build from — matching how a fresh board
+  // already starts from a real scenario instead of nothing. Turning it
+  // back off just hides the sequence bar; the in-progress sequence stays
+  // in memory (not persisted) so reopening it resumes where it left off,
+  // exactly like every other panel toggle on this page.
+  const enterSequenceMode = () => {
+    setSequenceMode(true);
+    if (sequenceSteps.length === 0) {
+      setSequenceSteps([tokens.map((t) => ({ ...t }))]);
+      setSequenceStepIndex(0);
+    }
+  };
+
+  const goToSequenceStep = (index: number) => {
+    if (index < 0 || index >= sequenceSteps.length) return;
+    setSequenceStepIndex(index);
+    setTokens(sequenceSteps[index].map((t) => ({ ...t })));
+  };
+
+  // Always appends to the end and jumps there, regardless of which step is
+  // currently being viewed — "snapshot what the board looks like right
+  // now, as the next step," not an insert-in-the-middle edit (which would
+  // need to decide what to do with every later step's numbering).
+  const addSequenceStep = () => {
+    const snapshot = tokens.map((t) => ({ ...t }));
+    setSequenceSteps((prev) => {
+      const next = [...prev, snapshot];
+      setSequenceStepIndex(next.length - 1);
+      return next;
+    });
+  };
+
+  // For touching up a step already in the sequence — move to it, adjust
+  // the board, then re-capture it here instead of deleting and re-adding.
+  const updateSequenceStep = () => {
+    const snapshot = tokens.map((t) => ({ ...t }));
+    setSequenceSteps((prev) => prev.map((s, i) => (i === sequenceStepIndex ? snapshot : s)));
+  };
+
+  const deleteSequenceStep = () => {
+    if (sequenceSteps.length <= 1) {
+      if (!window.confirm("Delete this sequence's only step and exit sequence mode?")) return;
+      setSequenceSteps([]);
+      setSequenceStepIndex(0);
+      setSequenceMode(false);
+      return;
+    }
+    if (!window.confirm(`Delete step ${sequenceStepIndex + 1}?`)) return;
+    setSequenceSteps((prev) => {
+      const next = prev.filter((_, i) => i !== sequenceStepIndex);
+      const newIndex = Math.min(sequenceStepIndex, next.length - 1);
+      setSequenceStepIndex(newIndex);
+      setTokens(next[newIndex].map((t) => ({ ...t })));
+      return next;
+    });
+  };
+
+  const saveSequence = () => {
+    const name = window.prompt("Name this sequence:", selectedSequenceName)?.trim();
+    if (!name) return;
+    setSavedSequences((prev) => {
+      const existing = prev.find((s) => s.name === name);
+      return [
+        ...prev.filter((s) => s.name !== name),
+        {
+          name,
+          steps: sequenceSteps.map((s) => s.map((t) => ({ ...t }))),
+          sharedId: existing?.sharedId,
+        },
+      ];
+    });
+    setSelectedSequenceName(name);
+  };
+
+  const loadSequence = (name: string) => {
+    setSelectedSequenceName(name);
+    if (!name) return;
+    const seq = savedSequences.find((s) => s.name === name);
+    if (!seq || seq.steps.length === 0) return;
+    setSequenceSteps(seq.steps.map((s) => s.map((t) => ({ ...t }))));
+    setSequenceStepIndex(0);
+    setTokens(seq.steps[0].map((t) => ({ ...t })));
+    setSequenceMode(true);
+  };
+
+  const deleteSavedSequence = () => {
+    if (!selectedSequenceName) return;
+    if (!window.confirm(`Delete saved sequence "${selectedSequenceName}"? This can't be undone.`)) return;
+    setSavedSequences((prev) => prev.filter((s) => s.name !== selectedSequenceName));
+    setSelectedSequenceName("");
+  };
+
+  // Publishes (or re-publishes) the current sequence to board_sequences,
+  // then copies the read-only viewer's link — see app/board/sequence/[id].
+  // Re-sharing the same saved sequence updates its existing row instead of
+  // creating a new link every time (the id, and therefore the link, only
+  // ever changes if that row was deleted out from under it, in which case
+  // this just falls through to inserting a fresh one).
+  const shareSequence = async () => {
+    if (sequenceSteps.length === 0) return;
+    let name = selectedSequenceName;
+    if (!name) {
+      name = window.prompt("Name this sequence before sharing:")?.trim() ?? "";
+      if (!name) return;
+    }
+    setSharingSequence(true);
+    try {
+      const steps = sequenceSteps.map((s) => s.map((t) => ({ ...t })));
+      const existing = savedSequences.find((s) => s.name === name);
+      let id = existing?.sharedId;
+      if (id) {
+        const { error } = await supabaseClient
+          .from("board_sequences")
+          .update({ name, map_id: currentMap.id, steps, updated_at: new Date().toISOString() })
+          .eq("id", id);
+        if (error) id = undefined;
+      }
+      if (!id) {
+        const { data, error } = await supabaseClient
+          .from("board_sequences")
+          .insert({ name, map_id: currentMap.id, steps })
+          .select("id")
+          .single();
+        if (error || !data) {
+          window.alert("Couldn't share this sequence — try again.");
+          return;
+        }
+        id = data.id as string;
+      }
+      setSavedSequences((prev) => [
+        ...prev.filter((s) => s.name !== name),
+        { name, steps, sharedId: id },
+      ]);
+      setSelectedSequenceName(name);
+      const url = `${window.location.origin}/board/sequence/${id}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setSequenceShareCopied(true);
+        setTimeout(() => setSequenceShareCopied(false), 2000);
+      } catch {
+        window.prompt("Copy this link to share:", url);
+      }
+    } finally {
+      setSharingSequence(false);
+    }
   };
 
   const resolveCellAt = useCallback((clientX: number, clientY: number) => {
@@ -1165,6 +1375,15 @@ export function HexBoard() {
         >
           <Trash2 size={16} />
         </button>
+        <button
+          type="button"
+          className={`goa-board-icon-btn ${sequenceMode ? "active" : ""}`}
+          onClick={() => (sequenceMode ? setSequenceMode(false) : enterSequenceMode())}
+          aria-label={sequenceMode ? "Hide sequence builder" : "Build a turn-by-turn sequence"}
+          aria-pressed={sequenceMode}
+        >
+          <ListOrdered size={16} />
+        </button>
         <div className="goa-board-toolbar-divider" />
 
         <select
@@ -1207,6 +1426,104 @@ export function HexBoard() {
           </button>
         )}
       </div>
+
+      {sequenceMode && (
+        <div className="goa-board-sequence-bar">
+          <div className="goa-board-sequence-row">
+            <button
+              type="button"
+              className="goa-board-icon-btn"
+              onClick={() => goToSequenceStep(sequenceStepIndex - 1)}
+              disabled={sequenceStepIndex === 0}
+              aria-label="Previous step"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="goa-board-sequence-step-label">
+              Step {sequenceStepIndex + 1} of {sequenceSteps.length}
+            </span>
+            <button
+              type="button"
+              className="goa-board-icon-btn"
+              onClick={() => goToSequenceStep(sequenceStepIndex + 1)}
+              disabled={sequenceStepIndex >= sequenceSteps.length - 1}
+              aria-label="Next step"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <div className="goa-board-toolbar-divider" />
+            <button
+              type="button"
+              className="goa-board-icon-btn"
+              onClick={addSequenceStep}
+              aria-label="Add the current board as a new step"
+              title="Add step"
+            >
+              <Camera size={16} />
+            </button>
+            <button
+              type="button"
+              className="goa-board-icon-btn"
+              onClick={updateSequenceStep}
+              aria-label="Update this step with the current board"
+              title="Update step"
+            >
+              <Save size={16} />
+            </button>
+            <button
+              type="button"
+              className="goa-board-icon-btn goa-board-icon-btn-danger"
+              onClick={deleteSequenceStep}
+              aria-label="Delete this step"
+              title="Delete step"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+          <div className="goa-board-sequence-row">
+            <select
+              className="goa-board-layout-select"
+              value={selectedSequenceName}
+              onChange={(e) => loadSequence(e.target.value)}
+            >
+              <option value="">Unsaved sequence</option>
+              {savedSequences.map((s) => (
+                <option key={s.name} value={s.name}>
+                  {s.name}
+                  {s.sharedId ? " (shared)" : ""}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="goa-board-icon-btn" onClick={saveSequence} aria-label="Save this sequence">
+              <Save size={16} />
+            </button>
+            {selectedSequenceName && (
+              <button
+                type="button"
+                className="goa-board-icon-btn goa-board-icon-btn-danger"
+                onClick={deleteSavedSequence}
+                aria-label="Delete saved sequence"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="goa-board-icon-btn"
+              onClick={shareSequence}
+              disabled={sharingSequence}
+              aria-label="Share this sequence"
+              title="Copy a shareable link"
+            >
+              {sequenceShareCopied ? <Check size={16} /> : <Share2 size={16} />}
+            </button>
+          </div>
+          <p className="goa-board-hint">
+            Set up the board, then tap the camera to capture it as the next step. Stepping back and forth loads each
+            step onto the live board — adjust it and tap the save icon to update that step in place.
+          </p>
+        </div>
+      )}
 
       {showHelp && (
         <div className="goa-board-tip">
