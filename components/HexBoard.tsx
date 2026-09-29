@@ -902,16 +902,38 @@ export function HexBoard() {
     [resolveCellAt, setDragRender, setTokens, setOpenHero, setEnlargedCardIndex],
   );
 
+  // A pointercancel means the platform aborted this gesture outright, not
+  // that the user deliberately released it — mobile browsers routinely
+  // fire one when an active touch drifts over a focusable/text-editable
+  // element (e.g. the hero search box below the board, which sits outside
+  // the board's own bounding box), handing the gesture off to their own
+  // text-selection/caret handling instead of continuing to report
+  // pointermove. Treating that identically to handlePointerUp (as this
+  // used to) ran its "dropped outside the board — remove it" branch,
+  // which is exactly what made a piece vanish while still mid-drag rather
+  // than only on a genuine, deliberate drop. Unlike handlePointerUp, this
+  // must never finalize anything: a "new" palette pickup was never added
+  // to tokens yet, and an "existing" piece's own entry in tokens was never
+  // touched during the drag itself (only the drag ghost's rendered
+  // position tracks the pointer — the real token is filtered out of the
+  // board's own render via draggingExistingId while dragging), so simply
+  // clearing the drag state puts it right back where it already was.
+  const cancelDrag = useCallback(() => {
+    if (!dragStateRef.current) return;
+    dragStateRef.current = null;
+    setDragRender(null);
+  }, []);
+
   useEffect(() => {
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
+    window.addEventListener("pointercancel", cancelDrag);
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
+      window.removeEventListener("pointercancel", cancelDrag);
     };
-  }, [handlePointerMove, handlePointerUp]);
+  }, [handlePointerMove, handlePointerUp, cancelDrag]);
 
   // Pinch-zoom/pan — built on native TouchEvents rather than
   // PointerEvents (unlike every other gesture in this file). An earlier
