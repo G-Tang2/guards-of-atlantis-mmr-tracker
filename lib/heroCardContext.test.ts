@@ -331,6 +331,34 @@ describe("detectStatThreshold / computeStatThresholdList", () => {
     expect(detectStatThreshold("2 or more radius")).toEqual({ stat: "area", comparator: ">=", value: 2 });
     expect(detectStatKeyword("cards with radius 2")).toBe("area");
   });
+
+  it("treats a bare 'N stat' mention (no comparator word) as an exact match", () => {
+    // Hit live: "show heroes who has 4 attack gold card" has no
+    // comparator word at all ("or more"/"at least"/etc.), so it wasn't
+    // detected as a threshold question — it fell through to the plain
+    // color filter, which lists every gold card regardless of attack
+    // value, and the model presented 2s and 3s alongside the real 4s as
+    // if they all matched.
+    expect(detectStatThreshold("show heroes who has 4 attack gold card")).toEqual({
+      stat: "attack",
+      comparator: "=",
+      value: 4,
+    });
+    expect(detectStatThreshold("attack of 4")).toEqual({ stat: "attack", comparator: "=", value: 4 });
+    expect(detectStatThreshold("defense 6")).toEqual({ stat: "defense", comparator: "=", value: 6 });
+  });
+
+  it("does not mistake a 'top N' count for the stat's own bare value", () => {
+    // "top 3 attack cards" has "3" sitting directly before "attack",
+    // same adjacency a genuine bare value ("3 attack") relies on — this
+    // must not be read as "attack exactly 3" (detectTopN's own "how many
+    // distinct values to show" already owns this number).
+    expect(detectStatThreshold("top 3 attack cards")).toBeNull();
+  });
+
+  it("still prefers an explicit comparator over the bare-value fallback", () => {
+    expect(detectStatThreshold("5 or more attack")).toEqual({ stat: "attack", comparator: ">=", value: 5 });
+  });
 });
 
 // The attack-specific tests above already exercise every branch of

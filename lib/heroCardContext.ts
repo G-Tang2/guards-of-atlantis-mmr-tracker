@@ -848,6 +848,47 @@ const THRESHOLD_PATTERNS: { comparator: StatComparator; pattern: RegExp }[] = [
   { comparator: "=", pattern: /\bexactly\s+(\d+)\b/ },
 ];
 
+// Mirrors each stat's own word alternation in STAT_KEYWORD_PATTERNS above
+// (kept as a separate small table rather than deriving it from those
+// RegExp objects, since extracting just the alternation back out of an
+// already-anchored /\bfoo\b/ pattern is more fragile than just repeating
+// the four-to-six words involved) — used below to build a fallback
+// pattern anchored to *this specific stat's own words*, not a bare
+// unanchored digit anywhere in the question.
+const STAT_WORD_SOURCE: Record<StatKind, string> = {
+  initiative: "initiative",
+  movement: "movement",
+  defense: "defen[cs]e",
+  attack: "attack|damage",
+  range: "range",
+  area: "area|radius",
+};
+
+// "Show heroes with a 4 attack gold card" — no comparator word at all
+// (not "or more"/"at least"/etc, so none of THRESHOLD_PATTERNS above
+// match), but the number is still clearly meant as the exact value being
+// asked for, not a stat name's own filter dimension. Without this, the
+// question fell through to listCardsByFilter same as the bare-threshold
+// gap above, dumping every gold card regardless of attack value and
+// letting the model present 2s and 3s as if they were the requested 4s.
+// Deliberately anchored to the resolved stat's own word(s) immediately
+// adjacent to the number (not just "the first digit anywhere in the
+// question") — a bare `\d+` search would just as happily grab the "1" out
+// of "tier 1" or the "3" out of "top 3" instead of the actual stat value.
+// That adjacency requirement alone still lets "top 3 attack cards"
+// through, though, since "3" sits directly before "attack" there too —
+// the leading negative lookbehind excludes that specific case explicitly,
+// since "top N" already has its own dedicated meaning (detectTopN).
+function bareStatValue(question: string, stat: StatKind): number | null {
+  const wordSource = STAT_WORD_SOURCE[stat];
+  const beforeMatch = question.match(new RegExp(`(?<!\\btop\\s)\\b(\\d+)\\s*(?:${wordSource})\\b`));
+  const afterMatch = question.match(new RegExp(`\\b(?:${wordSource})\\s*(?:of\\s*)?(\\d+)\\b`));
+  const raw = beforeMatch?.[1] ?? afterMatch?.[1];
+  if (raw === undefined) return null;
+  const value = parseInt(raw, 10);
+  return Number.isFinite(value) ? value : null;
+}
+
 // "Are there heroes with 5 or more attack on their tier 1 red card" — a
 // numeric threshold, not a superlative (detectStatSuperlative only fires
 // on "highest"/"lowest"-style wording) and not a plain color/tier
@@ -871,6 +912,8 @@ export function detectStatThreshold(
     const value = parseInt(match[1], 10);
     if (Number.isFinite(value)) return { stat, comparator, value };
   }
+  const bareValue = bareStatValue(lower, stat);
+  if (bareValue !== null) return { stat, comparator: "=", value: bareValue };
   return null;
 }
 
