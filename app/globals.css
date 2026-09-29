@@ -1993,13 +1993,30 @@
   .goa-cell-name {
     font-size: 1rem;
     color: var(--txt);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     display: flex;
     align-items: center;
     gap: 0.3rem;
+    min-width: 0;
     transition: color 0.15s;
+  }
+  /* Name and badges stack as two lines within the name cell (avatar stays
+     vertically centered against the pair) — badges get their own row
+     instead of crowding the name itself, which needs the room to still
+     truncate cleanly on a narrow phone screen. */
+  .goa-cell-name-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1;
+  }
+  .goa-cell-name-line {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .goa-cell-mmr {
@@ -6658,12 +6675,20 @@
     border-bottom: 1px solid var(--border);
   }
   .goa-vote-ballot-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     font-family: "Cinzel", serif;
     font-size: 0.85rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--gold-light);
+  }
+  /* Same red as the ban round's vote dots/option cards — see their own
+     comments — so the ballot header itself reads as "ban" at a glance. */
+  .goa-vote-ballot-title.ban {
+    color: #e8a3a3;
   }
 
   .goa-vote-dots {
@@ -6738,7 +6763,14 @@
     background: rgba(201, 151, 58, 0.08);
   }
   /* Ban-round ballot options get the same red theming as their vote dots
-     (see .goa-vote-dot.voted.ban) instead of the usual gold tap feedback. */
+     (see .goa-vote-dot.voted.ban) instead of the usual gold tap feedback —
+     including at rest, not just on hover/tap, so which kind of ballot
+     this is (ban vs. choose) reads at a glance from the cards themselves,
+     not just the header text above them. */
+  .vote-option-card.ban {
+    border-color: rgba(196, 74, 74, 0.3);
+    background: rgba(196, 74, 74, 0.05);
+  }
   @media (hover: hover) and (pointer: fine) {
     .vote-option-card.ban:hover {
       border-color: rgba(196, 74, 74, 0.5);

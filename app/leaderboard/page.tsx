@@ -531,22 +531,26 @@ export default function LeaderboardPage() {
                   name={p.name}
                   size={26}
                 />
-                {p.name}
-                {p.badges.length > 0 && (
-                  <span className="goa-player-badges">
-                    {p.badges.map((b) => (
-                      <Image
-                        key={b.id}
-                        src={b.icon}
-                        alt={b.name}
-                        title={b.name}
-                        width={14}
-                        height={14}
-                      />
-                    ))}
+                <span className="goa-cell-name-stack">
+                  <span className="goa-cell-name-line">
+                    {p.name}
+                    <span className="goa-name-arrow">›</span>
                   </span>
-                )}
-                <span className="goa-name-arrow">›</span>
+                  {p.badges.length > 0 && (
+                    <span className="goa-player-badges">
+                      {p.badges.map((b) => (
+                        <Image
+                          key={b.id}
+                          src={b.icon}
+                          alt={b.name}
+                          title={b.name}
+                          width={14}
+                          height={14}
+                        />
+                      ))}
+                    </span>
+                  )}
+                </span>
               </span>
               <span className="goa-cell-mmr">{p.mmr}</span>
               <span

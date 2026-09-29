@@ -315,7 +315,9 @@ export default function RemoteVotePage() {
       {voter && session.stage === "ban_ballot" && (
         <div className="goa-vote-live-body">
           <div className="goa-vote-ballot-head">
-            <span className="goa-vote-ballot-title">Vote to Ban</span>
+            <span className="goa-vote-ballot-title ban">
+              <Ban size={14} /> Vote to Ban
+            </span>
             <VoteDots total={session.total_votes} cast={session.ban_votes_cast} variant="ban" />
           </div>
           {banUsed >= allowance ? (
@@ -419,7 +421,9 @@ export default function RemoteVotePage() {
       {voter && session.stage === "ballot" && (
         <div className="goa-vote-live-body">
           <div className="goa-vote-ballot-head">
-            <span className="goa-vote-ballot-title">Cast Your Vote</span>
+            <span className="goa-vote-ballot-title">
+              <Crown size={14} /> Cast Your Vote
+            </span>
             <VoteDots total={session.total_votes} cast={session.votes_cast} />
           </div>
           {choiceUsed >= allowance ? (
