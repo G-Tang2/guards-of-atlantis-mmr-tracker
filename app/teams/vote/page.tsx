@@ -414,8 +414,8 @@ function TeamsVotePageInner() {
       chooseRoundSkipped: session.choose_round_skipped,
       winnerIndex: session.winner_index,
       options: session.splits.map((split, i) => ({
-        atlantis: split.atlantis.map((p) => ({ id: p.id, name: p.name })),
-        titans: split.titans.map((p) => ({ id: p.id, name: p.name })),
+        atlantis: split.atlantis.map((p) => ({ id: p.id, name: p.name, mmr: p.mmr, avatar_url: p.avatar_url ?? null })),
+        titans: split.titans.map((p) => ({ id: p.id, name: p.name, mmr: p.mmr, avatar_url: p.avatar_url ?? null })),
         votes: session.votes[i] ?? 0,
         banVotes: session.wants_ban ? (session.ban_votes[i] ?? 0) : undefined,
         banned: session.banned_indices.includes(i),

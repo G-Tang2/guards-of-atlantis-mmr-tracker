@@ -16,7 +16,9 @@ import {
   WinCondition,
 } from "@/lib/match";
 import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Ban } from "lucide-react";
-import { RankedBalanceResult } from "@/lib/rankedBalanceResult";
+import { RankedBalanceResult, RankedBalanceResultPlayer } from "@/lib/rankedBalanceResult";
+import { OptionCard } from "@/components/RankedVoteUI";
+import { VoteSessionPlayer } from "@/lib/rankedVoteSession";
 import {
   buildFirstHeroWinMap,
   isFirstHeroWinMatch,
@@ -273,6 +275,23 @@ function RankedBalanceResultSection({ result }: { result: RankedBalanceResult })
           result.wantsBan ? ", after a ban round" : ""
         }.`;
 
+  // Same card the vote page renders (OptionCard) whenever every player's
+  // MMR was captured — older saved results predate that and fall back to
+  // a plain name list instead, since their average MMR/gain can't be
+  // reconstructed honestly.
+  const hasFullPlayerData = result.options.every((option) =>
+    [...option.atlantis, ...option.titans].every((p) => typeof p.mmr === "number"),
+  );
+  const votesCast = result.options.reduce((sum, o) => sum + o.votes, 0);
+  const wasForced =
+    !result.skippedVoting && !result.chooseRoundSkipped && votesCast < result.totalVotes;
+  const toVotePlayer = (p: RankedBalanceResultPlayer): VoteSessionPlayer => ({
+    id: p.id,
+    name: p.name,
+    mmr: p.mmr ?? 0,
+    avatar_url: p.avatar_url ?? null,
+  });
+
   return (
     <details className="goa-section">
       <summary className="goa-sec-head clickable goa-ranked-result-summary">
@@ -283,25 +302,16 @@ function RankedBalanceResultSection({ result }: { result: RankedBalanceResult })
       <div className="draft-body">
         <p className="draft-note" style={{ textAlign: "left" }}>
           {summaryNote}
+          {wasForced && " The match creator picked the winning option directly."}
         </p>
         <div className="goa-vote-options">
-          {result.options.map((option, i) => (
-            <div
-              key={i}
-              className={`ranked-option${i === result.winnerIndex ? " winner" : ""}${
-                option.banned ? " banned" : ""
-              }`}
-            >
-              <div className="ranked-option-head">
-                <span className="ranked-option-head-left">
-                  Option {i + 1}
-                  {option.banned && (
-                    <span className="goa-vote-banned-tag">
-                      <Ban size={11} /> Banned
-                    </span>
-                  )}
-                </span>
-                {!result.skippedVoting && !result.chooseRoundSkipped && !option.banned && (
+          {result.options.map((option, i) => {
+            const className = `ranked-option${i === result.winnerIndex ? " winner" : ""}${
+              option.banned ? " banned" : ""
+            }`;
+            const headExtra = (
+              <>
+                {!result.skippedVoting && !result.chooseRoundSkipped && !option.banned && !wasForced && (
                   <span className="vote-results-count">
                     {option.votes} of {result.totalVotes} votes
                   </span>
@@ -311,26 +321,56 @@ function RankedBalanceResultSection({ result }: { result: RankedBalanceResult })
                     {option.banVotes} of {result.totalVotes} ban votes
                   </span>
                 )}
+              </>
+            );
+            if (hasFullPlayerData) {
+              return (
+                <OptionCard
+                  key={i}
+                  index={i}
+                  split={{
+                    atlantis: option.atlantis.map(toVotePlayer),
+                    titans: option.titans.map(toVotePlayer),
+                  }}
+                  className={className}
+                  banned={option.banned}
+                  headExtra={headExtra}
+                />
+              );
+            }
+            return (
+              <div key={i} className={className}>
+                <div className="ranked-option-head">
+                  <span className="ranked-option-head-left">
+                    Option {i + 1}
+                    {option.banned && (
+                      <span className="goa-vote-banned-tag">
+                        <Ban size={11} /> Banned
+                      </span>
+                    )}
+                  </span>
+                  {headExtra}
+                </div>
+                <div className="draft-live-teams">
+                  {(
+                    [
+                      ["atl", "Atlantis", option.atlantis],
+                      ["tit", "Titans", option.titans],
+                    ] as const
+                  ).map(([faction, label, players]) => (
+                    <div key={faction} className="draft-live-team">
+                      <span className={`draft-faction-label ${faction}`}>{label}</span>
+                      {players.map((p) => (
+                        <div key={p.id} className="draft-live-row">
+                          <span className="draft-live-name">{p.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="draft-live-teams">
-                {(
-                  [
-                    ["atl", "Atlantis", option.atlantis],
-                    ["tit", "Titans", option.titans],
-                  ] as const
-                ).map(([faction, label, players]) => (
-                  <div key={faction} className="draft-live-team">
-                    <span className={`draft-faction-label ${faction}`}>{label}</span>
-                    {players.map((p) => (
-                      <div key={p.id} className="draft-live-row">
-                        <span className="draft-live-name">{p.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </details>

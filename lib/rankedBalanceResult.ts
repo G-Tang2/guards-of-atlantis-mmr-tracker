@@ -8,7 +8,11 @@
 // recording the match.
 export const RANKED_BALANCE_RESULT_STORAGE_KEY = "goa-ranked-balance-result";
 
-export type RankedBalanceResultPlayer = { id: string; name: string };
+// mmr/avatar_url are what the vote page's own option cards show (average
+// MMR, MMR gain, avatar) — optional only because results saved before
+// these were captured don't have them, and those fall back to a plain
+// name list on the match page (see RankedBalanceResultSection there).
+export type RankedBalanceResultPlayer = { id: string; name: string; mmr?: number; avatar_url?: string | null };
 
 export type RankedBalanceResultOption = {
   atlantis: RankedBalanceResultPlayer[];
