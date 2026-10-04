@@ -924,6 +924,21 @@ export function HexBoard() {
     setDragRender(null);
   }, []);
 
+  // Installed/standalone launches (home-screen PWAs) don't reliably honor
+  // touch-action on the board the way a normal browser tab does — a vertical
+  // drag can get claimed as a native page scroll partway through, which
+  // aborts the pointer sequence (pointercancel) and makes the dragged piece
+  // vanish mid-gesture. Suppressing native touch-move handling for the
+  // lifetime of an active piece drag keeps the browser from taking the
+  // gesture over.
+  useEffect(() => {
+    const suppressNativeScrollDuringDrag = (e: TouchEvent) => {
+      if (dragStateRef.current) e.preventDefault();
+    };
+    window.addEventListener("touchmove", suppressNativeScrollDuringDrag, { passive: false });
+    return () => window.removeEventListener("touchmove", suppressNativeScrollDuringDrag);
+  }, []);
+
   useEffect(() => {
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
@@ -1216,6 +1231,16 @@ export function HexBoard() {
     // pinch handler was never getting an uncontested gesture).
     if (activePointersRef.current.size >= 1) return;
     e.preventDefault();
+    // Keeps this pointer's events bound to the token even if the browser
+    // would otherwise re-target them (e.g. a horizontal move that the
+    // browser starts treating as a pan) — the drag reads window-level
+    // pointer events, so losing the target was enough to abort it.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Capture is best-effort — the window-level listeners still drive
+      // the drag if the browser refuses it here.
+    }
     const state: DragState = {
       kind: "existing",
       id: token.id,
@@ -1631,9 +1656,7 @@ export function HexBoard() {
                 })}
               </svg>
 
-              {tokens
-                .filter((t) => t.id !== draggingExistingId)
-                .map((t) => {
+              {tokens.map((t) => {
                   if (!resolvePieceVisual(t.pieceId)) return null;
                   const { x, y } = grid.hexCenter(t.col, t.row);
                   const ringColor = MINION_TEAMS.find((team) => team.team === t.team)?.color;
@@ -1644,6 +1667,11 @@ export function HexBoard() {
                       style={{
                         left: `${(x / grid.boardWidth) * 100}%`,
                         top: `${(y / grid.boardHeight) * 100}%`,
+                        // Hidden rather than unmounted while it's being dragged —
+                        // unmounting the element a touch started on makes the
+                        // browser cancel that touch mid-gesture, which is what
+                        // was making the piece vanish on horizontal moves.
+                        visibility: t.id === draggingExistingId ? "hidden" : undefined,
                         // Cancels the parent's rotate+scale for this
                         // token's own artwork — its *position* should
                         // follow the angled grid, but a hero portrait or
