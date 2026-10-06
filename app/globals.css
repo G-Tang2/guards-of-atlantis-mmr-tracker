@@ -2699,14 +2699,14 @@
     border-radius: 4px;
     margin-bottom: 0.75rem;
     overflow: hidden;
-    /* Solid, and clearly lighter than the page background (#1c1a14) —
-       the old rgba(28,26,20,.85) was the exact same rgb as the page, so
-       the card only ever read as a bordered outline, never an actual
-       raised card; a one-step-lighter #23201a tried next was still too
-       close to tell apart at a glance. Sits below the header bar's own
-       (lighter still) #342f24 for a visible page < card body < header
-       strip depth order. */
-    background: #2b2619;
+    /* Clearly lighter than the page background (#1c1a14) — the original
+       rgba(28,26,20,.85) was the exact same rgb as the page, so the card
+       only ever read as a bordered outline, never an actual raised card.
+       Translucent rather than fully solid, same as most other cards in
+       the app (.goa-card, .goa-stats-card). Sits below the header bar's
+       own (lighter still) #342f24 for a visible page < card body <
+       header strip depth order. */
+    background: rgba(43, 38, 25, 0.85);
     position: relative;
     animation: fadeSlide 0.2s ease;
   }
