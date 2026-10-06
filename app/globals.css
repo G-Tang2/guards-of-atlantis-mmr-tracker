@@ -4626,20 +4626,6 @@
     fill: url(#goldGrad);
     opacity: 0.25;
   }
-  .goa-chart-dot {
-    fill: var(--stone);
-    stroke: var(--gold-light);
-    stroke-width: 1.5;
-  }
-  .goa-chart-dot.win {
-    stroke: var(--gain);
-  }
-  .goa-chart-dot.loss {
-    stroke: var(--loss);
-  }
-  .goa-chart-dot.draw {
-    stroke: rgba(201, 135, 36);
-  }
   .goa-chart-label {
     font-family: "Cinzel", serif;
     font-size: 9px;

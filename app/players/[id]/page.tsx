@@ -111,11 +111,16 @@ function MmrChart({ points }: { points: TrendPoint[] }) {
     );
   }
 
+  // Fixed — the whole trend always fits in this one width, however many
+  // battles there are, rather than growing wider and needing to scroll to
+  // see all of it. Points just sit closer together as the count grows;
+  // there's no longer a per-point dot (see the line's own comment below)
+  // competing for space at that tighter spacing.
   const W = 320,
     H = 100,
     PAD = { t: 12, r: 8, b: 28, l: 36 };
-  const iW = W - PAD.l - PAD.r;
   const iH = H - PAD.t - PAD.b;
+  const iW = W - PAD.l - PAD.r;
 
   const mmrs = points.map((p) => p.mmr);
   const minM = Math.min(...mmrs) - 20;
@@ -174,16 +179,12 @@ function MmrChart({ points }: { points: TrendPoint[] }) {
       <path d={areaPath} className="goa-chart-area" />
       <path d={linePath} className="goa-chart-line" />
 
-      {points.map((p, i) => (
-        <circle
-          key={i}
-          cx={xOf(i)}
-          cy={yOf(p.mmr)}
-          r={3}
-          className={`goa-chart-dot ${p.result}`}
-        />
-      ))}
-
+      {/* Only the first and last point's date — the only two positions
+          guaranteed not to collide with each other no matter how dense
+          the history is (they anchor outward from opposite ends; any
+          label in between risks overlapping its neighbors once there are
+          more than a handful of battles, since each date string is wider
+          than the gap between closely-packed points). */}
       {[0, points.length - 1].map((i) => (
         <text
           key={i}
@@ -1065,7 +1066,7 @@ export default function PlayerProfilePage() {
               <span className="goa-chart-footer-text">
                 ● <span className="goa-text-gain">Win</span> &nbsp; ●{" "}
                 <span className="goa-text-loss">Loss</span> &nbsp; ●{" "}
-                <span>Draw</span>
+                <span className="goa-text-draw">Draw</span>
               </span>
               <span className="goa-chart-footer-text">
                 {totalMatches} battles charted
