@@ -413,14 +413,6 @@ export default function MatchHistoryPage() {
                   </span>
                   · {formatDate(match.created_at)}
                 </span>
-                <span className="goa-match-winner">
-                  <span className={`goa-winner-badge ${match.winner}`}>
-                    {match.winner === "none"
-                      ? "DRAW"
-                      : `${match.winner.toUpperCase()} VICTORY`}{" "}
-                    {formatWinCondition(match.win_condition)}
-                  </span>
-                </span>
               </div>
 
               <div className="goa-teams">
@@ -431,6 +423,14 @@ export default function MatchHistoryPage() {
                   avgMmr={match.atlantis_avg_mmr}
                   onSelectPlayer={goToProfile}
                   showAllBadges
+                  isWinner={match.winner === "atlantis"}
+                  resultLabel={
+                    match.winner === "atlantis"
+                      ? formatWinCondition(match.win_condition)
+                      : match.winner === "none"
+                        ? "DRAW"
+                        : undefined
+                  }
                 />
                 <TeamPanel
                   label="Titans"
@@ -439,6 +439,14 @@ export default function MatchHistoryPage() {
                   avgMmr={match.titans_avg_mmr}
                   onSelectPlayer={goToProfile}
                   showAllBadges
+                  isWinner={match.winner === "titans"}
+                  resultLabel={
+                    match.winner === "titans"
+                      ? formatWinCondition(match.win_condition)
+                      : match.winner === "none"
+                        ? "DRAW"
+                        : undefined
+                  }
                 />
               </div>
             </div>

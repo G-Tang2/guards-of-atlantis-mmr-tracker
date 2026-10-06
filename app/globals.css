@@ -2699,7 +2699,14 @@
     border-radius: 4px;
     margin-bottom: 0.75rem;
     overflow: hidden;
-    background: rgba(28, 26, 20, 0.85);
+    /* Solid, and clearly lighter than the page background (#1c1a14) —
+       the old rgba(28,26,20,.85) was the exact same rgb as the page, so
+       the card only ever read as a bordered outline, never an actual
+       raised card; a one-step-lighter #23201a tried next was still too
+       close to tell apart at a glance. Sits below the header bar's own
+       (lighter still) #342f24 for a visible page < card body < header
+       strip depth order. */
+    background: #2b2619;
     position: relative;
     animation: fadeSlide 0.2s ease;
   }
@@ -2735,8 +2742,22 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    /* A long win-condition badge ("TITANS VICTORY BY LIFE COUNTER") has
+       nowhere near enough room next to the date on a normal phone width
+       (~390-430px) — without flex-wrap, the row doesn't wrap as a whole,
+       so the badge's own text wraps *inside* the pill instead, turning a
+       small chip into a bulky two-line block. Letting the badge flow to
+       its own full-width line (see .goa-match-winner's white-space:nowrap
+       + margin-left:auto below) keeps it a single clean line at every
+       width instead. */
+    flex-wrap: wrap;
+    row-gap: 0.3rem;
     border-bottom: 1px solid var(--border);
-    background: rgba(42, 39, 32, 0.4);
+    /* Solid, and lighter than .goa-match-card's own body (#2b2619) so the
+       bar still reads as sitting on top of the card, not blending into
+       it — see that rule's own comment for the full page/card/header
+       depth order. */
+    background: #342f24;
   }
 
   .goa-match-date {
@@ -2914,6 +2935,12 @@
     display: flex;
     align-items: center;
     gap: 0.35rem;
+    /* Never wraps its own text — either it fits next to the date on one
+       line, or (with .goa-match-header's own flex-wrap) it drops to its
+       own full-width line instead, where it has far more room and stays
+       right-aligned via the auto margin. */
+    white-space: nowrap;
+    margin-left: auto;
   }
 
   .goa-winner-badge {
@@ -2941,35 +2968,25 @@
     border: 1px solid rgba(187, 135, 40, 0.4);
   }
 
-  /* Narrow phones (e.g. Galaxy S8+ at 360px): the match number/date and the
-     victory-condition badge each wrapped to two lines on their own,
-     stacking the header four lines tall. Shrink both down and stop them
-     wrapping so match number, date, and victory condition all sit on one
-     line — the badge truncates with an ellipsis in the rare case it still
-     doesn't fit rather than wrapping or overflowing. */
+  /* Narrow phones (e.g. Galaxy S8+ at 360px): a little more headroom even
+     once the win badge has its own full-width line (see
+     .goa-match-header/.goa-match-winner above) — the ellipsis is just a
+     safety net for the rare case a long condition name still doesn't
+     fit, not the primary fix anymore. */
   @media (max-width: 380px) {
     .goa-match-header {
       padding: 0.45rem 0.6rem;
-      gap: 0.4rem;
+      column-gap: 0.4rem;
     }
     .goa-match-date {
-      font-size: 0.58rem;
-      white-space: nowrap;
-      flex-shrink: 0;
+      font-size: 0.62rem;
     }
     .goa-match-winner {
-      font-size: 0.6rem;
-      gap: 0.2rem;
-      min-width: 0;
-      flex-shrink: 1;
+      font-size: 0.62rem;
+      max-width: 100%;
+      overflow: hidden;
     }
     .goa-winner-badge {
-      font-size: 0.52rem;
-      letter-spacing: 0.02em;
-      padding: 0.15rem 0.35rem;
-      display: block;
-      max-width: 100%;
-      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
@@ -3240,6 +3257,29 @@
   .goa-team:first-child {
     border-bottom: 1px solid var(--border);
   }
+  /* Replaces the old separate "TITANS VICTORY BY LIFE COUNTER" badge in
+     the match card's header — the winning side's own panel is bordered
+     in its own team color instead, so which team won reads directly off
+     their half of the card. Inset box-shadow rather than a real border:
+     .goa-team has no border today and giving it one would shift every
+     player row over by the border width; an inset shadow paints inside
+     the existing padding box with no layout change. */
+  .goa-team.winner.atl {
+    box-shadow: inset 0 0 0 1.5px var(--atlantis-light);
+    background: rgba(122, 26, 42, 0.08);
+  }
+  .goa-team.winner.tit {
+    box-shadow: inset 0 0 0 1.5px var(--titans-light);
+    background: rgba(26, 107, 122, 0.08);
+  }
+
+  .goa-team-head-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.2rem;
+  }
 
   .goa-team-head {
     font-family: "Cinzel", serif;
@@ -3247,7 +3287,6 @@
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    margin-bottom: 0.2rem;
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -3258,6 +3297,34 @@
   }
   .goa-team-head.tit {
     color: var(--titans-light);
+  }
+
+  /* The win condition (or "DRAW"), right-aligned on the same row as the
+     team name it belongs to — see TeamPanel's own resultLabel comment.
+     A colored, bordered chip (in that team's own color, matching the
+     winning panel's own border) rather than plain muted text, so it
+     actually stands out as the result instead of reading like a caption. */
+  .goa-team-result {
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+  }
+  .goa-team.atl .goa-team-result {
+    color: var(--atlantis-light);
+    background: rgba(196, 42, 58, 0.18);
+    border: 1px solid rgba(196, 42, 58, 0.5);
+    text-shadow: 0 0 10px rgba(196, 42, 58, 0.5);
+  }
+  .goa-team.tit .goa-team-result {
+    color: var(--titans-light);
+    background: rgba(42, 171, 184, 0.18);
+    border: 1px solid rgba(42, 171, 184, 0.5);
+    text-shadow: 0 0 10px rgba(42, 171, 184, 0.5);
   }
 
   .goa-avg-mmr {

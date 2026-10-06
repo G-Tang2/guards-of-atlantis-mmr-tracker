@@ -20,6 +20,15 @@ type TeamPanelProps = {
   // not the match detail page (which already shows the specific badge
   // this match earned them, if any, next to their hero pick).
   showAllBadges?: boolean;
+  // Replaces the old standalone "TITANS VICTORY BY LIFE COUNTER" badge in
+  // the match card's own header (see app/matches/page.tsx) — the winning
+  // team's own panel gets a colored border instead of a separate banner,
+  // and resultLabel (e.g. "BY LIFE COUNTER", or "DRAW" on both panels for
+  // a draw) sits right-aligned on that same team's name row, so the
+  // result reads as part of the team it belongs to rather than a
+  // dedicated line that has to repeat which team won.
+  isWinner?: boolean;
+  resultLabel?: string;
 };
 
 export function TeamPanel({
@@ -30,10 +39,15 @@ export function TeamPanel({
   onSelectPlayer,
   showActionTime = false,
   showAllBadges = false,
+  isWinner = false,
+  resultLabel,
 }: TeamPanelProps) {
   return (
-    <div className="goa-team">
-      <span className={`goa-team-head ${labelClass}`}>{label}</span>
+    <div className={`goa-team ${labelClass}${isWinner ? " winner" : ""}`}>
+      <div className="goa-team-head-row">
+        <span className={`goa-team-head ${labelClass}`}>{label}</span>
+        {resultLabel && <span className="goa-team-result">{resultLabel}</span>}
+      </div>
       <div className="goa-avg-mmr">Avg {Math.round(avgMmr)} MMR</div>
       {players.map((p) => {
         const hero = getHero(p.hero_id);
