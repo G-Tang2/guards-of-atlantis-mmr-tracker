@@ -4,23 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
-import { calculateMMR, PlayerResult } from "@/lib/mmr";
+import { computeMatchOutcome } from "@/lib/matchRecording";
 import { HeroPicker } from "@/components/HeroPicker";
 import { Hero, HEROES } from "@/lib/heroes";
-import {
-  computeBountyHeroIds,
-  BOUNTY_MMR_BONUS,
-  ARCANE_BOUNTY_THRESHOLD,
-  WAYWARD_BOUNTY_MMR_BONUS,
-} from "@/lib/bounty";
-import { isRookie, ROOKIE_MMR_BONUS } from "@/lib/rookieBonus";
-import {
-  computeHeroWinBonus,
-  applyHeroWinBonus,
-  buildWonHeroesByPlayer,
-} from "@/lib/heroWinBonus";
-import { applyBadgeRewards, getOwnedBadgeIds } from "@/lib/badgeRewards";
-import { DraftMethod, didWin } from "@/lib/match";
+import { computeBountyHeroIds, ARCANE_BOUNTY_THRESHOLD } from "@/lib/bounty";
+import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
+import { getOwnedBadgeIds } from "@/lib/badgeRewards";
+import { DraftMethod } from "@/lib/match";
 import { TEAMS_DRAFT_STORAGE_KEY } from "@/lib/teamsDraft";
 import { TIMER_LOG_STORAGE_KEY } from "@/lib/timerLog";
 import {
@@ -285,7 +275,6 @@ function NewMatchPageInner() {
     try {
       const atlPlayers = atlantis.map((e) => e.player);
       const titPlayers = titans.map((e) => e.player);
-      const result = calculateMMR(atlPlayers, titPlayers, winner);
 
       const heroIdFor = (playerId: string, team: Team) =>
         (team === "atlantis" ? atlantis : titans).find(
@@ -293,11 +282,11 @@ function NewMatchPageInner() {
         )?.hero?.id ?? null;
 
       // Every participant's full hero-win history (not just this match's
-      // winners) — needed both for the existing first-hero-win/badge-
-      // completion bonus below AND for badge-reward eligibility (Arcane,
-      // Wayward, Devoted, Defiant, Renowned all key off badges owned
-      // BEFORE this match, which requires knowing every participant's
-      // wins regardless of whether they won this particular match).
+      // winners) — needed both for the first-hero-win/badge-completion
+      // bonus AND for badge-reward eligibility (Arcane, Wayward, Devoted,
+      // Defiant, Renowned all key off badges owned BEFORE this match,
+      // which requires knowing every participant's wins regardless of
+      // whether they won this particular match).
       const allParticipantIds = [
         ...atlantis.map((e) => e.player.id),
         ...titans.map((e) => e.player.id),
@@ -335,117 +324,29 @@ function NewMatchPageInner() {
         ARCANE_BOUNTY_THRESHOLD,
       );
 
-      const bountyBonusByPlayer = new Map<string, number>();
-      const applyBounty = (list: PlayerResult[], team: Team): PlayerResult[] =>
-        list.map((p) => {
-          const heroId = heroIdFor(p.id, team);
-          if (!heroId || winner === "none") return p;
-          const ownedBadges = ownedBadgesByPlayer.get(p.id);
-          const isBounty =
-            bountyHeroIds.has(heroId) ||
-            (ownedBadges?.has("arcane") && arcaneBountyHeroIds.has(heroId));
-          if (!isBounty) return p;
-          const bonusAmount = ownedBadges?.has("wayward")
-            ? WAYWARD_BOUNTY_MMR_BONUS
-            : BOUNTY_MMR_BONUS;
-          bountyBonusByPlayer.set(p.id, bonusAmount);
-          return {
-            ...p,
-            mmrChange: p.mmrChange + bonusAmount,
-            newMmr: p.newMmr + bonusAmount,
-          };
-        });
-
-      const atlantisResults = applyBounty(result.atlantis, "atlantis");
-      const titansResults = applyBounty(result.titans, "titans");
-
-      // First win with a hero grants a 30% MMR boost (on top of any bounty
-      // bonus already folded in above); if that win also completes a badge
-      // (a win with every hero in the badge), a flat +50 replaces the 30%
-      // boost rather than stacking with it. A draw isn't a win for either
-      // side, so it never grants this bonus and never advances hero/badge
-      // progress — see didWin in lib/match.ts.
-      const eligiblePlayers = [
-        ...atlantis.map((e) => ({ ...e, team: "atlantis" as Team })),
-        ...titans.map((e) => ({ ...e, team: "titans" as Team })),
-      ].filter((e) => e.hero && didWin(e.team, winner));
-
-      const newlyEarnedBadges: EarnedBadgeInfo[] = [];
-      const applyHeroBonus = (
-        list: PlayerResult[],
-        team: Team,
-      ): PlayerResult[] =>
-        list.map((p) => {
-          const entry = eligiblePlayers.find(
-            (e) => e.player.id === p.id && e.team === team,
-          );
-          const heroId = entry?.hero?.id;
-          if (!heroId) return p;
-
-          const bonus = computeHeroWinBonus(
-            heroId,
-            wonHeroesByPlayer.get(p.id) ?? new Set(),
-          );
-          if (!bonus) return p;
-
-          if (bonus.type === "badge") {
-            newlyEarnedBadges.push({
-              playerId: p.id,
-              playerName: p.name,
-              playerAvatar: entry?.player.avatar_url,
-              badge: bonus.badge,
-            });
-          }
-
-          const boostedChange = applyHeroWinBonus(p.mmrChange, bonus);
-          return {
-            ...p,
-            newMmr: p.newMmr + (boostedChange - p.mmrChange),
-            mmrChange: boostedChange,
-          };
-        });
-
-      const atlantisAfterHeroBonus = applyHeroBonus(atlantisResults, "atlantis");
-      const titansAfterHeroBonus = applyHeroBonus(titansResults, "titans");
-
-      // Renowned/Devoted/Defiant — must run last, after every other
-      // per-player adjustment, since Defiant is the only cross-team effect
-      // and needs to see everyone's otherwise-final numbers.
-      const badgeRewards = applyBadgeRewards(
-        atlantisAfterHeroBonus,
-        titansAfterHeroBonus,
-        winner,
-        ownedBadgesByPlayer,
+      const heroIdByPlayer = new Map<string, string | null>(
+        [...atlantis, ...titans].map((e) => [e.player.id, e.hero?.id ?? null]),
+      );
+      const rookieInputByPlayer = new Map(
+        [...atlPlayers, ...titPlayers].map((p) => [
+          p.id,
+          { matchesPlayedBefore: p.matches_played ?? 0, rookieEligible: p.rookie_eligible ?? false },
+        ]),
       );
 
-      // A genuinely new player (rookie_eligible — see
-      // supabase/migrations/0008_rookie_eligible_flag.sql; an existing
-      // player never qualifies, regardless of their own matches_played)
-      // still within their first ROOKIE_MATCH_THRESHOLD matches gets a
-      // flat MMR cushion, unaffected by any of the multiplicative bonuses
-      // above (first-hero-win, badge completion) — applied last so it's
-      // always exactly ROOKIE_MMR_BONUS, on top of whatever this match
-      // otherwise gave them, win, lose, or draw. Keyed off matches_played
-      // *before* this match (see the Player type/select("*") above).
-      const rookieBonusByPlayer = new Map<string, number>();
-      const applyRookieBonus = (
-        list: PlayerResult[],
-        team: Team,
-      ): PlayerResult[] =>
-        list.map((p) => {
-          const pool = team === "atlantis" ? atlPlayers : titPlayers;
-          const player = pool.find((x) => x.id === p.id);
-          if (!isRookie(player?.matches_played ?? 0, player?.rookie_eligible ?? false)) return p;
-          rookieBonusByPlayer.set(p.id, ROOKIE_MMR_BONUS);
-          return {
-            ...p,
-            mmrChange: p.mmrChange + ROOKIE_MMR_BONUS,
-            newMmr: p.newMmr + ROOKIE_MMR_BONUS,
-          };
-        });
+      const computed = computeMatchOutcome({
+        atlantis: atlPlayers.map((p) => ({ id: p.id, name: p.name, mmr: p.mmr, avatarUrl: p.avatar_url })),
+        titans: titPlayers.map((p) => ({ id: p.id, name: p.name, mmr: p.mmr, avatarUrl: p.avatar_url })),
+        winner,
+        heroIdByPlayer,
+        wonHeroesByPlayer,
+        ownedBadgesByPlayer,
+        bountyHeroIds,
+        arcaneBountyHeroIds,
+        rookieInputByPlayer,
+      });
 
-      const atlantisFinal = applyRookieBonus(badgeRewards.atlantis, "atlantis");
-      const titansFinal = applyRookieBonus(badgeRewards.titans, "titans");
+      const { atlantisFinal, titansFinal, bountyBonusByPlayer, rookieBonusByPlayer, newlyEarnedBadges, badgeBonusesByPlayer } = computed;
 
       const matchParticipantIds = new Set([
         ...atlantisFinal.map((p) => p.id),
@@ -481,11 +382,11 @@ function NewMatchPageInner() {
         .insert({
           winner,
           win_condition: winCondition,
-          atlantis_avg_mmr: result.meta.atlantisAvg,
-          titans_avg_mmr: result.meta.titansAvg,
-          atlantis_mmr_change: result.meta.atlantisDelta,
-          titans_mmr_change: result.meta.titansDelta,
-          expected_atlantis_win: result.meta.expectedA,
+          atlantis_avg_mmr: computed.meta.atlantisAvg,
+          titans_avg_mmr: computed.meta.titansAvg,
+          atlantis_mmr_change: computed.meta.atlantisDelta,
+          titans_mmr_change: computed.meta.titansDelta,
+          expected_atlantis_win: computed.meta.expectedA,
           draft_method: draftMethod,
           ranked_balance_result: rankedBalanceResult,
           starting_wave_counter: startingWaveCounter
@@ -533,7 +434,7 @@ function NewMatchPageInner() {
       const matchPlayers = [
         ...atlantisFinal.map((p) => {
           const heroId = heroIdFor(p.id, "atlantis");
-          const bonuses = badgeRewards.bonuses.get(p.id);
+          const bonuses = badgeBonusesByPlayer.get(p.id);
           return {
             match_id: match.id,
             match_number: newMatchNumber,
@@ -553,7 +454,7 @@ function NewMatchPageInner() {
         }),
         ...titansFinal.map((p) => {
           const heroId = heroIdFor(p.id, "titans");
-          const bonuses = badgeRewards.bonuses.get(p.id);
+          const bonuses = badgeBonusesByPlayer.get(p.id);
           return {
             match_id: match.id,
             match_number: newMatchNumber,

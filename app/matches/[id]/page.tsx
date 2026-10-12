@@ -15,7 +15,7 @@ import {
   Team,
   WinCondition,
 } from "@/lib/match";
-import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Ban } from "lucide-react";
+import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Ban, Pencil, X } from "lucide-react";
 import { RankedBalanceResult, RankedBalanceResultPlayer } from "@/lib/rankedBalanceResult";
 import { OptionCard } from "@/components/RankedVoteUI";
 import { VoteSessionPlayer } from "@/lib/rankedVoteSession";
@@ -25,12 +25,21 @@ import {
   buildBadgeCompletionMap,
   getBadgeEarnedInMatch,
   buildCompletedBadgesMap,
+  buildWonHeroesByPlayer,
 } from "@/lib/heroWinBonus";
 import { Badge } from "@/lib/badges";
 import { sharedAuthHeaders } from "@/lib/apiAuth";
 import { renderSimpleMarkdown } from "@/lib/simpleMarkdown";
 import { CardReference, findMentionedCards } from "@/lib/heroCardContext";
 import { CardDetailModal } from "@/components/CardDetail";
+import { PasswordGate } from "@/components/PasswordGate";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { HeroPicker } from "@/components/HeroPicker";
+import { Hero, HEROES } from "@/lib/heroes";
+import { computeBountyHeroIds, ARCANE_BOUNTY_THRESHOLD } from "@/lib/bounty";
+import { getOwnedBadgeIds } from "@/lib/badgeRewards";
+import { computeMatchOutcome, RosterPlayer } from "@/lib/matchRecording";
+import { BadgeEarnedOverlay, EarnedBadgeInfo } from "@/components/BadgeEarnedOverlay";
 
 type Match = {
   id: string;
@@ -397,6 +406,29 @@ export default function MatchDetailPage() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardReference | null>(null);
 
+  // Editing is only ever offered for the single most-recently-recorded
+  // match in the whole archive — see the edit section's own comment for
+  // why that scope is what keeps a correction safe to apply directly
+  // (no cascading recompute of anything after it, since nothing is).
+  const [latestMatchNumber, setLatestMatchNumber] = useState<number | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editWinner, setEditWinner] = useState<Team | "">("");
+  const [editWinCondition, setEditWinCondition] = useState<WinCondition | null>(null);
+  const [editHeroByPlayer, setEditHeroByPlayer] = useState<Record<string, Hero | null>>({});
+  const [earnedBadges, setEarnedBadges] = useState<EarnedBadgeInfo[]>([]);
+
+  useEffect(() => {
+    supabaseClient
+      .from("matches")
+      .select("match_number")
+      .order("match_number", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => setLatestMatchNumber(data?.match_number ?? null));
+  }, []);
+
   useEffect(() => {
     if (!matchId) return;
 
@@ -456,6 +488,183 @@ export default function MatchDetailPage() {
 
   const goToProfile = (id: string) => router.push(`/players/${id}`);
 
+  const isLatestMatch = !!match && match.match_number === latestMatchNumber;
+
+  const startEdit = () => {
+    if (!match) return;
+    setEditWinner(match.winner);
+    setEditWinCondition(match.win_condition);
+    const heroMap: Record<string, Hero | null> = {};
+    match.match_players.forEach((p) => {
+      heroMap[p.player_id] = p.hero_id ? HEROES.find((h) => h.id === p.hero_id) ?? null : null;
+    });
+    setEditHeroByPlayer(heroMap);
+    setEditError(null);
+    setEditMode(true);
+  };
+
+  // Every hero already assigned to a *different* participant in the edit
+  // form, so HeroPicker can hide it the same way the original recording
+  // form does — a hero can only be played by one player per match.
+  const otherEditAssignedHeroIds = (playerId: string): string[] =>
+    Object.entries(editHeroByPlayer)
+      .filter(([id, hero]) => id !== playerId && hero)
+      .map(([, hero]) => hero!.id);
+
+  // Recomputes this match's result through the exact same pipeline a
+  // fresh recording uses (see lib/matchRecording.ts) and overwrites it in
+  // place — safe only because this is the single latest match in the
+  // whole archive (enforced by isLatestMatch/the Edit button's own
+  // guard): nothing recorded after it depends on its numbers, so there's
+  // no cascade to replay. "Before this match" context (hero-win history,
+  // bounty eligibility, matches played) is rebuilt by excluding this
+  // match's own rows from the same queries a fresh recording would run —
+  // this match already exists in the DB, unlike a genuinely new one.
+  const handleSaveEdit = async () => {
+    if (!match || !editWinner || editSaving) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const pickedHeroIds = Object.values(editHeroByPlayer)
+        .filter((h): h is Hero => !!h)
+        .map((h) => h.id);
+      if (new Set(pickedHeroIds).size !== pickedHeroIds.length) {
+        throw new Error("The same hero can't be assigned to two players.");
+      }
+
+      const allParticipantIds = match.match_players.map((p) => p.player_id);
+
+      const [{ data: heroHistory }, { data: priorMatches }, { data: participantRows }] = await Promise.all([
+        supabaseClient
+          .from("match_players")
+          .select("player_id, hero_id, team, match_number, matches!inner(winner)")
+          .in("player_id", allParticipantIds)
+          .not("hero_id", "is", null)
+          .neq("match_id", match.id),
+        supabaseClient
+          .from("matches")
+          .select("id, match_number, winner, match_players ( hero_id )")
+          .neq("id", match.id)
+          .order("created_at", { ascending: false }),
+        supabaseClient.from("players").select("id, matches_played, rookie_eligible").in("id", allParticipantIds),
+      ]);
+
+      const wonHeroesByPlayer = buildWonHeroesByPlayer(heroHistory ?? []);
+      const ownedBadgesByPlayer = new Map<string, Set<string>>(
+        allParticipantIds.map((id) => [id, getOwnedBadgeIds(wonHeroesByPlayer.get(id) ?? new Set())]),
+      );
+      const allHeroIds = HEROES.map((h) => h.id);
+      const bountyHeroIds = computeBountyHeroIds(priorMatches ?? [], allHeroIds);
+      const arcaneBountyHeroIds = computeBountyHeroIds(priorMatches ?? [], allHeroIds, ARCANE_BOUNTY_THRESHOLD);
+      const heroIdByPlayer = new Map<string, string | null>(
+        match.match_players.map((p) => [p.player_id, editHeroByPlayer[p.player_id]?.id ?? null]),
+      );
+      // This is each participant's latest match, so their matches_played
+      // already includes it — "before" is one less.
+      const rookieInputByPlayer = new Map(
+        (participantRows ?? []).map((p) => [
+          p.id,
+          { matchesPlayedBefore: Math.max(0, (p.matches_played ?? 1) - 1), rookieEligible: p.rookie_eligible ?? false },
+        ]),
+      );
+
+      const toRoster = (list: MatchPlayer[]): RosterPlayer[] =>
+        list.map((p) => ({ id: p.player_id, name: p.players.name, mmr: p.mmr_before, avatarUrl: p.players.avatar_url }));
+
+      const computed = computeMatchOutcome({
+        atlantis: toRoster(match.match_players.filter((p) => p.team === "atlantis")),
+        titans: toRoster(match.match_players.filter((p) => p.team === "titans")),
+        winner: editWinner,
+        heroIdByPlayer,
+        wonHeroesByPlayer,
+        ownedBadgesByPlayer,
+        bountyHeroIds,
+        arcaneBountyHeroIds,
+        rookieInputByPlayer,
+      });
+
+      const { error: matchError } = await supabaseClient
+        .from("matches")
+        .update({
+          winner: editWinner,
+          win_condition: editWinner === "none" ? null : editWinCondition,
+          atlantis_mmr_change: computed.meta.atlantisDelta,
+          titans_mmr_change: computed.meta.titansDelta,
+          expected_atlantis_win: computed.meta.expectedA,
+        })
+        .eq("id", match.id);
+      if (matchError) throw matchError;
+
+      const allFinal = [...computed.atlantisFinal, ...computed.titansFinal];
+      const mpUpdateError = (
+        await Promise.all(
+          allFinal.map((p) => {
+            const bonuses = computed.badgeBonusesByPlayer.get(p.id);
+            return supabaseClient
+              .from("match_players")
+              .update({
+                hero_id: heroIdByPlayer.get(p.id) ?? null,
+                mmr_after: Math.round(p.newMmr),
+                is_bounty: computed.bountyBonusByPlayer.has(p.id),
+                bounty_bonus: computed.bountyBonusByPlayer.get(p.id) ?? null,
+                devoted_bonus: bonuses?.devoted ?? null,
+                renowned_bonus: bonuses?.renowned ?? null,
+                defiant_bonus: bonuses?.defiant ?? null,
+                rookie_bonus: computed.rookieBonusByPlayer.get(p.id) ?? null,
+              })
+              .eq("match_id", match.id)
+              .eq("player_id", p.id);
+          }),
+        )
+      ).find((r) => r.error)?.error;
+      if (mpUpdateError) throw mpUpdateError;
+
+      // Propagate each participant's corrected MMR to their *current*
+      // mmr — safe because this is their latest match (nothing later has
+      // happened for them since).
+      await Promise.all(
+        allFinal.map((p) => supabaseClient.from("players").update({ mmr: Math.round(p.newMmr) }).eq("id", p.id)),
+      );
+
+      // Resync every player's rank to a plain descending-mmr order —
+      // same "fresh baseline" approach supabase/migrations/0009_resync_ranks.sql
+      // already established for a correction like this, rather than
+      // replaying the full protected-rank/overtake algorithm a second
+      // time outside the one place (a fresh recording) it's meant for.
+      const { data: allPlayers } = await supabaseClient.from("players").select("id, mmr, rank, name");
+      if (allPlayers) {
+        const ordered = [...allPlayers].sort((a, b) => {
+          if (b.mmr !== a.mmr) return b.mmr - a.mmr;
+          const rankA = a.rank ?? Number.MAX_SAFE_INTEGER;
+          const rankB = b.rank ?? Number.MAX_SAFE_INTEGER;
+          if (rankA !== rankB) return rankA - rankB;
+          return a.name.localeCompare(b.name);
+        });
+        await supabaseClient
+          .from("players")
+          .update({ rank: null })
+          .in("id", ordered.map((p) => p.id));
+        await Promise.all(
+          ordered.map((p, idx) => supabaseClient.from("players").update({ rank: idx + 1 }).eq("id", p.id)),
+        );
+      }
+
+      const { data: refreshed } = await supabaseClient
+        .from("matches")
+        .select(MATCH_SELECT)
+        .eq("id", match.id)
+        .single();
+      if (refreshed) setMatch(normalizeMatch(refreshed as unknown as RawMatch));
+
+      setEditMode(false);
+      if (computed.newlyEarnedBadges.length > 0) setEarnedBadges(computed.newlyEarnedBadges);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to save changes. Try again.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const generateDraftAnalysis = async (regenerate: boolean) => {
     if (!matchId || analysisLoading) return;
     setAnalysisLoading(true);
@@ -501,6 +710,146 @@ export default function MatchDetailPage() {
           <p>Battle not found</p>
         </div>
       </main>
+    );
+  }
+
+  // Editing is its own full screen (rather than an inline panel on the
+  // normal view) so it can sit behind PasswordGate the same way
+  // /matches/new does — only someone who knows the shared password ever
+  // sees the form itself, not just a disabled "Edit" button.
+  if (editMode) {
+    const winConditionOptions: { value: WinCondition; label: string }[] = [
+      { value: WinCondition.THRONE, label: "Throne" },
+      { value: WinCondition.LAST_PUSH, label: "Last Push" },
+      { value: WinCondition.LIFE_COUNTER, label: "Life Counter" },
+    ];
+    return (
+      <PasswordGate>
+        <main className="goa-root goa-bg">
+          <header className="goa-header">
+            <h1 className="goa-title">Edit Battle #{match.match_number}</h1>
+            <p className="goa-subtitle">Guards of Atlantis II</p>
+          </header>
+
+          {(
+            [
+              ["atlantis", "Atlantis", "atlantis-header"],
+              ["titans", "Titans", "titans-header"],
+            ] as const
+          ).map(([team, label, headerClass]) => (
+            <div className="goa-section" key={team}>
+              <div className={`goa-section-header ${headerClass}`}>
+                <h2 className="goa-section-title">{label}</h2>
+              </div>
+              <div className="goa-players">
+                {match.match_players
+                  .filter((p) => p.team === team)
+                  .map((p) => (
+                    <div key={p.player_id} className="goa-player-block">
+                      <div className="goa-player-row">
+                        <span className="goa-player-name">
+                          <PlayerAvatar avatarUrl={p.players.avatar_url} name={p.players.name} size={22} />
+                          {p.players.name}
+                        </span>
+                      </div>
+                      <HeroPicker
+                        selected={editHeroByPlayer[p.player_id] ?? null}
+                        onSelect={(h) =>
+                          setEditHeroByPlayer((prev) => ({ ...prev, [p.player_id]: h }))
+                        }
+                        excludeHeroIds={otherEditAssignedHeroIds(p.player_id)}
+                      />
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
+
+          <p className="winner-label">Declare the victor</p>
+          <div className="goa-winner-section">
+            <button
+              type="button"
+              className={`goa-faction-btn goa-faction-btn-a ${editWinner === "atlantis" ? "selected" : ""}`}
+              onClick={() => setEditWinner(editWinner === "atlantis" ? "" : "atlantis")}
+            >
+              <span className="goa-faction-label">Atlantis</span>
+            </button>
+            <button
+              type="button"
+              className={`goa-faction-btn goa-faction-btn-t ${editWinner === "titans" ? "selected" : ""}`}
+              onClick={() => setEditWinner(editWinner === "titans" ? "" : "titans")}
+            >
+              <span className="goa-faction-label">Titans</span>
+            </button>
+            <button
+              type="button"
+              className={`goa-faction-btn goa-faction-btn-d ${editWinner === "none" ? "selected" : ""}`}
+              onClick={() => {
+                setEditWinner(editWinner === "none" ? "" : "none");
+                setEditWinCondition(null);
+              }}
+            >
+              <span className="goa-faction-label">Draw</span>
+            </button>
+          </div>
+
+          <p className="winner-label">Victory Condition</p>
+          <div className="goa-win-condition-section">
+            {winConditionOptions.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                disabled={editWinner === "none"}
+                className={`goa-win-condition-btn ${editWinCondition === value ? "selected" : ""}`}
+                onClick={() => setEditWinCondition(editWinCondition === value ? null : value)}
+              >
+                <span className="goa-faction-label">{label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="goa-divider" />
+
+          {editError && (
+            <p className="goa-password-gate-error" style={{ textAlign: "center" }}>
+              {editError}
+            </p>
+          )}
+
+          <div className="goa-btn-wrap">
+            <button
+              type="button"
+              className="goa-btn inline-flex items-center justify-center gap-2"
+              onClick={handleSaveEdit}
+              disabled={!editWinner || editSaving}
+            >
+              {editSaving ? (
+                "✦ Saving…"
+              ) : (
+                <>
+                  <Pencil size={18} />
+                  Save Changes
+                </>
+              )}
+            </button>
+          </div>
+          <div className="goa-btn-wrap">
+            <button
+              type="button"
+              className="goa-btn outline inline-flex items-center justify-center gap-2"
+              onClick={() => setEditMode(false)}
+              disabled={editSaving}
+            >
+              <X size={18} />
+              Cancel
+            </button>
+          </div>
+
+          {earnedBadges.length > 0 && (
+            <BadgeEarnedOverlay badges={earnedBadges} onDone={() => setEarnedBadges([])} />
+          )}
+        </main>
+      </PasswordGate>
     );
   }
 
@@ -595,6 +944,22 @@ export default function MatchDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Only the single most-recently-recorded match in the whole
+          archive is ever editable — see startEdit/handleSaveEdit's own
+          comment for why editing anything earlier isn't offered here. */}
+      {isLatestMatch && (
+        <div className="goa-btn-wrap">
+          <button
+            type="button"
+            className="goa-btn outline sm inline-flex items-center justify-center gap-2"
+            onClick={startEdit}
+          >
+            <Pencil size={14} />
+            Edit This Battle
+          </button>
+        </div>
+      )}
 
       {/* Pre-Match — everything known/decided before the battle started:
           how teams were built, the starting counters, and the Elo odds. */}
