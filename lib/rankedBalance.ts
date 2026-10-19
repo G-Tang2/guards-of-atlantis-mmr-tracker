@@ -28,6 +28,7 @@ const SKILL_RANK_POINTS: Record<string, number> = {
   dave: 4,
   vincent: 4,
   jenny: 4,
+  jason: 3,
   stella: 2,
 };
 
