@@ -34,7 +34,7 @@ import {
 } from "@/lib/rankedVoteSession";
 import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
-import { Star, Crown, ScrollText, Swords, Ban, Share2, CheckCircle2 } from "lucide-react";
+import { Star, Crown, ScrollText, Swords, Ban, Share2, CheckCircle2, ChevronDown } from "lucide-react";
 
 type Player = VoteSessionPlayer;
 
@@ -272,12 +272,32 @@ function TeamsVotePageInner() {
   }, [session?.id]);
 
   // Plays the tie-break flourish exactly once, only for a transition this
-  // device actually witnessed live (see revealPhase's own comment).
+  // device actually witnessed live (see revealPhase's own comment) — and,
+  // sharing the same "did this device just watch the stage change" check,
+  // auto-advances straight past the ban round's own results the instant
+  // they're in, instead of waiting on a host tap. Whichever device's tap
+  // happened to be the one that settled the ban tally only ever flips
+  // `stage` to "ban_results" for a moment — this is what carries it the
+  // rest of the way to the choose round (or straight to "results" if
+  // banning left only one option — see continueAfterBanDb). Guarded to
+  // the host's own page (the only place this effect runs) since
+  // continueAfterBan is a host-only transition, same as
+  // startBanRound/skipBanRound elsewhere in this file — a remote
+  // voter's device just watches whatever stage arrives next over
+  // realtime, same as always.
   useEffect(() => {
     if (!session) return;
     const cameFromElsewhere = prevStageRef.current !== session.stage;
     prevStageRef.current = session.stage;
     if (!cameFromElsewhere) return;
+
+    if (session.stage === "ban_results") {
+      continueAfterBanDb(session).then((updated) => {
+        if (updated) setSession(updated);
+      });
+      return;
+    }
+
     if (session.stage !== "results" || session.tied_indices.length <= 1) return;
 
     setRevealPhase("revealing");
@@ -382,12 +402,6 @@ function TeamsVotePageInner() {
     if (updated) setSession(updated);
   };
 
-  const continueAfterBan = async () => {
-    if (!session) return;
-    const updated = await continueAfterBanDb(session);
-    if (updated) setSession(updated);
-  };
-
   const finish = () => {
     if (!session || session.winner_index === null) return;
     const winner = session.splits[session.winner_index];
@@ -482,6 +496,41 @@ function TeamsVotePageInner() {
     !session.skipped_voting &&
     !session.choose_round_skipped &&
     session.votes_cast < session.total_votes;
+
+  // The ban round's own results used to be a dedicated stage the host had
+  // to tap past (see continueAfterBanDb's own auto-trigger above for why
+  // that stage is now just a momentary transition, not a screen) — this
+  // keeps the one thing worth keeping from it, the ban vote counts,
+  // visible as a collapsed aside instead. Shown wherever the ballot
+  // (normal case) or results (only one option survived banning) ends up
+  // afterward, since either is reachable from here.
+  const bannedOptionsSummary = session.wants_ban && session.banned_indices.length > 0 && (
+    <details className="goa-section">
+      <summary className="goa-sec-head clickable goa-ranked-result-summary">
+        <Ban size={13} />
+        {session.banned_indices.length} Option{session.banned_indices.length === 1 ? "" : "s"} Banned
+        <ChevronDown size={14} className="goa-ranked-result-chevron" />
+      </summary>
+      <div className="draft-body">
+        <div className="goa-vote-options">
+          {session.banned_indices.map((i) => (
+            <OptionCard
+              key={i}
+              index={i}
+              split={session.splits[i]}
+              className="ranked-option banned"
+              banned
+              headExtra={
+                <span className="vote-results-count">
+                  {session.ban_votes[i]} of {session.total_votes} ban votes
+                </span>
+              }
+            />
+          ))}
+        </div>
+      </div>
+    </details>
+  );
 
   return (
     <main
@@ -599,47 +648,15 @@ function TeamsVotePageInner() {
 
       {stage === "ban_results" && (
         <div className="goa-card">
-          <div className="goa-card-head">
-            <Ban size={16} /> Options Banned
-          </div>
           <div className="draft-body">
-            <p className="draft-note">
-              These {session.banned_indices.length} option(s) got the most
-              votes to ban and are out of the running.
-            </p>
-            <div className="goa-vote-options">
-              {sortBannedLast(session.splits, session.banned_indices).map((i) => (
-                <OptionCard
-                  key={i}
-                  index={i}
-                  split={session.splits[i]}
-                  className={`ranked-option${
-                    session.banned_indices.includes(i) ? " banned" : ""
-                  }`}
-                  banned={session.banned_indices.includes(i)}
-                  headExtra={
-                    <span className="vote-results-count">
-                      {session.ban_votes[i]} of {session.total_votes} ban votes
-                    </span>
-                  }
-                />
-              ))}
-            </div>
-            <div className="goa-btn-wrap" style={{ margin: 0 }}>
-              <button
-                className="goa-btn inline-flex items-center justify-center gap-2"
-                onClick={continueAfterBan}
-              >
-                <Swords size={18} />
-                Continue
-              </button>
-            </div>
+            <p className="draft-note">Tallying ban votes…</p>
           </div>
         </div>
       )}
 
       {stage === "ballot" && (
         <div className="goa-vote-live-body">
+          {bannedOptionsSummary}
           <div className="goa-vote-ballot-head">
             <span className="goa-vote-ballot-title">
               <Crown size={14} /> Cast Your Vote
@@ -697,10 +714,12 @@ function TeamsVotePageInner() {
       )}
 
       {stage === "results" && !showingTieReveal && session.winner_index !== null && (
-        <div className="goa-card">
-          <div className="goa-card-head">
-            <Crown size={16} /> Winning Split
-          </div>
+        <>
+          {bannedOptionsSummary}
+          <div className="goa-card">
+            <div className="goa-card-head">
+              <Crown size={16} /> Winning Split
+            </div>
           <div className="draft-body">
             {session.skipped_voting ? (
               <p className="draft-note">
@@ -750,7 +769,8 @@ function TeamsVotePageInner() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </>
       )}
 
       {voteConfirmVisible && (

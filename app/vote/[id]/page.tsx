@@ -27,7 +27,7 @@ import {
   undoChooseVote,
   settleChooseIfComplete,
 } from "@/lib/rankedVoteSession";
-import { Star, Crown, ScrollText, Ban, CheckCircle2, Users } from "lucide-react";
+import { Star, Crown, ScrollText, Ban, CheckCircle2, Users, ChevronDown } from "lucide-react";
 
 const identityKey = (sessionId: string) => `goa-vote-identity-${sessionId}`;
 
@@ -241,6 +241,41 @@ export default function RemoteVotePage() {
   const isLiveStage =
     session.stage === "setup" || session.stage === "ban_ballot" || session.stage === "ballot";
 
+  // The ban round's own results used to be a dedicated stage with its own
+  // "waiting for the host to continue" message — the host's own page now
+  // advances past it on its own (see continueAfterBanDb's auto-trigger
+  // there), so this keeps the one thing worth keeping from it, the ban
+  // vote counts, visible as a collapsed aside instead. Shown wherever the
+  // ballot (normal case) or results (only one option survived banning)
+  // ends up afterward, since either is reachable from here.
+  const bannedOptionsSummary = session.wants_ban && session.banned_indices.length > 0 && (
+    <details className="goa-section">
+      <summary className="goa-sec-head clickable goa-ranked-result-summary">
+        <Ban size={13} />
+        {session.banned_indices.length} Option{session.banned_indices.length === 1 ? "" : "s"} Banned
+        <ChevronDown size={14} className="goa-ranked-result-chevron" />
+      </summary>
+      <div className="draft-body">
+        <div className="goa-vote-options">
+          {session.banned_indices.map((i) => (
+            <OptionCard
+              key={i}
+              index={i}
+              split={session.splits[i]}
+              className="ranked-option banned"
+              banned
+              headExtra={
+                <span className="vote-results-count">
+                  {session.ban_votes[i]} of {session.total_votes} ban votes
+                </span>
+              }
+            />
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+
   return (
     <main className={`goa-root goa-vote-page${isLiveStage ? " goa-vote-live" : ""}`}>
       <header className="goa-header">
@@ -388,38 +423,15 @@ export default function RemoteVotePage() {
 
       {voter && session.stage === "ban_results" && (
         <div className="goa-card">
-          <div className="goa-card-head">
-            <Ban size={16} /> Options Banned
-          </div>
           <div className="draft-body">
-            <p className="draft-note">
-              These {session.banned_indices.length} option(s) got the most
-              votes to ban. Waiting for the host to continue…
-            </p>
-            <div className="goa-vote-options">
-              {sortBannedLast(session.splits, session.banned_indices).map((i) => (
-                <OptionCard
-                  key={i}
-                  index={i}
-                  split={session.splits[i]}
-                  className={`ranked-option${
-                    session.banned_indices.includes(i) ? " banned" : ""
-                  }`}
-                  banned={session.banned_indices.includes(i)}
-                  headExtra={
-                    <span className="vote-results-count">
-                      {session.ban_votes[i]} of {session.total_votes} ban votes
-                    </span>
-                  }
-                />
-              ))}
-            </div>
+            <p className="draft-note">Tallying ban votes…</p>
           </div>
         </div>
       )}
 
       {voter && session.stage === "ballot" && (
         <div className="goa-vote-live-body">
+          {bannedOptionsSummary}
           <div className="goa-vote-ballot-head">
             <span className="goa-vote-ballot-title">
               <Crown size={14} /> Cast Your Vote
@@ -493,39 +505,42 @@ export default function RemoteVotePage() {
       )}
 
       {session.stage === "results" && session.winner_index !== null && (
-        <div className="goa-card">
-          <div className="goa-card-head">
-            <Crown size={16} /> Winning Split
-          </div>
-          <div className="draft-body">
-            <p className="draft-note">
-              <CheckCircle2 size={14} className="inline-block align-text-bottom" />{" "}
-              Thanks for voting! Here's the result.
-            </p>
-            <div className="goa-vote-options">
-              {sortBannedLast(session.splits, session.banned_indices).map((i) => (
-                <OptionCard
-                  key={i}
-                  index={i}
-                  split={session.splits[i]}
-                  className={`ranked-option${
-                    i === session.winner_index ? " winner" : ""
-                  }${session.banned_indices.includes(i) ? " banned" : ""}`}
-                  banned={session.banned_indices.includes(i)}
-                  headExtra={
-                    !session.skipped_voting &&
-                    !session.banned_indices.includes(i) &&
-                    !session.choose_round_skipped ? (
-                      <span className="vote-results-count">
-                        {session.votes[i]} of {session.total_votes} votes
-                      </span>
-                    ) : undefined
-                  }
-                />
-              ))}
+        <>
+          {bannedOptionsSummary}
+          <div className="goa-card">
+            <div className="goa-card-head">
+              <Crown size={16} /> Winning Split
+            </div>
+            <div className="draft-body">
+              <p className="draft-note">
+                <CheckCircle2 size={14} className="inline-block align-text-bottom" />{" "}
+                Thanks for voting! Here's the result.
+              </p>
+              <div className="goa-vote-options">
+                {sortBannedLast(session.splits, session.banned_indices).map((i) => (
+                  <OptionCard
+                    key={i}
+                    index={i}
+                    split={session.splits[i]}
+                    className={`ranked-option${
+                      i === session.winner_index ? " winner" : ""
+                    }${session.banned_indices.includes(i) ? " banned" : ""}`}
+                    banned={session.banned_indices.includes(i)}
+                    headExtra={
+                      !session.skipped_voting &&
+                      !session.banned_indices.includes(i) &&
+                      !session.choose_round_skipped ? (
+                        <span className="vote-results-count">
+                          {session.votes[i]} of {session.total_votes} votes
+                        </span>
+                      ) : undefined
+                    }
+                  />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {voteConfirmVisible && (
