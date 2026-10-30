@@ -15,7 +15,7 @@ import {
   Team,
   WinCondition,
 } from "@/lib/match";
-import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Ban, Pencil, X } from "lucide-react";
+import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Ban, Pencil, X, Trash2 } from "lucide-react";
 import { RankedBalanceResult, RankedBalanceResultPlayer } from "@/lib/rankedBalanceResult";
 import { OptionCard } from "@/components/RankedVoteUI";
 import { VoteSessionPlayer } from "@/lib/rankedVoteSession";
@@ -418,6 +418,7 @@ export default function MatchDetailPage() {
   const [editWinCondition, setEditWinCondition] = useState<WinCondition | null>(null);
   const [editHeroByPlayer, setEditHeroByPlayer] = useState<Record<string, Hero | null>>({});
   const [earnedBadges, setEarnedBadges] = useState<EarnedBadgeInfo[]>([]);
+  const [deleteSaving, setDeleteSaving] = useState(false);
 
   useEffect(() => {
     supabaseClient
@@ -665,6 +666,99 @@ export default function MatchDetailPage() {
     }
   };
 
+  // Reverses this match's own effect on every participant and removes it
+  // entirely — safe only because it's the single latest match (same
+  // isLatestMatch guard as editing): mmr_before and each participant's
+  // current state are exactly what they'd be if this match had never
+  // happened, so there's nothing later to recompute. The actual row
+  // delete relies on the trigger fixed in
+  // supabase/migrations/0015_fix_match_delete_trigger.sql to keep
+  // match_number dense afterward — that trigger only closes the *gap*,
+  // though, so last_played_match_number for this match's own
+  // participants (which still points at the now-deleted match) is
+  // restored here first, to whichever match is next-most-recent for them.
+  const handleDeleteMatch = async () => {
+    if (!match || !isLatestMatch || deleteSaving || editSaving) return;
+    if (
+      !window.confirm(
+        `Delete Battle #${match.match_number}? This reverses its effect on every participant's MMR and cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeleteSaving(true);
+    setEditError(null);
+    try {
+      const participantIds = match.match_players.map((p) => p.player_id);
+
+      const [{ data: priorOwnMatches }, { data: participantRows }] = await Promise.all([
+        supabaseClient
+          .from("match_players")
+          .select("player_id, match_number")
+          .in("player_id", participantIds)
+          .neq("match_id", match.id)
+          .order("match_number", { ascending: false }),
+        supabaseClient.from("players").select("id, matches_played").in("id", participantIds),
+      ]);
+
+      const previousMatchByPlayer = new Map<string, number>();
+      (priorOwnMatches ?? []).forEach((row) => {
+        if (!previousMatchByPlayer.has(row.player_id)) {
+          previousMatchByPlayer.set(row.player_id, row.match_number);
+        }
+      });
+      const matchesPlayedByPlayer = new Map((participantRows ?? []).map((p) => [p.id, p.matches_played ?? 0]));
+
+      await Promise.all(
+        match.match_players.map((p) =>
+          supabaseClient
+            .from("players")
+            .update({
+              mmr: p.mmr_before,
+              matches_played: Math.max(0, (matchesPlayedByPlayer.get(p.player_id) ?? 1) - 1),
+              last_played_match_number: previousMatchByPlayer.get(p.player_id) ?? 0,
+            })
+            .eq("id", p.player_id),
+        ),
+      );
+
+      // Same plain descending-mmr rank resync as editing — see
+      // handleSaveEdit's own comment for why this is preferred over
+      // replaying the protected-rank/overtake algorithm a second time.
+      const { data: allPlayers } = await supabaseClient.from("players").select("id, mmr, rank, name");
+      if (allPlayers) {
+        const ordered = [...allPlayers].sort((a, b) => {
+          if (b.mmr !== a.mmr) return b.mmr - a.mmr;
+          const rankA = a.rank ?? Number.MAX_SAFE_INTEGER;
+          const rankB = b.rank ?? Number.MAX_SAFE_INTEGER;
+          if (rankA !== rankB) return rankA - rankB;
+          return a.name.localeCompare(b.name);
+        });
+        await supabaseClient
+          .from("players")
+          .update({ rank: null })
+          .in("id", ordered.map((p) => p.id));
+        await Promise.all(
+          ordered.map((p, idx) => supabaseClient.from("players").update({ rank: idx + 1 }).eq("id", p.id)),
+        );
+      }
+
+      const { error: mpDeleteError } = await supabaseClient
+        .from("match_players")
+        .delete()
+        .eq("match_id", match.id);
+      if (mpDeleteError) throw mpDeleteError;
+
+      const { error: matchDeleteError } = await supabaseClient.from("matches").delete().eq("id", match.id);
+      if (matchDeleteError) throw matchDeleteError;
+
+      router.replace("/matches");
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to delete this battle. Try again.");
+      setDeleteSaving(false);
+    }
+  };
+
   const generateDraftAnalysis = async (regenerate: boolean) => {
     if (!matchId || analysisLoading) return;
     setAnalysisLoading(true);
@@ -838,10 +932,30 @@ export default function MatchDetailPage() {
               type="button"
               className="goa-btn outline inline-flex items-center justify-center gap-2"
               onClick={() => setEditMode(false)}
-              disabled={editSaving}
+              disabled={editSaving || deleteSaving}
             >
               <X size={18} />
               Cancel
+            </button>
+          </div>
+
+          <div className="goa-divider" />
+
+          <div className="goa-btn-wrap">
+            <button
+              type="button"
+              className="goa-btn danger inline-flex items-center justify-center gap-2"
+              onClick={handleDeleteMatch}
+              disabled={editSaving || deleteSaving}
+            >
+              {deleteSaving ? (
+                "✦ Deleting…"
+              ) : (
+                <>
+                  <Trash2 size={18} />
+                  Delete This Battle
+                </>
+              )}
             </button>
           </div>
 
