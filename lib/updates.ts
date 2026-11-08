@@ -21,6 +21,24 @@ export type UpdateEntry = {
 
 export const UPDATES: UpdateEntry[] = [
   {
+    date: "Nov 8",
+    title: "Chronicles & Legends",
+    summary: "Two new tabs on the leaderboard: a quarterly archive and a record book of battle trivia.",
+    details: [
+      {
+        text: "The leaderboard page now has three tabs: Rankings (as before), Chronicles, and Legends.",
+      },
+      {
+        label: "Chronicles",
+        text: "A quarterly archive of the leaderboard, snapshotted automatically every 3 months. Each past snapshot is viewable as a collapsible entry by date.",
+      },
+      {
+        label: "Legends",
+        text: "A record book of battle trivia: longest win/loss streaks, current hot streaks, one-tricks, most versatile hero pool, best/worst teammate duos, fiercest rivalries, most battles played, and bounty bonuses earned. Each category shows the top 3, with ties shown in full.",
+      },
+    ],
+  },
+  {
     date: "Sep 8",
     title: "Ask the Oracle",
     summary: "A new AI chat assistant for rule clarifications and hero strategy — currently in Beta.",

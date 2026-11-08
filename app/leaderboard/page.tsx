@@ -10,6 +10,8 @@ import { didWin } from "@/lib/match";
 import { getCompletedBadges } from "@/lib/heroWinBonus";
 import { Badge } from "@/lib/badges";
 import { Trophy, Medal, Shield, Swords } from "lucide-react";
+import { LegendsPanel } from "@/components/LegendsPanel";
+import { ChroniclesPanel } from "@/components/ChroniclesPanel";
 
 type Player = {
   id: string;
@@ -41,8 +43,13 @@ type Match = {
     player_id: string;
     team: "atlantis" | "titans";
     hero_id: string | null;
+    mmr_before: number;
+    mmr_after: number;
+    is_bounty?: boolean | null;
   }[];
 };
+
+type LeaderboardTab = "rankings" | "chronicles" | "legends";
 
 type PlayerStats = {
   id: string;
@@ -70,6 +77,7 @@ export default function LeaderboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [sortAsc, setSortAsc] = useState(true);
   const [showAllPlayers, setShowAllPlayers] = useState(false);
+  const [activeTab, setActiveTab] = useState<LeaderboardTab>("rankings");
 
   const MINIMUM_MATCHES_FOR_DISPLAY = 5;
   const INACTIVE_GAME_THRESHOLD = 4;
@@ -87,7 +95,7 @@ export default function LeaderboardPage() {
         supabaseClient
           .from("matches")
           .select(
-            "id, match_number, winner, match_players ( player_id, team, hero_id )",
+            "id, match_number, winner, match_players ( player_id, team, hero_id, mmr_before, mmr_after, is_bounty )",
           )
           .order("created_at", { ascending: false }),
         supabaseClient
@@ -377,8 +385,29 @@ export default function LeaderboardPage() {
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
 
+      <div className="goa-profile-tabs">
+        {(
+          [
+            ["rankings", "Rankings"],
+            ["chronicles", "Chronicles"],
+            ["legends", "Legends"],
+          ] as const
+        ).map(([tab, label]) => (
+          <button
+            key={tab}
+            className={`goa-profile-tab ${activeTab === tab ? "active" : ""}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "chronicles" && <ChroniclesPanel />}
+      {activeTab === "legends" && <LegendsPanel players={players} matches={matches} />}
+
       {/* Podium — top 3 */}
-      {top3.length >= 1 && (
+      {activeTab === "rankings" && top3.length >= 1 && (
         <div className="goa-podium">
           {[1, 0, 2].map((idx) => {
             const p = top3[idx];
@@ -415,6 +444,8 @@ export default function LeaderboardPage() {
         </div>
       )}
 
+      {activeTab === "rankings" && (
+      <>
       {/* Sort pills */}
       <div className="goa-sort-bar">
         {sortCols.map(({ key, label }) => (
@@ -574,6 +605,8 @@ export default function LeaderboardPage() {
           );
         })}
       </div>
+      </>
+      )}
     </main>
   );
 }

@@ -2547,6 +2547,100 @@
     font-style: italic;
     margin-top: 0.15rem;
   }
+
+  /* Fun stats page (app/leaderboard/stats) — each record sits in its own
+     .goa-stats-card (reused as-is), with one row per holder below. */
+  .goa-funstat-desc {
+    padding: 0.55rem 0.85rem 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .goa-funstat-empty {
+    padding: 0.85rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .goa-funstat-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.85rem;
+    border-bottom: 1px solid rgba(201, 151, 58, 0.07);
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .goa-funstat-row:last-child {
+    border-bottom: none;
+  }
+  .goa-funstat-row:hover {
+    background: rgba(42, 39, 32, 0.6);
+  }
+  .goa-funstat-who {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .goa-funstat-rank {
+    flex-shrink: 0;
+    width: 1.8rem;
+    font-family: "Cinzel", serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+  .goa-funstat-rank.r1 {
+    color: var(--gold-light);
+  }
+  .goa-funstat-rank.r2 {
+    color: rgba(192, 192, 192, 0.9);
+  }
+  .goa-funstat-rank.r3 {
+    color: rgba(180, 100, 40, 0.9);
+  }
+  .goa-funstat-duo-avatars {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .goa-funstat-duo-avatars .goa-avatar:last-child {
+    margin-left: -0.5rem;
+  }
+  .goa-funstat-name {
+    font-family: "Crimson Pro", serif;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .goa-funstat-sub {
+    font-size: 0.68rem;
+    color: var(--muted);
+    display: block;
+  }
+  .goa-funstat-hero-icon {
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .goa-funstat-value {
+    flex-shrink: 0;
+    font-family: "Cinzel", serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--gold-light);
+    text-align: right;
+  }
+  .goa-funstat-value.gain {
+    color: var(--gain);
+  }
+  .goa-funstat-value.loss {
+    color: var(--loss);
+  }
+
   .goa-pie-wrap {
     display: flex;
     align-items: center;
