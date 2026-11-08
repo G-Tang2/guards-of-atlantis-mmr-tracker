@@ -1,6 +1,6 @@
 // app/vote/[id]/page.tsx
 //
-// The shareable-link side of a Ranked Balance vote — deliberately outside
+// The shareable-link side of a Ranked Balance or Balanced vote — deliberately outside
 // PasswordGate (this link is meant to be handed to people who may not have
 // the app's shared password at all) and with none of the match creator's
 // own host-only controls (choosing whether to ban first, continuing past
@@ -27,7 +27,7 @@ import {
   undoChooseVote,
   settleChooseIfComplete,
 } from "@/lib/rankedVoteSession";
-import { Star, Crown, ScrollText, Ban, CheckCircle2, Users, ChevronDown } from "lucide-react";
+import { Star, Scale, Crown, ScrollText, Ban, CheckCircle2, Users, ChevronDown } from "lucide-react";
 
 const identityKey = (sessionId: string) => `goa-vote-identity-${sessionId}`;
 
@@ -193,7 +193,7 @@ export default function RemoteVotePage() {
           <div className="goa-crown">
             <Star size={30} />
           </div>
-          <h1 className="goa-title">Ranked Balance Vote</h1>
+          <h1 className="goa-title">Team Split Vote</h1>
         </header>
         <div className="goa-card">
           <div className="draft-body">
@@ -280,9 +280,11 @@ export default function RemoteVotePage() {
     <main className={`goa-root goa-vote-page${isLiveStage ? " goa-vote-live" : ""}`}>
       <header className="goa-header">
         <div className="goa-crown">
-          <Star size={30} />
+          {session.split_method === "balanced" ? <Scale size={30} /> : <Star size={30} />}
         </div>
-        <h1 className="goa-title">Ranked Balance Vote</h1>
+        <h1 className="goa-title">
+          {session.split_method === "balanced" ? "Balanced Vote" : "Ranked Balance Vote"}
+        </h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
 
@@ -326,12 +328,14 @@ export default function RemoteVotePage() {
       {session.stage === "impossible" && (
         <div className="goa-card">
           <div className="goa-card-head">
-            <Ban size={16} /> Ranked Balance Not Possible
+            <Ban size={16} />{" "}
+            {session.split_method === "balanced" ? "Balanced Split Not Possible" : "Ranked Balance Not Possible"}
           </div>
           <div className="draft-body">
             <p className="draft-note">
-              No split of this group keeps both sides close enough in
-              skill — the host will need to choose teams a different way.
+              {session.split_method === "balanced"
+                ? "No split of this group is possible — the host will need to choose teams a different way."
+                : "No split of this group keeps both sides close enough in skill — the host will need to choose teams a different way."}
             </p>
           </div>
         </div>

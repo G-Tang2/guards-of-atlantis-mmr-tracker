@@ -29,6 +29,10 @@ export type RankedBalanceResultOption = {
 };
 
 export type RankedBalanceResult = {
+  // Absent on results saved before the "Balanced" button grew its own
+  // voted variant — those all predate it, so they're always the "ranked"
+  // (skill-point) splitter (see lib/rankedVoteSession.ts's VoteSplitMethod).
+  method?: "ranked" | "balanced";
   totalVotes: number;
   wantsBan: boolean;
   // Only one split was possible at all for this group — it was applied

@@ -12,10 +12,11 @@ import {
   RankedBalanceResult,
 } from "@/lib/rankedBalanceResult";
 import { LAST_BATTLE_STEP_STORAGE_KEY } from "@/lib/battleSession";
-import { rankedBalancedSplits, MAX_SKILL_POINT_DIFF } from "@/lib/rankedBalance";
+import { rankedBalancedSplits, mmrBalancedSplits, MAX_SKILL_POINT_DIFF } from "@/lib/rankedBalance";
 import {
   VoteSessionRow,
   VoteSessionPlayer,
+  VoteSplitMethod,
   BAN_COUNT,
   computeVoteAllowance,
   totalVotesFromAllowance,
@@ -34,11 +35,14 @@ import {
 } from "@/lib/rankedVoteSession";
 import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
-import { Star, Crown, ScrollText, Swords, Ban, Share2, CheckCircle2, ChevronDown } from "lucide-react";
+import { Star, Scale, Crown, ScrollText, Swords, Ban, Share2, CheckCircle2, ChevronDown } from "lucide-react";
 
 type Player = VoteSessionPlayer;
 
-type StoredVoteRef = { playerIds: string[]; sessionId?: string };
+// `method` is only read on a brand-new vote (see the init effect below) —
+// absent on an older stored ref predating this field, which defaults to
+// "ranked" there the same way VoteSplitMethod's own DB column does.
+type StoredVoteRef = { playerIds: string[]; sessionId?: string; method?: VoteSplitMethod };
 
 // Pure, module-level (mirrors shuffle() in app/teams/page.tsx) so the
 // random pick lives outside the component's closures. Purely a *cosmetic*
@@ -117,7 +121,7 @@ function TeamsVotePageInner() {
 
     if (saved.sessionId) {
       // Resume an existing session — never recompute splits here, since
-      // rankedBalancedSplits has real randomness in its own tie-breaking
+      // both splitters have real randomness in their own tie-breaking
       // and every device (this refresh included) needs to see the exact
       // same options a remote voter might already be looking at.
       supabaseClient
@@ -178,10 +182,13 @@ function TeamsVotePageInner() {
       const voteAllowance = computeVoteAllowance(saved.playerIds, baseOwnerIds);
       const computedTotalVotes = totalVotesFromAllowance(voteAllowance);
 
-      const computedSplits = rankedBalancedSplits(resolved, 4);
+      const splitMethod: VoteSplitMethod = saved.method === "balanced" ? "balanced" : "ranked";
+      const computedSplits =
+        splitMethod === "balanced" ? mmrBalancedSplits(resolved, 4) : rankedBalancedSplits(resolved, 4);
       const allIndices = computedSplits.map((_, i) => i);
 
       const initial: Partial<VoteSessionRow> = {
+        split_method: splitMethod,
         player_ids: saved.playerIds,
         vote_allowance: voteAllowance,
         splits: computedSplits,
@@ -190,8 +197,10 @@ function TeamsVotePageInner() {
       };
 
       if (computedSplits.length === 0) {
-        // No split keeps both sides within the skill-point threshold —
-        // there's nothing to vote on at all, not even a single option.
+        // No split keeps both sides within the skill-point threshold (only
+        // reachable for the "ranked" method — a plain MMR balance always
+        // has at least one valid split) — there's nothing to vote on at
+        // all, not even a single option.
         initial.stage = "impossible";
       } else if (computedSplits.length <= 1) {
         // Nothing to vote on — apply the one possible split directly.
@@ -414,7 +423,7 @@ function TeamsVotePageInner() {
         pool: [],
         atlantis: winner.atlantis.map((p) => p.id),
         titans: winner.titans.map((p) => p.id),
-        method: "ranked_balanced",
+        method: session.split_method === "balanced" ? "balanced" : "ranked_balanced",
       }),
     );
 
@@ -422,6 +431,7 @@ function TeamsVotePageInner() {
     // breakdown separately so /matches/new can save it onto the match row
     // for the detail page to show later.
     const result: RankedBalanceResult = {
+      method: session.split_method,
       totalVotes: session.total_votes,
       wantsBan: session.wants_ban === true,
       skippedVoting: session.skipped_voting,
@@ -474,6 +484,7 @@ function TeamsVotePageInner() {
   }
 
   const stage = session.stage;
+  const method = session.split_method;
   const isLiveStage = stage === "ballot" || stage === "ban_ballot" || stage === "setup";
   const showingTieReveal = stage === "results" && revealPhase === "revealing";
 
@@ -538,9 +549,9 @@ function TeamsVotePageInner() {
     >
       <header className="goa-header">
         <div className="goa-crown">
-          <Star size={30} />
+          {method === "balanced" ? <Scale size={30} /> : <Star size={30} />}
         </div>
-        <h1 className="goa-title">Ranked Balance Vote</h1>
+        <h1 className="goa-title">{method === "balanced" ? "Balanced Vote" : "Ranked Balance Vote"}</h1>
         <p className="goa-subtitle">Guards of Atlantis II</p>
       </header>
 
@@ -556,13 +567,17 @@ function TeamsVotePageInner() {
       {stage === "impossible" && (
         <div className="goa-card">
           <div className="goa-card-head">
-            <Ban size={16} /> Ranked Balance Not Possible
+            <Ban size={16} /> {method === "balanced" ? "Balanced Split Not Possible" : "Ranked Balance Not Possible"}
           </div>
           <div className="draft-body">
             <p className="draft-note">
-              No split of this group keeps both sides within{" "}
-              {MAX_SKILL_POINT_DIFF} skill points of each other — try
-              Balanced or Custom teams instead.
+              {method === "balanced" ? (
+                "No split of this group is possible — try Custom teams instead."
+              ) : (
+                <>No split of this group keeps both sides within{" "}
+                {MAX_SKILL_POINT_DIFF} skill points of each other — try
+                Balanced or Custom teams instead.</>
+              )}
             </p>
             <div className="goa-btn-wrap" style={{ margin: 0 }}>
               <button

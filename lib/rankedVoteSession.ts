@@ -23,8 +23,16 @@ export type VoteStage =
   | "ballot"
   | "results";
 
+// Which splitter produced this session's `splits` — "ranked" (hand-assigned
+// skill points, see lib/rankedBalance.ts's rankedBalancedSplits) or
+// "balanced" (plain MMR, mmrBalancedSplits). Everything else about the
+// ban/choose flow below is identical either way; this only ever matters
+// for picking the right title/copy in the UI layer.
+export type VoteSplitMethod = "ranked" | "balanced";
+
 export type VoteSessionRow = {
   id: string;
+  split_method: VoteSplitMethod;
   player_ids: string[];
   vote_allowance: Record<string, number>;
   splits: Split<VoteSessionPlayer>[];

@@ -83,39 +83,6 @@ const randomSplit = (pool: Player[]): Split => {
   return { atlantis: shuffled.slice(0, mid), titans: shuffled.slice(mid) };
 };
 
-const balancedSplit = (pool: Player[]): Split => {
-  const n = pool.length;
-  const totalMMR = pool.reduce((s, p) => s + p.mmr, 0);
-  let bestDiff = Infinity;
-  let bestMask = 0;
-
-  for (let mask = 0; mask < 1 << n; mask++) {
-    let teamASize = 0;
-    let teamASum = 0;
-    for (let i = 0; i < n; i++) {
-      if (mask & (1 << i)) {
-        teamASize++;
-        teamASum += pool[i].mmr;
-      }
-    }
-    const teamBSize = n - teamASize;
-    if (Math.abs(teamASize - teamBSize) > 1) continue;
-    const diff = Math.abs(teamASum - (totalMMR - teamASum));
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestMask = mask;
-    }
-  }
-
-  const atlantis: Player[] = [];
-  const titans: Player[] = [];
-  for (let i = 0; i < n; i++) {
-    (bestMask & (1 << i) ? atlantis : titans).push(pool[i]);
-  }
-
-  return { atlantis, titans };
-};
-
 // Snake pick order: 1,2,2,1,1,2,2,1… (first pick alternates every two picks)
 const snakeFaction = (
   pickNumber: number,
@@ -441,17 +408,16 @@ export default function TeamSplitterPage() {
     setColumns({ pool: [], atlantis, titans });
     setAssemblyMethod("random");
   };
-  const handleBalanced = () => {
-    const { atlantis, titans } = balancedSplit(allAdded);
-    setColumns({ pool: [], atlantis, titans });
-    setAssemblyMethod("balanced");
-  };
 
-  const goToRankedVote = () => {
+  // Both Balanced and Ranked Balance now hand off to the same /teams/vote
+  // ban/choose flow — only which splitter it uses (MMR vs hand-assigned
+  // skill points, see lib/rankedBalance.ts) differs, recorded alongside
+  // the player pool so /teams/vote knows which to run.
+  const goToVote = (method: "balanced" | "ranked") => {
     persistDraft();
     localStorage.setItem(
       RANKED_VOTE_STORAGE_KEY,
-      JSON.stringify({ playerIds: allAdded.map((p) => p.id) }),
+      JSON.stringify({ playerIds: allAdded.map((p) => p.id), method }),
     );
     router.push("/teams/vote");
   };
@@ -760,7 +726,7 @@ export default function TeamSplitterPage() {
           </button>
           <button
             className="goa-split-btn balanced"
-            onClick={handleBalanced}
+            onClick={() => goToVote("balanced")}
             disabled={!canSplit}
           >
             <span className="goa-split-icon">
@@ -770,7 +736,7 @@ export default function TeamSplitterPage() {
           </button>
           <button
             className="goa-split-btn ranked"
-            onClick={goToRankedVote}
+            onClick={() => goToVote("ranked")}
             disabled={!canSplit}
           >
             <span className="goa-split-icon">

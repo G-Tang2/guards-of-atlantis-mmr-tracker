@@ -15,7 +15,7 @@ import {
   Team,
   WinCondition,
 } from "@/lib/match";
-import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Ban, Pencil, X, Trash2 } from "lucide-react";
+import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Scale, Ban, Pencil, X, Trash2 } from "lucide-react";
 import { RankedBalanceResult, RankedBalanceResultPlayer } from "@/lib/rankedBalanceResult";
 import { OptionCard } from "@/components/RankedVoteUI";
 import { VoteSessionPlayer } from "@/lib/rankedVoteSession";
@@ -304,8 +304,8 @@ function RankedBalanceResultSection({ result }: { result: RankedBalanceResult })
   return (
     <details className="goa-section">
       <summary className="goa-sec-head clickable goa-ranked-result-summary">
-        <Star size={13} />
-        Ranked Balance Vote
+        {result.method === "balanced" ? <Scale size={13} /> : <Star size={13} />}
+        {result.method === "balanced" ? "Balanced Vote" : "Ranked Balance Vote"}
         <ChevronDown size={14} className="goa-ranked-result-chevron" />
       </summary>
       <div className="draft-body">

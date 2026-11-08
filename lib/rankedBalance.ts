@@ -3,6 +3,7 @@
 // computes the actual candidate splits players vote on).
 
 export type SkillPlayer = { id: string; name: string };
+export type MmrPlayer = SkillPlayer & { mmr: number };
 export type Split<T extends SkillPlayer = SkillPlayer> = {
   atlantis: T[];
   titans: T[];
@@ -191,33 +192,37 @@ function bestDiverseCombination(
   return result.best ? result.best.indices : null;
 }
 
-// Up to `count` most-balanced Atlantis/Titans splits by total skill points
-// (lowest point difference first) — fewer than `count`, or none at all,
-// when fewer than `count` splits (or none) actually keep both sides within
-// MAX_SKILL_POINT_DIFF points of each other; callers need to handle an
-// empty result as "no ranked-balanced split is possible for this group"
-// rather than assuming at least one option always comes back. Among
-// whatever qualifies, this also tries to keep any single pair of players
-// from sharing a side across more than MIN_PAIR_TOGETHER_CAP of the
-// returned options (relaxed upward only if that's not achievable — see its
-// own comment). Unlike a plain MMR-balanced split (which just wants the
-// single best split), this hands back several options since which specific
-// players end up together can vary a lot between splits that are otherwise
-// equally balanced on paper — worth letting players vote on rather than
-// always taking the first ones found, and worth making those choices
-// actually different from each other.
+// Up to `count` most-balanced Atlantis/Titans splits by total weight
+// (lowest difference first) — fewer than `count`, or none at all, when
+// fewer than `count` splits (or none) actually keep both sides within
+// `maxDiff` of each other; callers need to handle an empty result as "no
+// split is possible for this group" rather than assuming at least one
+// option always comes back (pass `Infinity` for `maxDiff` when there's no
+// such threshold at all, e.g. a plain MMR balance — every pool of 2+
+// always has at least one valid split, so this never comes back empty).
+// Among whatever qualifies, this also tries to keep any single pair of
+// players from sharing a side across more than MIN_PAIR_TOGETHER_CAP of
+// the returned options (relaxed upward only if that's not achievable — see
+// its own comment). This hands back several options (rather than just the
+// single best split) since which specific players end up together can vary
+// a lot between splits that are otherwise equally balanced on paper —
+// worth letting players vote on rather than always taking the first ones
+// found, and worth making those choices actually different from each
+// other.
 //
 // Enumerates all 2^n subsets (fine for the small rosters this splitter
 // handles) and folds each partition's Atlantis/Titans-swapped mirror into a
 // single candidate by fixing pool[0] to always land on the "titans" side —
 // since a mask and its bitwise complement always have the same point
 // difference, this loses no candidates while halving the work.
-export const rankedBalancedSplits = <T extends SkillPlayer>(
+function balancedSplitsByWeight<T extends SkillPlayer>(
   pool: T[],
+  weightOf: (p: T) => number,
   count: number,
-): Split<T>[] => {
+  maxDiff: number,
+): Split<T>[] {
   const n = pool.length;
-  const weights = pool.map(skillPointsOf);
+  const weights = pool.map(weightOf);
   const total = weights.reduce((s, w) => s + w, 0);
   const candidates: { mask: number; diff: number }[] = [];
 
@@ -233,7 +238,7 @@ export const rankedBalancedSplits = <T extends SkillPlayer>(
     }
     if (Math.abs(sizeA - (n - sizeA)) > 1) continue;
     const diff = Math.abs(weightA - (total - weightA));
-    if (diff >= MAX_SKILL_POINT_DIFF) continue;
+    if (diff >= maxDiff) continue;
     candidates.push({ mask, diff });
   }
 
@@ -267,4 +272,20 @@ export const rankedBalancedSplits = <T extends SkillPlayer>(
     }
     return { atlantis, titans };
   });
-};
+}
+
+// Skill-point-weighted splits (hand-assigned ranks, see SKILL_RANK_POINTS)
+// — options this lopsided on paper aren't offered at all (see
+// MAX_SKILL_POINT_DIFF).
+export const rankedBalancedSplits = <T extends SkillPlayer>(
+  pool: T[],
+  count: number,
+): Split<T>[] => balancedSplitsByWeight(pool, skillPointsOf, count, MAX_SKILL_POINT_DIFF);
+
+// MMR-weighted splits — the "Balanced" button's own voted variant. No
+// diff threshold: a plain MMR balance always has a real best option, even
+// if every possible split is lopsided, so there's nothing to gate on.
+export const mmrBalancedSplits = <T extends MmrPlayer>(
+  pool: T[],
+  count: number,
+): Split<T>[] => balancedSplitsByWeight(pool, (p) => p.mmr, count, Infinity);
