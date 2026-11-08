@@ -1502,7 +1502,11 @@
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .goa-chronicles-months::-webkit-scrollbar {
+    display: none;
   }
   .goa-chronicles-months .goa-sort-btn {
     flex-shrink: 0;
