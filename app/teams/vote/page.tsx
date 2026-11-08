@@ -448,7 +448,26 @@ function TeamsVotePageInner() {
     localStorage.setItem(RANKED_BALANCE_RESULT_STORAGE_KEY, JSON.stringify(result));
 
     localStorage.removeItem(RANKED_VOTE_STORAGE_KEY);
-    router.replace("/teams");
+    // If the host already set the starting wave/life counters before
+    // kicking off the vote, there's nothing left to fill in on Divide
+    // the Host — skip straight to recording the battle. Otherwise land
+    // back on Divide the Host as before, so the host can set them.
+    const readyToRecord = !!prev.waveCounter && !!prev.lifeCounter;
+    router.replace(readyToRecord ? "/matches/new" : "/teams");
+  };
+
+  // Mirrors finish()'s own readyToRecord check, for the Continue button's
+  // label — read fresh each render rather than cached in state, since it
+  // only ever needs to reflect what's in storage right now.
+  const draftReadyToRecord = () => {
+    try {
+      const raw = localStorage.getItem(TEAMS_DRAFT_STORAGE_KEY);
+      if (!raw) return false;
+      const saved = JSON.parse(raw);
+      return !!saved.waveCounter && !!saved.lifeCounter;
+    } catch {
+      return false;
+    }
   };
 
   const backToTeams = () => {
@@ -780,7 +799,7 @@ function TeamsVotePageInner() {
                 onClick={finish}
               >
                 <Swords size={18} />
-                Continue to Divide the Host
+                {draftReadyToRecord() ? "Continue to Record of Battle" : "Continue to Divide the Host"}
               </button>
             </div>
           </div>
