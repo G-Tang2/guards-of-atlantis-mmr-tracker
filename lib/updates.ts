@@ -23,14 +23,14 @@ export const UPDATES: UpdateEntry[] = [
   {
     date: "Nov 8",
     title: "Chronicles & Legends",
-    summary: "Two new tabs on the leaderboard: a quarterly archive and a record book of battle trivia.",
+    summary: "Two new tabs on the leaderboard: a monthly archive and a record book of battle trivia.",
     details: [
       {
         text: "The leaderboard page now has three tabs: Rankings (as before), Chronicles, and Legends.",
       },
       {
         label: "Chronicles",
-        text: "A quarterly archive of the leaderboard, snapshotted automatically every 3 months. Each past snapshot is viewable as a collapsible entry by date.",
+        text: "A monthly archive of the leaderboard, snapshotted automatically every month. Each past snapshot is viewable as a collapsible entry by date.",
       },
       {
         label: "Legends",

@@ -35,7 +35,7 @@ function formatSnapshotDate(dateString: string) {
 }
 
 // The "Chronicles" tab on /leaderboard — a read-only history of the
-// quarterly leaderboard snapshots taken automatically by the Vercel Cron
+// monthly leaderboard snapshots taken automatically by the Vercel Cron
 // job (see app/api/cron/leaderboard-snapshot and vercel.json). Fetches its
 // own data, independently of the Rankings/Legends tabs, since
 // leaderboard_snapshots is an entirely separate table.
@@ -77,7 +77,7 @@ export function ChroniclesPanel() {
           Chronicles
         </div>
         <div className="goa-funstat-empty">
-          No snapshots recorded yet — the leaderboard is automatically archived every quarter,
+          No snapshots recorded yet — the leaderboard is automatically archived every month,
           so the first entry will appear here after the next one runs.
         </div>
       </section>

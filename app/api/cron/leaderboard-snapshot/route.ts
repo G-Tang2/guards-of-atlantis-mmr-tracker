@@ -1,4 +1,4 @@
-// Called by the Vercel Cron schedule in vercel.json, once every quarter.
+// Called by the Vercel Cron schedule in vercel.json, once every month.
 // Vercel invokes cron routes with GET and no way to attach the shared
 // PasswordGate header, so this checks CRON_SECRET instead — a separate,
 // server-only env var only Vercel's scheduler (and you, manually) knows,

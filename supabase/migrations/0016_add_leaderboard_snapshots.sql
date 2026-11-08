@@ -1,5 +1,5 @@
 -- Stores a point-in-time copy of the leaderboard, taken automatically every
--- quarter by a Vercel Cron job (see app/api/cron/leaderboard-snapshot and
+-- month by a Vercel Cron job (see app/api/cron/leaderboard-snapshot and
 -- vercel.json). The leaderboard itself (app/leaderboard/page.tsx) has
 -- always been computed live from players + matches with nothing persisted,
 -- so this is purely an append-only history table — nothing else reads or
@@ -11,7 +11,7 @@ create table if not exists leaderboard_snapshots (
   id uuid primary key default gen_random_uuid(),
 
   -- Date the snapshot was taken (UTC), not a timestamp — this is a
-  -- once-per-quarter record, not a precise instant.
+  -- once-per-month record, not a precise instant.
   snapshot_date date not null,
 
   -- One row per player at snapshot time: { player_id, name, mmr, rank,

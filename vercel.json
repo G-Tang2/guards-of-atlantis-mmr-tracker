@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/leaderboard-snapshot",
-      "schedule": "0 0 1 */3 *"
+      "schedule": "0 0 1 * *"
     }
   ]
 }
