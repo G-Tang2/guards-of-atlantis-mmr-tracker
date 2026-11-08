@@ -36,10 +36,37 @@ const SKILL_RANK_POINTS: Record<string, number> = {
 const skillPointsOf = (p: SkillPlayer) =>
   SKILL_RANK_POINTS[p.name.toLowerCase()] ?? 0;
 
-// A split whose two sides differ by this many skill points or more isn't
-// offered at all — better to hand back fewer options (down to none) than
-// one so lopsided on paper it isn't a real "ranked balanced" choice.
-// Exported so callers can explain *why* to a group that gets none at all.
+// How much one skill point is "worth" in MMR for the composite weight
+// below — every this-many MMR a player sits above/below the pool's own
+// average nudges their composite weight by about one skill point. Tuned
+// to be a real but secondary signal alongside hand-assigned skill points
+// (which span roughly 0-10): a tight group (a ~150-250 MMR spread, typical
+// of a real session) nudges by under a point each, while a genuinely
+// lopsided one can swing a point or more — enough to catch a stale or
+// missing skill rank without overriding a deliberate one.
+const MMR_POINTS_PER_SKILL_POINT = 150;
+
+// Skill points nudged by how far above/below the pool's own average MMR
+// each player sits — pool-relative (not a fixed MMR anchor like 1000)
+// since this app's MMR only ever means anything relative to who's
+// actually being split tonight, not as an absolute scale. Hand-assigned
+// skill points stay the primary signal (an intentional, actively
+// maintained judgment call — see SKILL_RANK_POINTS), with MMR as a
+// secondary correction: it catches a split that looks fine on stale or
+// missing skill numbers but is actually lopsided by recent form, and it
+// gives an unranked player (skillPointsOf defaults to 0) a sensible
+// position from their MMR alone instead of flatly ranking them worst
+// regardless of how they've actually played.
+function compositeWeightOf(pool: MmrPlayer[]): (p: MmrPlayer) => number {
+  const poolAvgMmr = pool.reduce((s, p) => s + p.mmr, 0) / pool.length;
+  return (p) => skillPointsOf(p) + (p.mmr - poolAvgMmr) / MMR_POINTS_PER_SKILL_POINT;
+}
+
+// A split whose two sides differ by this many composite weight points or
+// more isn't offered at all — better to hand back fewer options (down to
+// none) than one so lopsided on paper it isn't a real "ranked balanced"
+// choice. Exported so callers can explain *why* to a group that gets none
+// at all.
 export const MAX_SKILL_POINT_DIFF = 4;
 
 // A pair of players who keep landing on the same side across most of the
@@ -274,13 +301,13 @@ function balancedSplitsByWeight<T extends SkillPlayer>(
   });
 }
 
-// Skill-point-weighted splits (hand-assigned ranks, see SKILL_RANK_POINTS)
-// — options this lopsided on paper aren't offered at all (see
-// MAX_SKILL_POINT_DIFF).
-export const rankedBalancedSplits = <T extends SkillPlayer>(
+// Composite-weighted splits (hand-assigned skill points nudged by
+// pool-relative MMR — see compositeWeightOf) — options this lopsided on
+// paper aren't offered at all (see MAX_SKILL_POINT_DIFF).
+export const rankedBalancedSplits = <T extends MmrPlayer>(
   pool: T[],
   count: number,
-): Split<T>[] => balancedSplitsByWeight(pool, skillPointsOf, count, MAX_SKILL_POINT_DIFF);
+): Split<T>[] => balancedSplitsByWeight(pool, compositeWeightOf(pool), count, MAX_SKILL_POINT_DIFF);
 
 // MMR-weighted splits — the "Balanced" button's own voted variant. No
 // diff threshold: a plain MMR balance always has a real best option, even

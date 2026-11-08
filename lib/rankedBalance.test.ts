@@ -81,13 +81,18 @@ describe("mmrBalancedSplits", () => {
 });
 
 describe("rankedBalancedSplits (regression after extracting the shared weighted-split core)", () => {
+  // Every player sits at the pool's own average MMR in this describe block
+  // (unless a test says otherwise), so the composite weight's MMR nudge is
+  // always exactly 0 and these behave exactly like the pre-composite,
+  // skill-points-only splitter — isolating these from the new MMR-blending
+  // behavior, which gets its own describe block below.
   it("still gates on MAX_SKILL_POINT_DIFF — a 10-vs-0 skill gap returns no options", () => {
     // "keith" is hand-assigned 10 skill points; an unrecognized name
     // defaults to 0 (see skillPointsOf) — a 10-point gap is well past
     // MAX_SKILL_POINT_DIFF, so there's no split to offer at all.
     const pool = [
-      { id: "1", name: "Keith" },
-      { id: "2", name: "Zzz" },
+      { id: "1", name: "Keith", mmr: 1000 },
+      { id: "2", name: "Zzz", mmr: 1000 },
     ];
     expect(rankedBalancedSplits(pool, 4)).toEqual([]);
   });
@@ -95,10 +100,10 @@ describe("rankedBalancedSplits (regression after extracting the shared weighted-
   it("still returns balanced options when skill points are close enough", () => {
     // "xi" and "keith" are both hand-assigned 10 points — an even split.
     const pool = [
-      { id: "1", name: "Xi" },
-      { id: "2", name: "Keith" },
-      { id: "3", name: "Zzz" },
-      { id: "4", name: "Yyy" },
+      { id: "1", name: "Xi", mmr: 1000 },
+      { id: "2", name: "Keith", mmr: 1000 },
+      { id: "3", name: "Zzz", mmr: 1000 },
+      { id: "4", name: "Yyy", mmr: 1000 },
     ];
     const splits = rankedBalancedSplits(pool, 4);
     expect(splits.length).toBeGreaterThan(0);
@@ -111,5 +116,47 @@ describe("rankedBalancedSplits (regression after extracting the shared weighted-
     // Sanity check that the constant itself survived the refactor
     // unchanged, not just its effect.
     expect(MAX_SKILL_POINT_DIFF).toBe(4);
+  });
+});
+
+describe("rankedBalancedSplits composite weight (skill points nudged by pool-relative MMR)", () => {
+  it("breaks a skill-points tie using MMR once both players are unranked", () => {
+    // Neither name is in SKILL_RANK_POINTS, so both default to 0 skill
+    // points — pure skill weighting would call this a perfectly even
+    // (diff 0) split regardless of MMR. Pool average is 1000, so Alice
+    // sits +150 MMR above it and Bob -150 below: at the documented 150
+    // MMR-per-skill-point rate, that's a +1/-1 nudge each, a real (and
+    // correctly detected) diff of 2 instead of 0.
+    const pool = [
+      { id: "1", name: "Alice", mmr: 1150 },
+      { id: "2", name: "Bob", mmr: 850 },
+    ];
+    const splits = rankedBalancedSplits(pool, 4);
+    expect(splits).toHaveLength(1);
+  });
+
+  it("rejects a split that's skill-tied but badly MMR-lopsided, where the old skill-only weighting would have allowed it", () => {
+    // Same idea, stretched further: a 300/-300 MMR gap around the pool
+    // average nudges each side's weight by a full 2 points either way —
+    // a 4-point total diff, right at MAX_SKILL_POINT_DIFF's cutoff, so
+    // this composite-balanced "tie" is correctly refused rather than
+    // offered as a fake "perfectly balanced" split.
+    const pool = [
+      { id: "1", name: "Alice", mmr: 1300 },
+      { id: "2", name: "Bob", mmr: 700 },
+    ];
+    expect(rankedBalancedSplits(pool, 4)).toEqual([]);
+  });
+
+  it("still lets a hand-assigned skill rank dominate a modest MMR gap", () => {
+    // "keith" (10) vs "stella" (2) is an 8-point skill gap on its own —
+    // already past MAX_SKILL_POINT_DIFF — so a realistic MMR nudge (a few
+    // hundred points either way) isn't anywhere near enough to pull this
+    // back into range. The hand-curated judgment still wins.
+    const pool = [
+      { id: "1", name: "Keith", mmr: 700 },
+      { id: "2", name: "Stella", mmr: 1300 },
+    ];
+    expect(rankedBalancedSplits(pool, 4)).toEqual([]);
   });
 });
