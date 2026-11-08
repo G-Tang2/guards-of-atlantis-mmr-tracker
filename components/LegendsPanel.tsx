@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Flame, Sparkles, Skull, Repeat2, Shuffle, Heart, HeartCrack, Swords, Dumbbell, Coins } from "lucide-react";
+import { Crown, Medal, Flame, Sparkles, Skull, Repeat2, Shuffle, Heart, HeartCrack, Swords, Dumbbell, Coins } from "lucide-react";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { getHero } from "@/lib/match";
 import {
@@ -48,6 +48,40 @@ export function LegendsPanel({ players, matches }: { players: Player[]; matches:
 
   return (
     <>
+      {/* Battles played by the league while holding #1 MMR */}
+      <StatCard icon={<Crown size={16} />} title="The Throne" description="Battles played league-wide while ranked #1, whether you played in them or not">
+        {stats.reign.length === 0 ? (
+          <Empty />
+        ) : (
+          withRank(stats.reign, (e) => e.count).map(({ rank, entry: e }) => (
+            <PlayerRow
+              key={e.playerId}
+              rank={rank}
+              player={playerMap.get(e.playerId)}
+              onClick={() => goToProfile(e.playerId)}
+              value={`${e.count} battles`}
+            />
+          ))
+        )}
+      </StatCard>
+
+      {/* Battles played by the league while holding a top-3 MMR spot */}
+      <StatCard icon={<Medal size={16} />} title="The Podium" description="Battles played league-wide while ranked in the top 3, whether you played in them or not">
+        {stats.podium.length === 0 ? (
+          <Empty />
+        ) : (
+          withRank(stats.podium, (e) => e.count).map(({ rank, entry: e }) => (
+            <PlayerRow
+              key={e.playerId}
+              rank={rank}
+              player={playerMap.get(e.playerId)}
+              onClick={() => goToProfile(e.playerId)}
+              value={`${e.count} battles`}
+            />
+          ))
+        )}
+      </StatCard>
+
       {/* Longest win streak */}
       <StatCard icon={<Flame size={16} />} title="On Fire" description="Longest win streak">
         {stats.longestWinStreak.length === 0 ? (

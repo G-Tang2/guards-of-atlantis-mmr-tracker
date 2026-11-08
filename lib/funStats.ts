@@ -41,6 +41,8 @@ export type HeroCountEntry = { playerId: string; heroId: string; count: number }
 export type VersatilityEntry = { playerId: string; count: number };
 export type BountyEntry = { playerId: string; count: number };
 export type IronManEntry = { playerId: string; count: number };
+export type ReignEntry = { playerId: string; count: number };
+export type PodiumEntry = { playerId: string; count: number };
 
 export type DuoEntry = {
   playerIds: [string, string];
@@ -63,6 +65,8 @@ export type NemesisEntry = {
 };
 
 export type FunStats = {
+  reign: ReignEntry[];
+  podium: PodiumEntry[];
   longestWinStreak: StreakEntry[];
   longestLossStreak: StreakEntry[];
   hotStreak: StreakEntry[];
@@ -112,6 +116,9 @@ export function computeFunStats(
   const bountyCounts = new Map<string, number>();
   const duoStats = new Map<string, DuoEntry>();
   const nemesisStats = new Map<string, NemesisEntry>();
+  const currentMmr = new Map<string, number>();
+  const reignCounts = new Map<string, number>();
+  const podiumCounts = new Map<string, number>();
 
   sortedMatches.forEach((match) => {
     const byTeam: Record<"atlantis" | "titans", string[]> = { atlantis: [], titans: [] };
@@ -136,7 +143,26 @@ export function computeFunStats(
       if (mp.is_bounty) {
         bountyCounts.set(mp.player_id, (bountyCounts.get(mp.player_id) ?? 0) + 1);
       }
+
+      currentMmr.set(mp.player_id, mp.mmr_after);
     });
+
+    // Reign / Podium — after this match, whoever has the highest MMR (or
+    // sits in the top 3) among everyone who has played at least once so
+    // far "holds the throne" (or "a podium spot") for this match, whether
+    // they personally played in it or not (e.g. two other players' match
+    // still counts toward the reigning #1's tally, same as if the
+    // leaderboard's #1/top-3 slots just didn't move). Ties broken by
+    // player id — arbitrary, but deterministic.
+    const standings = Array.from(currentMmr.entries()).sort((a, b) =>
+      b[1] !== a[1] ? b[1] - a[1] : a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0,
+    );
+    if (standings.length > 0) {
+      reignCounts.set(standings[0][0], (reignCounts.get(standings[0][0]) ?? 0) + 1);
+      standings.slice(0, 3).forEach(([playerId]) => {
+        podiumCounts.set(playerId, (podiumCounts.get(playerId) ?? 0) + 1);
+      });
+    }
 
     (["atlantis", "titans"] as const).forEach((team) => {
       const roster = byTeam[team];
@@ -274,7 +300,12 @@ export function computeFunStats(
     .filter((d) => d.games >= minDuoGames)
     .map((d) => ({ ...d, winRate: d.games === 0 ? 0 : (d.wins / d.games) * 100 }));
 
+  const reignEntries: ReignEntry[] = Array.from(reignCounts.entries()).map(([playerId, count]) => ({ playerId, count }));
+  const podiumEntries: PodiumEntry[] = Array.from(podiumCounts.entries()).map(([playerId, count]) => ({ playerId, count }));
+
   return {
+    reign: topN(reignEntries, (e) => e.count, TOP_N),
+    podium: topN(podiumEntries, (e) => e.count, TOP_N),
     longestWinStreak: topN(winStreaks, (e) => e.length, TOP_N),
     longestLossStreak: topN(lossStreaks, (e) => e.length, TOP_N),
     hotStreak: topN(hotStreaks, (e) => e.length, TOP_N),

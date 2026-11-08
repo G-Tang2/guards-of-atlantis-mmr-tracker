@@ -280,3 +280,130 @@ describe("computeFunStats top-3 cutoff", () => {
     expect(bountyHunter).toHaveLength(4);
   });
 });
+
+describe("computeFunStats reign (battles played by the league while holding #1 MMR)", () => {
+  // 3 players. MMR tracked via mmr_after only — hero/team/winner fields are
+  // irrelevant to this stat, so left at harmless placeholder values.
+  //
+  //   M1 p1=1050, p2=950           -> only p1/p2 have played; p1 leads (1050)
+  //   M2 p2=980,  p3=820           -> p1 still leads (1050 > 980 > 820),
+  //                                   despite not playing this match at all
+  //   M3 p2=1100, p1=1000          -> p2 overtakes (1100 > 1000)
+  //   M4 p3=830,  p1=990           -> p2 still leads (1100, unchanged),
+  //                                   despite not playing this match either
+  //
+  // p1 leads after M1 and M2 (2 matches); p2 leads after M3 and M4 (2
+  // matches) — a tie, and p2's M4 credit is the whole point: p2 didn't
+  // play M4 (p1 vs p3) but still "held the throne" for it.
+  const matches: FunStatsMatch[] = [
+    {
+      match_number: 1,
+      winner: "atlantis",
+      match_players: [
+        { player_id: "p1", team: "atlantis", hero_id: null, mmr_before: 1000, mmr_after: 1050 },
+        { player_id: "p2", team: "titans", hero_id: null, mmr_before: 1000, mmr_after: 950 },
+      ],
+    },
+    {
+      match_number: 2,
+      winner: "atlantis",
+      match_players: [
+        { player_id: "p2", team: "atlantis", hero_id: null, mmr_before: 950, mmr_after: 980 },
+        { player_id: "p3", team: "titans", hero_id: null, mmr_before: 1000, mmr_after: 820 },
+      ],
+    },
+    {
+      match_number: 3,
+      winner: "atlantis",
+      match_players: [
+        { player_id: "p2", team: "atlantis", hero_id: null, mmr_before: 980, mmr_after: 1100 },
+        { player_id: "p1", team: "titans", hero_id: null, mmr_before: 1050, mmr_after: 1000 },
+      ],
+    },
+    {
+      match_number: 4,
+      winner: "titans",
+      match_players: [
+        { player_id: "p1", team: "atlantis", hero_id: null, mmr_before: 1000, mmr_after: 990 },
+        { player_id: "p3", team: "titans", hero_id: null, mmr_before: 820, mmr_after: 830 },
+      ],
+    },
+  ];
+
+  it("credits p1 for M1-M2 and p2 for M3-M4, including the match each led without playing", () => {
+    const { reign } = computeFunStats(matches);
+    const byPlayer = new Map(reign.map((e) => [e.playerId, e.count]));
+    expect(byPlayer.get("p1")).toBe(2);
+    expect(byPlayer.get("p2")).toBe(2);
+    expect(byPlayer.has("p3")).toBe(false);
+    // Every match is attributed to exactly one reigning player.
+    expect(reign.reduce((sum, e) => sum + e.count, 0)).toBe(matches.length);
+  });
+});
+
+describe("computeFunStats podium (battles played by the league while in the top 3 MMR)", () => {
+  // 4 players — only 3 can ever be "in the top 3" at once, so this
+  // dataset specifically exercises a player being excluded despite having
+  // just played the very match in question (p4 in M2), and a player
+  // dropping out of the top 3 on a match they didn't play at all (p3 in
+  // M3, p2 in M4).
+  //
+  //   M1 p1=1200, p2=1100                      -> known: p1,p2 (both "top 3" since <3 exist)
+  //   M2 p3=1000, p4=900                       -> known: p1,p2,p3,p4 -> top3=[p1,p2,p3], p4 OUT despite playing
+  //   M3 p4=1250, p1=1150 (p4 beats p1)         -> top3=[p4,p1,p2], p3 OUT despite not playing
+  //   M4 p2=950,  p3=1050 (p2 loses to p3)      -> top3=[p4,p1,p3], p2 OUT despite not playing
+  //
+  // Podium tallies: p1 in all 4 (4), p2 in M1-M3 (3), p3 in M2 and M4 (2),
+  // p4 in M3-M4 (2). Reign (#1 only, for cross-checking): p1 leads M1-M2
+  // (2), p4 leads M3-M4 (2, including M4 which p4 didn't play).
+  const podiumMatches: FunStatsMatch[] = [
+    {
+      match_number: 1,
+      winner: "atlantis",
+      match_players: [
+        { player_id: "p1", team: "atlantis", hero_id: null, mmr_before: 1000, mmr_after: 1200 },
+        { player_id: "p2", team: "titans", hero_id: null, mmr_before: 1000, mmr_after: 1100 },
+      ],
+    },
+    {
+      match_number: 2,
+      winner: "atlantis",
+      match_players: [
+        { player_id: "p3", team: "atlantis", hero_id: null, mmr_before: 1000, mmr_after: 1000 },
+        { player_id: "p4", team: "titans", hero_id: null, mmr_before: 1000, mmr_after: 900 },
+      ],
+    },
+    {
+      match_number: 3,
+      winner: "titans",
+      match_players: [
+        { player_id: "p1", team: "atlantis", hero_id: null, mmr_before: 1200, mmr_after: 1150 },
+        { player_id: "p4", team: "titans", hero_id: null, mmr_before: 900, mmr_after: 1250 },
+      ],
+    },
+    {
+      match_number: 4,
+      winner: "titans",
+      match_players: [
+        { player_id: "p2", team: "atlantis", hero_id: null, mmr_before: 1100, mmr_after: 950 },
+        { player_id: "p3", team: "titans", hero_id: null, mmr_before: 1000, mmr_after: 1050 },
+      ],
+    },
+  ];
+
+  it("credits every match to whoever sat in the top 3 at that point, whether they played it or not", () => {
+    const { podium, reign } = computeFunStats(podiumMatches);
+
+    const podiumByPlayer = new Map(podium.map((e) => [e.playerId, e.count]));
+    expect(podiumByPlayer.get("p1")).toBe(4);
+    expect(podiumByPlayer.get("p2")).toBe(3);
+    expect(podiumByPlayer.get("p3")).toBe(2);
+    expect(podiumByPlayer.get("p4")).toBe(2);
+    expect(podium).toHaveLength(4);
+
+    const reignByPlayer = new Map(reign.map((e) => [e.playerId, e.count]));
+    expect(reignByPlayer.get("p1")).toBe(2);
+    expect(reignByPlayer.get("p4")).toBe(2);
+    expect(reign).toHaveLength(2);
+  });
+});
