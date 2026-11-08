@@ -15,9 +15,13 @@ create table if not exists leaderboard_snapshots (
   snapshot_date date not null,
 
   -- One row per player at snapshot time: { player_id, name, mmr, rank,
-  -- avatar_url, matches_played }. Stored as a denormalized blob (rather
-  -- than a separate per-player table) since this is read as a whole
-  -- leaderboard at a time, never joined/filtered per player.
+  -- avatar_url, matches_played, wins, losses, draws, badge_ids }. Stored
+  -- as a denormalized blob (rather than a separate per-player table)
+  -- since this is read as a whole leaderboard at a time, never
+  -- joined/filtered per player. wins/losses/draws/badge_ids are the same
+  -- derived stats the Rankings tab computes live (see
+  -- app/leaderboard/page.tsx) — captured here too so a snapshot is a
+  -- genuinely self-contained record, not just mmr/rank.
   players jsonb not null,
 
   created_at timestamptz not null default now()

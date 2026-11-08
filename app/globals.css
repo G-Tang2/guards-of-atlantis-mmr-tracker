@@ -1986,14 +1986,6 @@
     background: rgba(180, 100, 40, 0.06);
   }
 
-  /* Chronicles' own per-snapshot table — same row/cell look as the
-     Rankings table above, just 4 columns instead of 6 since a snapshot
-     only ever stores rank/name/MMR/battles, never a win/loss breakdown. */
-  .goa-row.compact,
-  .goa-header-row.compact {
-    grid-template-columns: 50px 1fr 58px 54px;
-  }
-
   .goa-cell-rank {
     font-family: "Cinzel", serif;
     font-size: 0.85rem;
