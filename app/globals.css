@@ -1495,6 +1495,19 @@
     margin-top: 0.3rem;
   }
 
+  /* Chronicles' month picker — same pill look as .goa-sort-btn, but in a
+     single horizontally-scrolling row instead of wrapping, since the list
+     only ever grows (one more month every month). */
+  .goa-chronicles-months {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .goa-chronicles-months .goa-sort-btn {
+    flex-shrink: 0;
+  }
+
   /* Bounty hero badge — shown on a match's hero pick when it earned the flat MMR bonus */
   .goa-bounty-badge {
     display: inline-flex;
@@ -1971,6 +1984,14 @@
   }
   .goa-row.rank-3 {
     background: rgba(180, 100, 40, 0.06);
+  }
+
+  /* Chronicles' own per-snapshot table — same row/cell look as the
+     Rankings table above, just 4 columns instead of 6 since a snapshot
+     only ever stores rank/name/MMR/battles, never a win/loss breakdown. */
+  .goa-row.compact,
+  .goa-header-row.compact {
+    grid-template-columns: 50px 1fr 58px 54px;
   }
 
   .goa-cell-rank {
