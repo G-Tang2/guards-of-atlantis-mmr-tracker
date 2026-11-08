@@ -21,6 +21,23 @@ export type UpdateEntry = {
 
 export const UPDATES: UpdateEntry[] = [
   {
+    date: "Nov 9",
+    title: "Balanced Vote",
+    summary: "Balanced now offers 4 MMR-balanced options to vote on, instead of applying one split instantly.",
+    details: [
+      {
+        text: "The Balanced button on Divide the Host now works just like Ranked Balance: it offers 4 team splits with the smallest MMR gap, rather than silently picking the single best one.",
+      },
+      {
+        label: "Ban Round",
+        text: "With enough options, everyone can first vote to ban the split they least want before choosing between what's left — exactly the same ban-then-choose flow Ranked Balance already uses.",
+      },
+      {
+        text: "Ranked Balance is unchanged — it still weighs hand-assigned skill ranks rather than MMR. Balanced is the MMR-based alternative for groups without skill ranks assigned.",
+      },
+    ],
+  },
+  {
     date: "Nov 8",
     title: "Chronicles & Legends",
     summary: "Two new tabs on the leaderboard: a monthly archive and a record book of battle trivia.",
