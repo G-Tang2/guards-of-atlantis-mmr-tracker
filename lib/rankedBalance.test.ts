@@ -78,6 +78,36 @@ describe("mmrBalancedSplits", () => {
       expect(split.atlantis.length + split.titans.length).toBe(8);
     });
   });
+
+  it("regression: always includes the single best split, even when that costs pairing diversity", () => {
+    // Real 8-player MMR data where the true best 2-vs-2-vs-2-vs-2... err,
+    // 4-vs-4 split (diff 3) shares enough pairs with the next-best options
+    // that the old pair-diversity cap (inherited from rankedBalancedSplits,
+    // tuned for skill points' small, heavily-clustered integer scale) threw
+    // it away entirely and settled for four much worse options (diffs
+    // 17/55/109/147, total 328) instead of the four genuinely best ones
+    // (diffs 3/17/17/17, total 54). mmrBalancedSplits must never trade the
+    // actual best option away for variety — see its own comment.
+    const pool = [
+      { id: "a", name: "Adrian", mmr: 1162 },
+      { id: "b", name: "Amy", mmr: 995 },
+      { id: "c", name: "Bao", mmr: 1080 },
+      { id: "d", name: "Cathy", mmr: 976 },
+      { id: "e", name: "Dave", mmr: 913 },
+      { id: "f", name: "Eddy", mmr: 1172 },
+      { id: "g", name: "Ellie", mmr: 959 },
+      { id: "h", name: "Garvin", mmr: 1172 },
+    ];
+    const diffOf = (split: { atlantis: { mmr: number }[]; titans: { mmr: number }[] }) =>
+      Math.abs(
+        split.atlantis.reduce((s, p) => s + p.mmr, 0) - split.titans.reduce((s, p) => s + p.mmr, 0),
+      );
+
+    const splits = mmrBalancedSplits(pool, 4);
+    const diffs = splits.map(diffOf).sort((a, b) => a - b);
+    expect(diffs[0]).toBe(3);
+    expect(diffs).toEqual([3, 17, 17, 17]);
+  });
 });
 
 describe("rankedBalancedSplits (regression after extracting the shared weighted-split core)", () => {

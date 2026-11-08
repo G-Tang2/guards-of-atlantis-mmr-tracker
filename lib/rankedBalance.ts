@@ -18,15 +18,15 @@ const SKILL_RANK_POINTS: Record<string, number> = {
   adrian: 10,
   garvin: 10,
   harry: 10,
-  eddy: 8,
+  eddy: 9,
+  han: 7,
   bao: 6.5,
-  tu: 6.5,
+  gordon: 6.5,
+  tu: 6,
   peter: 6,
-  han: 6,
   amy: 6,
-  gordon: 6,
   vincent: 5,
-  sam: 4,
+  sam: 5,
   dave: 4,
   jenny: 4,
   jason: 3,
@@ -242,11 +242,24 @@ function bestDiverseCombination(
 // single candidate by fixing pool[0] to always land on the "titans" side —
 // since a mask and its bitwise complement always have the same point
 // difference, this loses no candidates while halving the work.
+// `applyDiversityCap` is a real quality trade-off, not a free diversity
+// bonus: bestDiverseCombination stops at the FIRST cap level (starting
+// from MIN_PAIR_TOGETHER_CAP) that yields ANY valid combination at all,
+// not the first one that yields a GOOD one — so if a tight cap happens to
+// be satisfiable only by combinations of otherwise-mediocre candidates
+// (common once weights are mostly-distinct continuous values like MMR,
+// rather than the small, heavily-clustered integer scale skill points
+// use, where a cheap cap is almost always satisfiable by near-optimal
+// candidates anyway), the result can come back far worse than the actual
+// best `count` splits — including dropping the single best one entirely.
+// Verified against skill points in practice; MMR is the caller that
+// should leave this off (see mmrBalancedSplits).
 function balancedSplitsByWeight<T extends SkillPlayer>(
   pool: T[],
   weightOf: (p: T) => number,
   count: number,
   maxDiff: number,
+  applyDiversityCap: boolean = true,
 ): Split<T>[] {
   const n = pool.length;
   const weights = pool.map(weightOf);
@@ -279,11 +292,13 @@ function balancedSplitsByWeight<T extends SkillPlayer>(
   // `count` total options), so this is guaranteed to terminate with a
   // real combination rather than needing a separate uncapped fallback.
   let selectedIndices: number[] = candidates.slice(0, count).map((_, i) => i);
-  for (let cap = MIN_PAIR_TOGETHER_CAP; cap <= count; cap++) {
-    const diverseIndices = bestDiverseCombination(candidates, count, n, cap);
-    if (diverseIndices) {
-      selectedIndices = diverseIndices;
-      break;
+  if (applyDiversityCap) {
+    for (let cap = MIN_PAIR_TOGETHER_CAP; cap <= count; cap++) {
+      const diverseIndices = bestDiverseCombination(candidates, count, n, cap);
+      if (diverseIndices) {
+        selectedIndices = diverseIndices;
+        break;
+      }
     }
   }
   const selected = orderByNovelty(
@@ -311,8 +326,13 @@ export const rankedBalancedSplits = <T extends MmrPlayer>(
 
 // MMR-weighted splits — the "Balanced" button's own voted variant. No
 // diff threshold: a plain MMR balance always has a real best option, even
-// if every possible split is lopsided, so there's nothing to gate on.
+// if every possible split is lopsided, so there's nothing to gate on. No
+// diversity cap either (see balancedSplitsByWeight's own comment on why):
+// with MMR's mostly-distinct values, the cap search tends to settle for
+// combinations far worse than the real best `count` splits, which directly
+// contradicts what "Balanced" promises — these are meant to be *the*
+// most balanced options, full stop.
 export const mmrBalancedSplits = <T extends MmrPlayer>(
   pool: T[],
   count: number,
-): Split<T>[] => balancedSplitsByWeight(pool, (p) => p.mmr, count, Infinity);
+): Split<T>[] => balancedSplitsByWeight(pool, (p) => p.mmr, count, Infinity, false);
