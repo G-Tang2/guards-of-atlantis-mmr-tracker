@@ -49,7 +49,7 @@ export function LegendsPanel({ players, matches }: { players: Player[]; matches:
   return (
     <>
       {/* Battles played by the league while holding #1 MMR */}
-      <StatCard icon={<Crown size={16} />} title="The Throne" description="Battles played league-wide while ranked #1, whether you played in them or not">
+      <StatCard icon={<Crown size={16} />} title="The Throne" description="Battles played across the league while ranked #1">
         {stats.reign.length === 0 ? (
           <Empty />
         ) : (
@@ -66,7 +66,7 @@ export function LegendsPanel({ players, matches }: { players: Player[]; matches:
       </StatCard>
 
       {/* Battles played by the league while holding a top-3 MMR spot */}
-      <StatCard icon={<Medal size={16} />} title="The Podium" description="Battles played league-wide while ranked in the top 3, whether you played in them or not">
+      <StatCard icon={<Medal size={16} />} title="The Podium" description="Battles played across the league while ranked in the top 3">
         {stats.podium.length === 0 ? (
           <Empty />
         ) : (
