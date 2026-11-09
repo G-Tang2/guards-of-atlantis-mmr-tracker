@@ -7772,6 +7772,94 @@
     cursor: pointer;
   }
 
+  /* Match detail page's Moments section (app/matches/[id]/page.tsx) —
+     a horizontally-scrolling strip of square photo thumbnails, each
+     opening a full-size lightbox on tap. */
+  .goa-moments-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    padding: 0.75rem 0.85rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .goa-moments-row::-webkit-scrollbar {
+    display: none;
+  }
+  .goa-moment-thumb-btn,
+  .goa-moment-add-btn {
+    flex-shrink: 0;
+    width: 84px;
+    height: 84px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .goa-moment-thumb-btn {
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: rgba(28, 26, 20, 0.85);
+  }
+  .goa-moment-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .goa-moment-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--border-bright);
+    background: rgba(42, 39, 32, 0.5);
+    color: var(--text-muted);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .goa-moment-add-btn:hover {
+    color: var(--gold-light);
+    border-color: var(--gold);
+  }
+  .goa-moment-add-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .goa-moment-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 9, 6, 0.85);
+    padding: 1rem;
+  }
+  .goa-moment-modal-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 4px 32px rgba(0, 0, 0, 0.6);
+  }
+  .goa-moment-modal-close {
+    position: fixed;
+    top: calc(0.75rem + env(safe-area-inset-top));
+    right: 0.75rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: rgba(28, 26, 20, 0.9);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 201;
+  }
+
   .goa-chat-input-bar {
     flex-shrink: 0;
     display: flex;

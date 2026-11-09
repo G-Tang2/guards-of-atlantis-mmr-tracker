@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, ReactNode, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, CSSProperties, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -15,7 +15,7 @@ import {
   Team,
   WinCondition,
 } from "@/lib/match";
-import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Scale, Ban, Pencil, X, Trash2 } from "lucide-react";
+import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Scale, Ban, Pencil, X, Trash2, Camera, ImagePlus } from "lucide-react";
 import { RankedBalanceResult, RankedBalanceResultPlayer } from "@/lib/rankedBalanceResult";
 import { OptionCard } from "@/components/RankedVoteUI";
 import { VoteSessionPlayer } from "@/lib/rankedVoteSession";
@@ -40,6 +40,12 @@ import { computeBountyHeroIds, ARCANE_BOUNTY_THRESHOLD } from "@/lib/bounty";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
 import { computeMatchOutcome, RosterPlayer } from "@/lib/matchRecording";
 import { BadgeEarnedOverlay, EarnedBadgeInfo } from "@/components/BadgeEarnedOverlay";
+
+type MatchMoment = {
+  id: string;
+  image_url: string;
+  created_at: string;
+};
 
 type Match = {
   id: string;
@@ -420,6 +426,17 @@ export default function MatchDetailPage() {
   const [earnedBadges, setEarnedBadges] = useState<EarnedBadgeInfo[]>([]);
   const [deleteSaving, setDeleteSaving] = useState(false);
 
+  // Moments — photos the group adds to a battle, shown just above Draft
+  // Analysis. Adding one needs the shared password, same trust boundary
+  // as editing/deleting (see momentsAuthed below), but unlike those,
+  // viewing/adding isn't scoped to only the latest match — a moment can
+  // be added to any battle, whenever someone gets around to it.
+  const [moments, setMoments] = useState<MatchMoment[]>([]);
+  const [momentsAuthed, setMomentsAuthed] = useState(false);
+  const [momentUploading, setMomentUploading] = useState(false);
+  const [enlargedMoment, setEnlargedMoment] = useState<string | null>(null);
+  const momentInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     supabaseClient
       .from("matches")
@@ -429,6 +446,59 @@ export default function MatchDetailPage() {
       .maybeSingle()
       .then(({ data }) => setLatestMatchNumber(data?.match_number ?? null));
   }, []);
+
+  useEffect(() => {
+    setMomentsAuthed(localStorage.getItem("goa-match-auth") === "true");
+  }, []);
+
+  useEffect(() => {
+    if (!matchId) return;
+    supabaseClient
+      .from("match_moments")
+      .select("id, image_url, created_at")
+      .eq("match_id", matchId)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => setMoments(data ?? []));
+  }, [matchId]);
+
+  const MOMENT_MAX_BYTES = 8 * 1024 * 1024;
+
+  const handleMomentFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !match) return;
+    if (file.size > MOMENT_MAX_BYTES) {
+      alert("Photo must be under 8MB");
+      if (momentInputRef.current) momentInputRef.current.value = "";
+      return;
+    }
+    setMomentUploading(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${match.id}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabaseClient.storage
+        .from("match-moments")
+        .upload(path, file, { contentType: file.type });
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabaseClient.storage
+        .from("match-moments")
+        .getPublicUrl(path);
+
+      const { data: inserted, error: insertError } = await supabaseClient
+        .from("match_moments")
+        .insert({ match_id: match.id, image_url: publicUrlData.publicUrl })
+        .select("id, image_url, created_at")
+        .single();
+      if (insertError) throw insertError;
+      if (inserted) setMoments((prev) => [...prev, inserted]);
+    } catch (err) {
+      console.error("Moment upload failed", err);
+      alert("Failed to upload photo. Please try again.");
+    } finally {
+      setMomentUploading(false);
+      if (momentInputRef.current) momentInputRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     if (!matchId) return;
@@ -1178,6 +1248,50 @@ export default function MatchDetailPage() {
         </div>
       </div>
 
+      {/* Moments — photos the group has added for this battle. Adding one
+          needs the shared password (see momentsAuthed above); viewing
+          them, like the rest of this page, stays public. */}
+      <div className="goa-section">
+        <div className="goa-sec-head">
+          <ImagePlus size={14} className="inline-block align-text-bottom" style={{ marginRight: "0.35rem" }} />
+          Moments
+        </div>
+        {moments.length === 0 && !momentsAuthed ? (
+          <p className="goa-draft-analysis-hint">No photos added yet.</p>
+        ) : (
+          <div className="goa-moments-row">
+            {moments.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className="goa-moment-thumb-btn"
+                onClick={() => setEnlargedMoment(m.image_url)}
+              >
+                <img src={m.image_url} alt="Match moment" className="goa-moment-thumb-img" />
+              </button>
+            ))}
+            {momentsAuthed && (
+              <button
+                type="button"
+                className="goa-moment-add-btn"
+                onClick={() => momentInputRef.current?.click()}
+                disabled={momentUploading}
+                aria-label="Add a photo"
+              >
+                {momentUploading ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
+              </button>
+            )}
+          </div>
+        )}
+        <input
+          ref={momentInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleMomentFileChange}
+        />
+      </div>
+
       {/* Draft Analysis — an Oracle-generated (Gemini) read on which team
           drafted the stronger composition. Generated once on demand and
           cached on the match row (see draft_analysis in MATCH_SELECT
@@ -1233,6 +1347,25 @@ export default function MatchDetailPage() {
 
       {selectedCard && (
         <CardDetailModal reference={selectedCard} onClose={() => setSelectedCard(null)} />
+      )}
+
+      {enlargedMoment && (
+        <div className="goa-moment-modal-backdrop" onClick={() => setEnlargedMoment(null)}>
+          <button
+            type="button"
+            className="goa-moment-modal-close"
+            onClick={() => setEnlargedMoment(null)}
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={enlargedMoment}
+            alt="Match moment, enlarged"
+            className="goa-moment-modal-img"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </main>
   );
