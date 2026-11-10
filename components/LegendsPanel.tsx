@@ -3,14 +3,16 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Crown, Medal, Flame, Sparkles, Skull, Repeat2, Shuffle, Heart, HeartCrack, Swords, Dumbbell, Coins } from "lucide-react";
+import { Crown, Medal, Flame, Sparkles, Skull, Repeat2, Shuffle, Heart, HeartCrack, Swords, Dumbbell, Coins, Flag, Trophy } from "lucide-react";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { getHero } from "@/lib/match";
 import {
   computeFunStats,
+  computeMmrMilestones,
   FunStatsMatch,
   MIN_DUO_GAMES,
   type DuoEntry,
+  type MmrMilestoneEntry,
   type NemesisEntry,
 } from "@/lib/funStats";
 
@@ -44,10 +46,14 @@ export function LegendsPanel({ players, matches }: { players: Player[]; matches:
   const router = useRouter();
   const playerMap = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
   const stats = useMemo(() => computeFunStats(matches), [matches]);
+  const milestones = useMemo(() => computeMmrMilestones(matches), [matches]);
   const goToProfile = (id: string) => router.push(`/players/${id}`);
 
   return (
     <>
+      {/* The first player to ever reach each 100-mmr threshold, league-wide */}
+      <MilestonesSection milestones={milestones} playerMap={playerMap} />
+
       {/* Battles played by the league while holding #1 MMR */}
       <StatCard icon={<Crown size={16} />} title="The Throne" description="Battles played across the league while ranked #1">
         {stats.reign.length === 0 ? (
@@ -185,6 +191,23 @@ export function LegendsPanel({ players, matches }: { players: Player[]; matches:
         )}
       </StatCard>
 
+      {/* Most distinct heroes won on (not just played) */}
+      <StatCard icon={<Trophy size={16} />} title="Most Versatile Wins" description="Most distinct heroes won with">
+        {stats.mostVersatileWins.length === 0 ? (
+          <Empty />
+        ) : (
+          withRank(stats.mostVersatileWins, (e) => e.count).map(({ rank, entry: e }) => (
+            <PlayerRow
+              key={e.playerId}
+              rank={rank}
+              player={playerMap.get(e.playerId)}
+              onClick={() => goToProfile(e.playerId)}
+              value={`${e.count} heroes`}
+            />
+          ))
+        )}
+      </StatCard>
+
       {/* Best duo */}
       <StatCard
         icon={<Heart size={16} />}
@@ -260,6 +283,85 @@ export function LegendsPanel({ players, matches }: { players: Player[]; matches:
         )}
       </StatCard>
     </>
+  );
+}
+
+// "Milestones" — who was first to claim each 100-mmr milestone,
+// league-wide and all-time. Rendered as a vertical ladder climbing
+// bottom-to-top (1100 at the base, each higher threshold a rung above
+// it) — ending in one dashed "?" rung at the very top for whichever
+// threshold nobody has reached yet, the next peak to chase. Purely
+// informational, not a leaderboard of holders, so rungs aren't clickable.
+function MilestonesSection({
+  milestones,
+  playerMap,
+}: {
+  milestones: MmrMilestoneEntry[];
+  playerMap: Map<string, Player>;
+}) {
+  // milestones is ascending (1100 first); reverse so the highest/next rung
+  // renders at the top of the column and 1100 anchors the bottom.
+  const bottomToTop = [...milestones].reverse();
+  let reachedRank = -1;
+  return (
+    <section className="goa-milestones-card">
+      <div className="goa-milestones-head">
+        <Flag size={16} />
+        Milestones
+      </div>
+      <p className="goa-funstat-desc">First to claim each 100 MMR milestone</p>
+      <div className="goa-milestones-ladder">
+        {bottomToTop.map((m) => {
+          if (m.playerId) reachedRank++;
+          return (
+            <MilestoneRung
+              key={m.threshold}
+              entry={m}
+              player={m.playerId ? playerMap.get(m.playerId) : undefined}
+              isCurrentRecord={reachedRank === 0 && !!m.playerId}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function MilestoneRung({
+  entry,
+  player,
+  isCurrentRecord,
+}: {
+  entry: MmrMilestoneEntry;
+  player?: Player;
+  isCurrentRecord: boolean;
+}) {
+  const unreached = entry.playerId === null;
+  const dateLabel = entry.date
+    ? new Date(entry.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : null;
+  return (
+    <div className={`goa-milestone-rung ${unreached ? "unreached" : ""}`}>
+      <div className={`goa-milestone-badge ${isCurrentRecord ? "current-record" : ""}`}>
+        {unreached ? (
+          <span className="goa-milestone-question">?</span>
+        ) : (
+          <PlayerAvatar avatarUrl={player?.avatar_url} name={player?.name ?? "?"} size={40} />
+        )}
+      </div>
+      <span className="goa-milestone-rung-text">
+        <span className="goa-milestone-name">
+          {unreached ? "Unclaimed" : player?.name ?? "Unknown"}
+        </span>
+        {!unreached && (
+          <span className="goa-milestone-sub">
+            Battle #{entry.matchNumber}
+            {dateLabel ? ` · ${dateLabel}` : ""}
+          </span>
+        )}
+      </span>
+      <span className="goa-milestone-threshold-value">{entry.threshold}</span>
+    </div>
   );
 }
 

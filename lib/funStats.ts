@@ -17,6 +17,9 @@ export type FunStatsMatch = {
   match_number: number;
   winner: "atlantis" | "titans" | "none";
   match_players: FunStatsMatchPlayer[];
+  // Only computeMmrMilestones below actually needs this — optional so
+  // every other caller/fixture is unaffected.
+  created_at?: string;
 };
 
 // A pair needs at least this many games together (on the same team) to be
@@ -39,6 +42,7 @@ export type StreakEntry = {
 
 export type HeroCountEntry = { playerId: string; heroId: string; count: number };
 export type VersatilityEntry = { playerId: string; count: number };
+export type VersatileWinEntry = { playerId: string; count: number };
 export type BountyEntry = { playerId: string; count: number };
 export type IronManEntry = { playerId: string; count: number };
 export type ReignEntry = { playerId: string; count: number };
@@ -72,6 +76,7 @@ export type FunStats = {
   hotStreak: StreakEntry[];
   mostGamesOneHero: HeroCountEntry[];
   mostHeroesPlayed: VersatilityEntry[];
+  mostVersatileWins: VersatileWinEntry[];
   bestDuo: DuoEntry[];
   worstDuo: DuoEntry[];
   nemesis: NemesisEntry[];
@@ -113,6 +118,7 @@ export function computeFunStats(
 
   const perPlayerResults = new Map<string, { matchNumber: number; result: "win" | "loss" | "draw" }[]>();
   const heroCounts = new Map<string, Map<string, number>>();
+  const wonHeroIds = new Map<string, Set<string>>();
   const bountyCounts = new Map<string, number>();
   const duoStats = new Map<string, DuoEntry>();
   const nemesisStats = new Map<string, NemesisEntry>();
@@ -138,6 +144,12 @@ export function computeFunStats(
         const counts = heroCounts.get(mp.player_id) ?? new Map<string, number>();
         counts.set(mp.hero_id, (counts.get(mp.hero_id) ?? 0) + 1);
         heroCounts.set(mp.player_id, counts);
+
+        if (result === "win") {
+          const won = wonHeroIds.get(mp.player_id) ?? new Set<string>();
+          won.add(mp.hero_id);
+          wonHeroIds.set(mp.player_id, won);
+        }
       }
 
       if (mp.is_bounty) {
@@ -293,6 +305,10 @@ export function computeFunStats(
     versatilityEntries.push({ playerId, count: counts.size });
   });
 
+  const versatileWinEntries: VersatileWinEntry[] = Array.from(wonHeroIds.entries()).map(
+    ([playerId, heroIds]) => ({ playerId, count: heroIds.size }),
+  );
+
   const bountyEntries: BountyEntry[] = [];
   bountyCounts.forEach((count, playerId) => bountyEntries.push({ playerId, count }));
 
@@ -311,10 +327,73 @@ export function computeFunStats(
     hotStreak: topN(hotStreaks, (e) => e.length, TOP_N),
     mostGamesOneHero: topN(heroCountEntries, (e) => e.count, TOP_N),
     mostHeroesPlayed: topN(versatilityEntries, (e) => e.count, TOP_N),
+    mostVersatileWins: topN(versatileWinEntries, (e) => e.count, TOP_N),
     bestDuo: topN(duoEntries, (e) => e.winRate, TOP_N),
     worstDuo: topN(duoEntries, (e) => e.winRate, TOP_N, "min"),
     nemesis: topN(Array.from(nemesisStats.values()), (e) => e.games, TOP_N),
     ironMan: topN(ironManEntries, (e) => e.count, TOP_N),
     bountyHunter: topN(bountyEntries, (e) => e.count, TOP_N),
   };
+}
+
+export const MMR_MILESTONE_START = 1100;
+export const MMR_MILESTONE_STEP = 100;
+
+export type MmrMilestoneEntry = {
+  threshold: number;
+  playerId: string | null; // null if nobody has reached it yet
+  matchNumber: number | null;
+  date: string | null; // that match's created_at, verbatim
+};
+
+// Walks every match_player row looking for the match in which a player's
+// mmr crossed each 100-wide milestone (1100, 1200, …) for the first time —
+// no starting mmr has ever been at or above 1100 (700 by default, 1000
+// before that), so mmr_after is the only way a milestone gets crossed.
+// Ties on the same match_number (two players crossing it in the same
+// battle) break on player id, arbitrarily but deterministically.
+//
+// Returns a contiguous run starting at 1100: every milestone someone has
+// actually reached, in order, plus exactly one trailing entry (playerId
+// null) for the next, not-yet-reached milestone — the caller renders that
+// one as a "?" slot and stops there.
+export function computeMmrMilestones(matches: FunStatsMatch[]): MmrMilestoneEntry[] {
+  const firstToReach = new Map<number, { playerId: string; matchNumber: number; date: string | null }>();
+
+  matches.forEach((match) => {
+    match.match_players.forEach((mp) => {
+      for (
+        let threshold = Math.floor(mp.mmr_before / MMR_MILESTONE_STEP + 1) * MMR_MILESTONE_STEP;
+        threshold <= mp.mmr_after;
+        threshold += MMR_MILESTONE_STEP
+      ) {
+        if (threshold < MMR_MILESTONE_START) continue;
+        const existing = firstToReach.get(threshold);
+        if (
+          !existing ||
+          match.match_number < existing.matchNumber ||
+          (match.match_number === existing.matchNumber && mp.player_id < existing.playerId)
+        ) {
+          firstToReach.set(threshold, {
+            playerId: mp.player_id,
+            matchNumber: match.match_number,
+            date: match.created_at ?? null,
+          });
+        }
+      }
+    });
+  });
+
+  const entries: MmrMilestoneEntry[] = [];
+  for (let threshold = MMR_MILESTONE_START; ; threshold += MMR_MILESTONE_STEP) {
+    const reached = firstToReach.get(threshold);
+    entries.push({
+      threshold,
+      playerId: reached?.playerId ?? null,
+      matchNumber: reached?.matchNumber ?? null,
+      date: reached?.date ?? null,
+    });
+    if (!reached) break;
+  }
+  return entries;
 }

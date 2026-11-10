@@ -35,6 +35,7 @@ import { CardDetailModal } from "@/components/CardDetail";
 import { PasswordGate } from "@/components/PasswordGate";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { HeroPicker } from "@/components/HeroPicker";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Hero, HEROES } from "@/lib/heroes";
 import { computeBountyHeroIds, ARCANE_BOUNTY_THRESHOLD } from "@/lib/bounty";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
@@ -423,6 +424,14 @@ export default function MatchDetailPage() {
   const [editWinner, setEditWinner] = useState<Team | "">("");
   const [editWinCondition, setEditWinCondition] = useState<WinCondition | null>(null);
   const [editHeroByPlayer, setEditHeroByPlayer] = useState<Record<string, Hero | null>>({});
+  // Badges each participant owned BEFORE this match (excludes this match's
+  // own rows — see handleSaveEdit's own comment) — populated once edit
+  // mode opens, so the "place a Defiant bet?" checkbox has something to
+  // key off.
+  const [editOwnedBadgesByPlayer, setEditOwnedBadgesByPlayer] = useState<Map<string, Set<string>>>(new Map());
+  // Which Defiant owners have their bet on for this edit — pre-filled in
+  // startEdit from each participant's stored defiant_bonus.
+  const [editDefiantBetByPlayer, setEditDefiantBetByPlayer] = useState<Set<string>>(new Set());
   const [earnedBadges, setEarnedBadges] = useState<EarnedBadgeInfo[]>([]);
   const [deleteSaving, setDeleteSaving] = useState(false);
 
@@ -570,8 +579,60 @@ export default function MatchDetailPage() {
       heroMap[p.player_id] = p.hero_id ? HEROES.find((h) => h.id === p.hero_id) ?? null : null;
     });
     setEditHeroByPlayer(heroMap);
+
+    // A nonzero stored defiant_bonus only ever comes from a placed bet (a
+    // draw voids it to nothing — see applyBadgeRewards), so it's exactly
+    // "were they betting last time."
+    setEditDefiantBetByPlayer(
+      new Set(match.match_players.filter((p) => !!p.defiant_bonus).map((p) => p.player_id)),
+    );
+
     setEditError(null);
     setEditMode(true);
+
+    // Who owned which badges BEFORE this match — same "exclude this
+    // match's own rows" query handleSaveEdit uses, fetched early so the
+    // "place a Defiant bet?" checkbox has something to key off while the
+    // edit form is open.
+    const allParticipantIds = match.match_players.map((p) => p.player_id);
+    supabaseClient
+      .from("match_players")
+      .select("player_id, hero_id, team, match_number, matches!inner(winner)")
+      .in("player_id", allParticipantIds)
+      .not("hero_id", "is", null)
+      .neq("match_id", match.id)
+      .then(({ data: heroHistory }) => {
+        const wonHeroesByPlayer = buildWonHeroesByPlayer(heroHistory ?? []);
+        setEditOwnedBadgesByPlayer(
+          new Map(allParticipantIds.map((id) => [id, getOwnedBadgeIds(wonHeroesByPlayer.get(id) ?? new Set())])),
+        );
+      });
+  };
+
+  const toggleEditDefiantBet = (playerId: string, checked: boolean) => {
+    setEditDefiantBetByPlayer((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(playerId);
+      else next.delete(playerId);
+      return next;
+    });
+  };
+
+  const renderEditDefiantBetToggle = (playerId: string) => {
+    if (!editOwnedBadgesByPlayer.get(playerId)?.has("defiant")) return null;
+    const id = `edit-defiant-bet-${playerId}`;
+    return (
+      <div className="goa-checkbox-container goa-defiant-bet">
+        <Checkbox
+          id={id}
+          checked={editDefiantBetByPlayer.has(playerId)}
+          onCheckedChange={(checked) => toggleEditDefiantBet(playerId, checked === true)}
+        />
+        <label htmlFor={id} className="goa-tap-hint">
+          Place Defiant bet (5 MMR)?
+        </label>
+      </div>
+    );
   };
 
   // Every hero already assigned to a *different* participant in the edit
@@ -642,6 +703,13 @@ export default function MatchDetailPage() {
       const toRoster = (list: MatchPlayer[]): RosterPlayer[] =>
         list.map((p) => ({ id: p.player_id, name: p.players.name, mmr: p.mmr_before, avatarUrl: p.players.avatar_url }));
 
+      // Owning Defiant only makes someone eligible to bet — editDefiantBetByPlayer
+      // (the checkbox state) is who actually has it on for this edit,
+      // filtered defensively against who really owns it by now.
+      const defiantBetPlayerIds = new Set(
+        [...editDefiantBetByPlayer].filter((id) => ownedBadgesByPlayer.get(id)?.has("defiant")),
+      );
+
       const computed = computeMatchOutcome({
         atlantis: toRoster(match.match_players.filter((p) => p.team === "atlantis")),
         titans: toRoster(match.match_players.filter((p) => p.team === "titans")),
@@ -652,6 +720,7 @@ export default function MatchDetailPage() {
         bountyHeroIds,
         arcaneBountyHeroIds,
         rookieInputByPlayer,
+        defiantBetPlayerIds,
       });
 
       const { error: matchError } = await supabaseClient
@@ -923,6 +992,7 @@ export default function MatchDetailPage() {
                         }
                         excludeHeroIds={otherEditAssignedHeroIds(p.player_id)}
                       />
+                      {renderEditDefiantBetToggle(p.player_id)}
                     </div>
                   ))}
               </div>

@@ -6,6 +6,7 @@ export default defineConfig({
     // @playwright/test's own test()/expect(), not vitest's, and need a
     // real browser + running app rather than vitest's JS environment.
     exclude: ["**/node_modules/**", "e2e/**"],
+    setupFiles: ["./vitest.setup.ts"],
   },
   resolve: {
     // Mirrors tsconfig.json's "@/*" -> "./*" path mapping — vitest

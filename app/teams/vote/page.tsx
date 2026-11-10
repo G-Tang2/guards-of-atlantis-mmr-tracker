@@ -18,8 +18,8 @@ import {
   VoteSessionPlayer,
   VoteSplitMethod,
   BAN_COUNT,
-  computeVoteAllowance,
-  totalVotesFromAllowance,
+  computeVoteWeight,
+  totalVotesFromPlayerIds,
   sortBannedLast,
   votedFully,
   incrementBanVote,
@@ -35,7 +35,8 @@ import {
 } from "@/lib/rankedVoteSession";
 import { buildWonHeroesByPlayer } from "@/lib/heroWinBonus";
 import { getOwnedBadgeIds } from "@/lib/badgeRewards";
-import { Star, Scale, Crown, ScrollText, Swords, Ban, Share2, CheckCircle2, ChevronDown } from "lucide-react";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { Star, Scale, Crown, ScrollText, Swords, Ban, Share2, CheckCircle2, ChevronDown, ShieldCheck } from "lucide-react";
 
 type Player = VoteSessionPlayer;
 
@@ -84,6 +85,12 @@ function TeamsVotePageInner() {
   // (see OptionCard's onHoldComplete) — an option index, not a boolean,
   // since the dialog needs to say which option it's about to lock in.
   const [forceWinnerIndex, setForceWinnerIndex] = useState<number | null>(null);
+
+  // Base badge voting flow — see baseOwnersInSession/remainingBaseVoters
+  // below. armedBaseVoterId is "the very next tap on an option belongs to
+  // this player, weighted 1.5x" — set the instant they tap their own name,
+  // cleared once that tap's confirm/undo resolves.
+  const [armedBaseVoterId, setArmedBaseVoterId] = useState<string | null>(null);
 
   // React (in dev, under StrictMode) runs a fresh-mount effect twice —
   // harmless for an effect that only reads, but this one can *create* a
@@ -151,8 +158,8 @@ function TeamsVotePageInner() {
         .select("id, name, mmr, avatar_url")
         .in("id", saved.playerIds),
       // Base badge ownership — every hero any of tonight's players has
-      // ever won with, used only to work out who gets a second vote (see
-      // lib/rankedVoteSession.ts's computeVoteAllowance). Not scoped to
+      // ever won with, used only to work out whose vote is weighted 1.5x
+      // (see lib/rankedVoteSession.ts's computeVoteWeight). Not scoped to
       // didWin here; buildWonHeroesByPlayer already applies that filter.
       supabaseClient
         .from("match_players")
@@ -179,8 +186,8 @@ function TeamsVotePageInner() {
           getOwnedBadgeIds(wonHeroesByPlayer.get(id) ?? new Set()).has("base"),
         ),
       );
-      const voteAllowance = computeVoteAllowance(saved.playerIds, baseOwnerIds);
-      const computedTotalVotes = totalVotesFromAllowance(voteAllowance);
+      const voteWeight = computeVoteWeight(saved.playerIds, baseOwnerIds);
+      const computedTotalVotes = totalVotesFromPlayerIds(saved.playerIds);
 
       const splitMethod: VoteSplitMethod = saved.method === "balanced" ? "balanced" : "ranked";
       const computedSplits =
@@ -190,7 +197,7 @@ function TeamsVotePageInner() {
       const initial: Partial<VoteSessionRow> = {
         split_method: splitMethod,
         player_ids: saved.playerIds,
-        vote_allowance: voteAllowance,
+        vote_weight: voteWeight,
         splits: computedSplits,
         total_votes: computedTotalVotes,
         active_indices: allIndices,
@@ -300,6 +307,12 @@ function TeamsVotePageInner() {
     prevStageRef.current = session.stage;
     if (!cameFromElsewhere) return;
 
+    // A new round starting (however it got settled) means any armed Base
+    // badge identity from the round that just ended is stale — left
+    // armed, the next tap in the new round would wrongly get attributed
+    // (and weighted) to whoever tapped their name last round.
+    setArmedBaseVoterId(null);
+
     if (session.stage === "ban_results") {
       continueAfterBanDb(session).then((updated) => {
         if (updated) setSession(updated);
@@ -357,17 +370,20 @@ function TeamsVotePageInner() {
 
   const castVote = async (index: number) => {
     if (!session) return;
+    const voterId = armedBaseVoterId ?? undefined;
     const before = session;
-    const updated = await incrementChooseVote(before, index);
+    const updated = await incrementChooseVote(before, index, voterId);
     if (updated) setSession(updated);
     showConfirmationThen(
       async () => {
         const settled = await settleChooseIfComplete(updated ?? before);
         if (settled) setSession(settled);
+        setArmedBaseVoterId(null);
       },
       async () => {
+        setArmedBaseVoterId(null);
         if (!updated) return;
-        const reverted = await undoChooseVote(updated, index);
+        const reverted = await undoChooseVote(updated, index, voterId);
         if (reverted) setSession(reverted);
       },
     );
@@ -375,17 +391,20 @@ function TeamsVotePageInner() {
 
   const castBanVoteTap = async (index: number) => {
     if (!session) return;
+    const voterId = armedBaseVoterId ?? undefined;
     const before = session;
-    const updated = await incrementBanVote(before, index);
+    const updated = await incrementBanVote(before, index, voterId);
     if (updated) setSession(updated);
     showConfirmationThen(
       async () => {
         const settled = await settleBanIfComplete(updated ?? before);
         if (settled) setSession(settled);
+        setArmedBaseVoterId(null);
       },
       async () => {
+        setArmedBaseVoterId(null);
         if (!updated) return;
-        const reverted = await undoBanVote(updated, index);
+        const reverted = await undoBanVote(updated, index, voterId);
         if (reverted) setSession(reverted);
       },
     );
@@ -510,11 +529,60 @@ function TeamsVotePageInner() {
   // Every option includes every player, just assigned to a different side
   // — session.splits[0] alone already has the full roster.
   const roster = [...session.splits[0].atlantis, ...session.splits[0].titans];
-  // Only ever reflects players who voted through the shareable link (see
-  // ban_voters/voters' own column comments) — a tap on this device itself
-  // stays fully anonymous, exactly as it always has.
+  // Reflects players who voted with a known identity — either through the
+  // shareable link, or on this device via the "I have a Base badge" flow
+  // (see armedBaseVoterId below). Every other tap on this device stays
+  // fully anonymous, exactly as it always has.
   const votedNames = (votersMap: Record<string, number>): string[] =>
-    roster.filter((p) => votedFully(votersMap, session.vote_allowance, p.id)).map((p) => p.name);
+    roster.filter((p) => votedFully(votersMap, p.id)).map((p) => p.name);
+
+  // Base badge voters — their one tap is worth 1.5x (see vote_weight), but
+  // since the host device's taps are normally anonymous, there's no way to
+  // know whose tap to weight. This lets a Base owner "sign in" for just
+  // their own next tap: pick a name here, then tap an option as usual —
+  // that tap (and only that one) is attributed to them. Cleared once that
+  // tap's confirm/undo resolves (see castBanVoteTap/castVote below).
+  const baseOwnersInSession = roster.filter((p) => session.vote_weight[p.id] === 1.5);
+  const remainingBaseVoters = (votersMap: Record<string, number>) =>
+    baseOwnersInSession.filter((p) => (votersMap[p.id] ?? 0) < 1);
+
+  const renderBaseVoterControl = (remaining: VoteSessionPlayer[]) => {
+    if (armedBaseVoterId) {
+      const voter = roster.find((p) => p.id === armedBaseVoterId);
+      return (
+        <div className="goa-base-voter-armed">
+          <ShieldCheck size={14} />
+          Voting as <strong>{voter?.name}</strong> — 1.5× (Base badge). Tap an option.
+          <button type="button" className="goa-base-voter-cancel" onClick={() => setArmedBaseVoterId(null)}>
+            Cancel
+          </button>
+        </div>
+      );
+    }
+    if (remaining.length === 0) {
+      return <p className="goa-base-voter-note">Base badge voters have all voted.</p>;
+    }
+    return (
+      <div className="goa-base-voter-row">
+        <span className="goa-base-voter-label">
+          <ShieldCheck size={13} /> Base badge — is one of these you?
+        </span>
+        <div className="goa-base-voter-chips">
+          {remaining.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="goa-base-voter-chip"
+              onClick={() => setArmedBaseVoterId(p.id)}
+            >
+              <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={22} />
+              <span>{p.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // settleChooseIfComplete (the only other way winner_index ever gets set)
   // never runs until votes_cast reaches total_votes — so seeing a winner
@@ -657,14 +725,14 @@ function TeamsVotePageInner() {
           </div>
           {votedNames(session.ban_voters).length > 0 && (
             <p className="goa-vote-voted-note">
-              <CheckCircle2 size={12} /> Voted via link: {votedNames(session.ban_voters).join(", ")}
+              <CheckCircle2 size={12} /> Voted: {votedNames(session.ban_voters).join(", ")}
             </p>
           )}
           <p className="draft-note">
-            Tap the option you'd most like to remove, then pass the device
-            on. If you have two votes from the Base badge, use them on two
-            different options.
+            Tap the option you'd most like to remove, then pass the device on.
           </p>
+          {baseOwnersInSession.length > 0 &&
+            renderBaseVoterControl(remainingBaseVoters(session.ban_voters))}
           <div className="goa-vote-options">
             {session.splits.map((split, i) => (
               <OptionCard
@@ -699,18 +767,18 @@ function TeamsVotePageInner() {
           </div>
           {votedNames(session.voters).length > 0 && (
             <p className="goa-vote-voted-note">
-              <CheckCircle2 size={12} /> Voted via link: {votedNames(session.voters).join(", ")}
+              <CheckCircle2 size={12} /> Voted: {votedNames(session.voters).join(", ")}
             </p>
           )}
           <p className="draft-note">
-            Tap an option to cast your vote, then pass the device on. If you
-            have two votes from the Base badge, use them on two different
-            options.
+            Tap an option to cast your vote, then pass the device on.
           </p>
           <p className="draft-note subtle">
             Match creator: press and hold an option for 2 seconds to pick it
             directly and skip the rest of the vote.
           </p>
+          {baseOwnersInSession.length > 0 &&
+            renderBaseVoterControl(remainingBaseVoters(session.voters))}
           <div className="goa-vote-options">
             {session.active_indices.map((i) => (
               <OptionCard

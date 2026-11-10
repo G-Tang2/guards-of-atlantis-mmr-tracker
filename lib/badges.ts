@@ -27,7 +27,7 @@ export const BADGES: Badge[] = [
       "xargatha",
     ],
     description:
-      "Gain a second vote in Ranked Balance team-split voting. Your two votes can't go to the same option.",
+      "Your vote counts for 1.5x in Ranked Balance and Balanced team-split voting.",
   },
   {
     id: "arcane",
@@ -35,7 +35,7 @@ export const BADGES: Badge[] = [
     icon: "/badges/arcane.png",
     heroIds: ["rowenna", "mrak", "snorri", "razzle", "gydion"],
     description:
-      "For you, a hero nobody has played in the last 5 games counts as a bounty hero (instead of the usual 7).",
+      "For you, heroes qualify as bounty heroes after just 6 unplayed games instead of the usual 8.",
   },
   {
     id: "wayward",
@@ -56,8 +56,7 @@ export const BADGES: Badge[] = [
     name: "Defiant",
     icon: "/badges/defiant.png",
     heroIds: ["garrus", "bain", "cutter", "nebkher", "trinkets"],
-    description:
-      "If you win, you and your team gain 1 extra MMR. If you lose, your opponents gain 1 less MMR.",
+    description: "Optionally wager 5 MMR before battle: win to gain 5 MMR, or lose to lose 5 MMR.",
   },
   {
     id: "renowned",

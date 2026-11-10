@@ -2658,6 +2658,160 @@
     color: var(--loss);
   }
 
+  /* Legends tab's "Milestones" section — a vertical ladder of rungs
+     climbing bottom-to-top, one per 100-mmr threshold reached league-wide,
+     plus a trailing dashed "?" rung at the top for the next, not-yet-
+     claimed one. Same border/hairline treatment as .goa-stats-card (the
+     tinted background is this card's only real departure from it); the
+     single reached-highest rung gets a small crown to mark the current
+     record, which is where this section's prestige actually comes from. */
+  .goa-milestones-card {
+    margin: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: linear-gradient(
+      160deg,
+      rgba(42, 36, 20, 0.95),
+      rgba(20, 18, 14, 0.95)
+    );
+    position: relative;
+    animation: fadeSlide 0.25s ease;
+  }
+  .goa-milestones-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--border-bright),
+      transparent
+    );
+  }
+  .goa-milestones-head {
+    padding: 0.65rem 0.9rem 0.55rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-family: "Cinzel", serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    text-shadow: 0 0 10px rgba(201, 151, 58, 0.35);
+  }
+  .goa-milestones-ladder {
+    display: flex;
+    flex-direction: column;
+    padding: 0.2rem 0.9rem 1.1rem;
+  }
+  .goa-milestone-rung {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+  .goa-milestone-rung:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: calc(50% + 22px);
+    bottom: -0.5rem;
+    width: 1px;
+    background: linear-gradient(
+      to bottom,
+      rgba(201, 151, 58, 0.35),
+      rgba(201, 151, 58, 0.08)
+    );
+  }
+  /* A soft gold spotlight behind whoever currently holds the highest
+     milestone — the one touch of "prestige" meant to draw the eye, rather
+     than a loud border around the whole card. */
+  .goa-milestone-rung:has(.goa-milestone-badge.current-record)::before {
+    content: "";
+    position: absolute;
+    inset: -0.1rem -0.5rem;
+    border-radius: 8px;
+    background: radial-gradient(
+      circle at 8% 50%,
+      rgba(201, 151, 58, 0.12),
+      transparent 70%
+    );
+    pointer-events: none;
+  }
+  .goa-milestone-badge {
+    position: relative;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .goa-milestone-badge.current-record {
+    filter: drop-shadow(0 0 6px rgba(201, 151, 58, 0.55));
+  }
+  .goa-milestone-question {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    font-family: "Cinzel", serif;
+    font-size: 1rem;
+    color: var(--text-muted);
+  }
+  .goa-milestone-rung-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    flex: 1;
+  }
+  .goa-milestone-threshold-value {
+    flex-shrink: 0;
+    font-family: "Cinzel", serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--gold-light);
+    text-align: right;
+  }
+  .goa-milestone-rung.unreached .goa-milestone-threshold-value {
+    color: var(--text-muted);
+  }
+  .goa-milestone-name {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: "Crimson Pro", serif;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .goa-milestone-rung.unreached .goa-milestone-name {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .goa-milestone-crown {
+    flex-shrink: 0;
+    color: var(--gold-light);
+    filter: drop-shadow(0 0 3px rgba(201, 151, 58, 0.6));
+  }
+  .goa-milestone-sub {
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
   .goa-pie-wrap {
     display: flex;
     align-items: center;
@@ -4285,6 +4439,14 @@
   }
   .goa-hero-wrap {
     padding: 0.3rem 0.55rem 0.45rem;
+  }
+
+  /* "Place a Defiant bet?" checkbox, shown per Defiant owner in the
+     roster — reuses .goa-checkbox-container's layout but flush with the
+     player block's own padding instead of the leaderboard's offset. */
+  .goa-player-block .goa-defiant-bet {
+    margin: 0 0.55rem 0.5rem;
+    width: auto;
   }
 
   .goa-hero-stat-hero-info {
@@ -7151,6 +7313,86 @@
     font-family: "Crimson Pro", serif;
     font-size: 0.8rem;
     color: var(--gain);
+  }
+
+  /* Base badge voting (app/teams/vote/page.tsx) — a row of Base owners'
+     names a voter taps to "sign in" as themselves before casting their
+     one 1.5x-weighted vote, since the shared device's taps are otherwise
+     anonymous. */
+  .goa-base-voter-row {
+    margin: 0 0.9rem 0.6rem;
+  }
+  .goa-base-voter-label {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0.35rem;
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .goa-base-voter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .goa-base-voter-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(42, 39, 32, 0.7);
+    color: var(--text-primary);
+    font-family: "Crimson Pro", serif;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .goa-base-voter-chip:hover {
+    border-color: var(--gold);
+    color: var(--gold-light);
+  }
+  .goa-base-voter-note {
+    margin: 0 0.9rem 0.6rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  /* Armed banner — shown once a Base owner has tapped their own name,
+     right up until their next tap on an option resolves (confirmed or
+     undone). */
+  .goa-base-voter-armed {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0.9rem 0.6rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--border-bright);
+    border-radius: 4px;
+    background: rgba(201, 151, 58, 0.12);
+    color: var(--gold-light);
+    font-family: "Crimson Pro", serif;
+    font-size: 0.8rem;
+  }
+  .goa-base-voter-cancel {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .goa-base-voter-cancel:hover {
+    color: var(--gold-light);
   }
 
   /* Remote voter's waiting screen (app/vote/[id]/page.tsx) — once someone

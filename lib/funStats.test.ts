@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeFunStats, FunStatsMatch } from "@/lib/funStats";
+import { computeFunStats, computeMmrMilestones, FunStatsMatch } from "@/lib/funStats";
 
 // Four players, four matches, hand-picked so streaks/heroes/duos all land
 // on deliberate, hand-verifiable ties and winners:
@@ -103,6 +103,20 @@ describe("computeFunStats", () => {
     expect(topTier).toEqual(["p1", "p2"]);
   });
 
+  it("finds p2 as the most versatile winner, with 2 distinct heroes won on", () => {
+    // p1 won only as arien (twice), p3 won only as dodger (twice), p2 won
+    // once as brogan (M1) and once as xargatha (M3) — 2 distinct heroes.
+    // p4 never won at all, so they get no entry here (unlike
+    // mostHeroesPlayed, which counts played heroes regardless of result).
+    const { mostVersatileWins } = computeFunStats(matches);
+    const byPlayer = new Map(mostVersatileWins.map((e) => [e.playerId, e.count]));
+    expect(byPlayer.get("p2")).toBe(2);
+    expect(byPlayer.get("p1")).toBe(1);
+    expect(byPlayer.get("p3")).toBe(1);
+    expect(byPlayer.has("p4")).toBe(false);
+    expect(mostVersatileWins).toHaveLength(3);
+  });
+
   it("finds the best and worst duo once the games-together threshold is lowered to 2", () => {
     const { bestDuo, worstDuo } = computeFunStats(matches, 2);
     // p2+p3: win (M3), draw (M4) -> 1/2 = 50%
@@ -145,6 +159,7 @@ describe("computeFunStats", () => {
     expect(stats.hotStreak).toEqual([]);
     expect(stats.mostGamesOneHero).toEqual([]);
     expect(stats.mostHeroesPlayed).toEqual([]);
+    expect(stats.mostVersatileWins).toEqual([]);
     expect(stats.bestDuo).toEqual([]);
     expect(stats.worstDuo).toEqual([]);
     expect(stats.nemesis).toEqual([]);
@@ -405,5 +420,71 @@ describe("computeFunStats podium (battles played by the league while in the top 
     expect(reignByPlayer.get("p1")).toBe(2);
     expect(reignByPlayer.get("p4")).toBe(2);
     expect(reign).toHaveLength(2);
+  });
+});
+
+describe("computeMmrMilestones", () => {
+  it("credits each 100-mmr milestone to whoever first crossed it, then stops at a trailing '?' for the next one", () => {
+    const milestoneMatches: FunStatsMatch[] = [
+      {
+        match_number: 1,
+        winner: "atlantis",
+        created_at: "2026-01-01T00:00:00Z",
+        match_players: [
+          // p1 crosses 1100 here.
+          { player_id: "p1", team: "atlantis", hero_id: "arien", mmr_before: 1080, mmr_after: 1120 },
+          { player_id: "p2", team: "titans", hero_id: "brogan", mmr_before: 1000, mmr_after: 960 },
+        ],
+      },
+      {
+        match_number: 2,
+        winner: "titans",
+        created_at: "2026-01-05T00:00:00Z",
+        match_players: [
+          { player_id: "p1", team: "atlantis", hero_id: "arien", mmr_before: 1120, mmr_after: 1090 },
+          // p2 crosses 1100 AND 1200 in the same battle, before p1 ever
+          // reaches 1200.
+          { player_id: "p2", team: "titans", hero_id: "brogan", mmr_before: 960, mmr_after: 1210 },
+        ],
+      },
+    ];
+
+    const milestones = computeMmrMilestones(milestoneMatches);
+
+    expect(milestones).toEqual([
+      { threshold: 1100, playerId: "p1", matchNumber: 1, date: "2026-01-01T00:00:00Z" },
+      { threshold: 1200, playerId: "p2", matchNumber: 2, date: "2026-01-05T00:00:00Z" },
+      { threshold: 1300, playerId: null, matchNumber: null, date: null },
+    ]);
+  });
+
+  it("returns a single unreached entry when nobody has hit 1100 yet", () => {
+    const milestones = computeMmrMilestones([
+      {
+        match_number: 1,
+        winner: "atlantis",
+        match_players: [
+          { player_id: "p1", team: "atlantis", hero_id: "arien", mmr_before: 700, mmr_after: 730 },
+        ],
+      },
+    ]);
+
+    expect(milestones).toEqual([{ threshold: 1100, playerId: null, matchNumber: null, date: null }]);
+  });
+
+  it("breaks a same-match tie on player id", () => {
+    const milestones = computeMmrMilestones([
+      {
+        match_number: 1,
+        winner: "atlantis",
+        created_at: "2026-02-10T00:00:00Z",
+        match_players: [
+          { player_id: "zeus", team: "atlantis", hero_id: "arien", mmr_before: 1080, mmr_after: 1120 },
+          { player_id: "abel", team: "titans", hero_id: "brogan", mmr_before: 1080, mmr_after: 1120 },
+        ],
+      },
+    ]);
+
+    expect(milestones[0]).toEqual({ threshold: 1100, playerId: "abel", matchNumber: 1, date: "2026-02-10T00:00:00Z" });
   });
 });

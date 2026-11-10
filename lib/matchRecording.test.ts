@@ -169,6 +169,74 @@ describe("computeMatchOutcome — Devoted/Renowned/Defiant badge rewards", () =>
     // Base loss delta is -20; Devoted softens it by 3.
     expect(result.atlantisFinal[0].mmrChange).toBe(-20 + 3);
   });
+
+  it("pays out a Defiant owner's bet +5 when their team wins", () => {
+    const result = computeMatchOutcome({
+      ...emptyInput,
+      atlantis: [player("a", 1000)],
+      titans: [player("t", 1000)],
+      winner: "atlantis",
+      ownedBadgesByPlayer: new Map([["a", new Set(["defiant"])]]),
+      defiantBetPlayerIds: new Set(["a"]),
+    });
+    expect(result.atlantisFinal[0].mmrChange).toBe(25 + 5);
+    expect(result.badgeBonusesByPlayer.get("a")?.defiant).toBe(5);
+  });
+
+  it("costs a Defiant owner's bet -5 when their team loses", () => {
+    const result = computeMatchOutcome({
+      ...emptyInput,
+      atlantis: [player("a", 1000)],
+      titans: [player("t", 1000)],
+      winner: "titans",
+      ownedBadgesByPlayer: new Map([["a", new Set(["defiant"])]]),
+      defiantBetPlayerIds: new Set(["a"]),
+    });
+    expect(result.atlantisFinal[0].mmrChange).toBe(-20 - 5);
+    expect(result.badgeBonusesByPlayer.get("a")?.defiant).toBe(-5);
+  });
+
+  it("leaves a Defiant owner's result untouched if they didn't place a bet this match", () => {
+    const result = computeMatchOutcome({
+      ...emptyInput,
+      atlantis: [player("a", 1000)],
+      titans: [player("t", 1000)],
+      winner: "atlantis",
+      ownedBadgesByPlayer: new Map([["a", new Set(["defiant"])]]),
+      // No defiantBetPlayerIds at all — owning the badge alone isn't a bet.
+    });
+    expect(result.atlantisFinal[0].mmrChange).toBe(25);
+    expect(result.badgeBonusesByPlayer.get("a")?.defiant).toBeUndefined();
+  });
+
+  it("voids a Defiant bet on a draw, regardless of who placed one", () => {
+    const result = computeMatchOutcome({
+      ...emptyInput,
+      atlantis: [player("a", 1000)],
+      titans: [player("t", 1000)],
+      winner: "none",
+      ownedBadgesByPlayer: new Map([["a", new Set(["defiant"])]]),
+      defiantBetPlayerIds: new Set(["a"]),
+    });
+    // A draw's own flat MMR reward is handled elsewhere (lib/match.ts) —
+    // computeMatchOutcome's own base Elo path for "none" leaves mmrChange
+    // at 0 before any bonus, so an untouched 0 here proves the bet itself
+    // never fired, not just that it happened to cancel out.
+    expect(result.atlantisFinal[0].mmrChange).toBe(0);
+    expect(result.badgeBonusesByPlayer.get("a")?.defiant).toBeUndefined();
+  });
+
+  it("never applies a bet to someone who doesn't actually own Defiant, even if listed", () => {
+    const result = computeMatchOutcome({
+      ...emptyInput,
+      atlantis: [player("a", 1000)],
+      titans: [player("t", 1000)],
+      winner: "atlantis",
+      // "a" is in defiantBetPlayerIds but owns no badges at all.
+      defiantBetPlayerIds: new Set(["a"]),
+    });
+    expect(result.atlantisFinal[0].mmrChange).toBe(25);
+  });
 });
 
 describe("computeMatchOutcome — rookie cushion", () => {

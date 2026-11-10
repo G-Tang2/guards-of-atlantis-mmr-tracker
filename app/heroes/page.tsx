@@ -48,6 +48,16 @@ export default function HeroesPage() {
   const [sortKey, setSortKey] = useState<SortKey>("played");
   const [sortAsc, setSortAsc] = useState(false);
   const threshold = BOUNTY_THRESHOLD;
+  // computeBountyHeroIds' actual rule is "last played more than threshold
+  // games ago" (last > threshold), which for an integer game count is the
+  // same as "threshold + 1 or more games ago" — the +1 here is just
+  // correcting the *label* to say what the rule already does, not
+  // changing the rule itself.
+  const bountyDisplayThreshold = threshold + 1;
+  // Same off-by-one correction as bountyDisplayThreshold above — Arcane's
+  // own rule (lastPlayedGame > ARCANE_BOUNTY_THRESHOLD, just below) is the
+  // identical shape.
+  const arcaneDisplayThreshold = ARCANE_BOUNTY_THRESHOLD + 1;
 
   useEffect(() => {
     const load = async () => {
@@ -217,7 +227,7 @@ export default function HeroesPage() {
             </div>
             <div className="goa-bounty-header-sub">
               <span>
-                Not picked in {threshold}+ games · Bonus {BOUNTY_MMR_BONUS} MMR
+                Not picked in {bountyDisplayThreshold}+ games · Bonus {BOUNTY_MMR_BONUS} MMR
                 awarded on play
               </span>
             </div>
@@ -259,7 +269,7 @@ export default function HeroesPage() {
 
       {/* Arcane Bounty Heroes — the badge's shorter 5-game window, shown
           separately since it only applies for players who've earned
-          Arcane (see lib/badges.ts); heroes already listed above (7+
+          Arcane (see lib/badges.ts); heroes already listed above (8+
           games) aren't repeated here. */}
       {arcaneOnlyHeroes.length > 0 && (
         <div className="goa-bounty-section arcane">
@@ -270,7 +280,7 @@ export default function HeroesPage() {
             </div>
             <div className="goa-bounty-header-sub">
               <span>
-                Not picked in {ARCANE_BOUNTY_THRESHOLD}+ games · Counts as
+                Not picked in {arcaneDisplayThreshold}+ games · Counts as
                 bounty for Arcane badge owners only
               </span>
             </div>

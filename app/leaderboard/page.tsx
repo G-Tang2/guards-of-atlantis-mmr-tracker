@@ -39,6 +39,7 @@ type Match = {
   id: string;
   match_number: number;
   winner: "atlantis" | "titans" | "none";
+  created_at: string;
   match_players: {
     player_id: string;
     team: "atlantis" | "titans";
@@ -95,7 +96,7 @@ export default function LeaderboardPage() {
         supabaseClient
           .from("matches")
           .select(
-            "id, match_number, winner, match_players ( player_id, team, hero_id, mmr_before, mmr_after, is_bounty )",
+            "id, match_number, winner, created_at, match_players ( player_id, team, hero_id, mmr_before, mmr_after, is_bounty )",
           )
           .order("created_at", { ascending: false }),
         supabaseClient

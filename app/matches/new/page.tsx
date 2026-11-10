@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -21,7 +21,28 @@ import { LAST_BATTLE_STEP_STORAGE_KEY } from "@/lib/battleSession";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { PasswordGate } from "@/components/PasswordGate";
 import { BadgeEarnedOverlay, EarnedBadgeInfo } from "@/components/BadgeEarnedOverlay";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Swords } from "lucide-react";
+
+// Shared by handleSave (fresh roster, every participant) and the
+// ownedBadgesByPlayer effect below (same roster, computed early so the
+// "place a Defiant bet?" checkbox has something to key off before save) —
+// one query, not two drifting copies of it.
+async function fetchHeroHistoryFor(playerIds: string[]) {
+  if (playerIds.length === 0) {
+    return { wonHeroesByPlayer: new Map<string, Set<string>>(), ownedBadgesByPlayer: new Map<string, Set<string>>() };
+  }
+  const { data: heroHistory } = await supabaseClient
+    .from("match_players")
+    .select("player_id, hero_id, team, match_number, matches!inner(winner)")
+    .in("player_id", playerIds)
+    .not("hero_id", "is", null);
+  const wonHeroesByPlayer = buildWonHeroesByPlayer(heroHistory ?? []);
+  const ownedBadgesByPlayer = new Map<string, Set<string>>(
+    playerIds.map((id) => [id, getOwnedBadgeIds(wonHeroesByPlayer.get(id) ?? new Set())]),
+  );
+  return { wonHeroesByPlayer, ownedBadgesByPlayer };
+}
 
 type Player = {
   id: string;
@@ -97,6 +118,58 @@ function NewMatchPageInner() {
   const [toastError, setToastError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [earnedBadges, setEarnedBadges] = useState<EarnedBadgeInfo[]>([]);
+  // Badges each current roster member already owns (completed before this
+  // match) — needed early, not just at save time, so the "place a Defiant
+  // bet?" checkbox knows who's actually eligible to see it.
+  const [ownedBadgesByPlayer, setOwnedBadgesByPlayer] = useState<Map<string, Set<string>>>(new Map());
+  // Which Defiant owners have opted into their bet for this match.
+  const [defiantBetByPlayer, setDefiantBetByPlayer] = useState<Set<string>>(new Set());
+
+  // Recomputed whenever roster membership changes (not on every hero pick
+  // — rosterPlayerIds below is stable across those) so the Defiant bet
+  // checkbox stays in sync with who's actually in the match.
+  const rosterPlayerIds = useMemo(
+    () => [...atlantis.map((e) => e.player.id), ...titans.map((e) => e.player.id)].sort().join(","),
+    [atlantis, titans],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    const ids = rosterPlayerIds ? rosterPlayerIds.split(",") : [];
+    fetchHeroHistoryFor(ids).then(({ ownedBadgesByPlayer }) => {
+      if (!cancelled) setOwnedBadgesByPlayer(ownedBadgesByPlayer);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [rosterPlayerIds]);
+
+  const toggleDefiantBet = (playerId: string, checked: boolean) => {
+    setDefiantBetByPlayer((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(playerId);
+      else next.delete(playerId);
+      return next;
+    });
+  };
+
+  // Only a Defiant owner sees this — betting is opt-in per match, not a
+  // standing effect like Renowned/Devoted (see lib/badgeRewards.ts).
+  const renderDefiantBetToggle = (playerId: string) => {
+    if (!ownedBadgesByPlayer.get(playerId)?.has("defiant")) return null;
+    const id = `defiant-bet-${playerId}`;
+    return (
+      <div className="goa-checkbox-container goa-defiant-bet">
+        <Checkbox
+          id={id}
+          checked={defiantBetByPlayer.has(playerId)}
+          onCheckedChange={(checked) => toggleDefiantBet(playerId, checked === true)}
+        />
+        <label htmlFor={id} className="goa-tap-hint">
+          Place Defiant bet (5 MMR)?
+        </label>
+      </div>
+    );
+  };
 
   useEffect(() => {
     const loadPlayers = async () => {
@@ -286,23 +359,21 @@ function NewMatchPageInner() {
       // bonus AND for badge-reward eligibility (Arcane, Wayward, Devoted,
       // Defiant, Renowned all key off badges owned BEFORE this match,
       // which requires knowing every participant's wins regardless of
-      // whether they won this particular match).
+      // whether they won this particular match). Refetched here rather
+      // than reusing the ownedBadgesByPlayer state above, since that one
+      // only drives the bet checkbox and could be a request behind.
       const allParticipantIds = [
         ...atlantis.map((e) => e.player.id),
         ...titans.map((e) => e.player.id),
       ];
-      const { data: heroHistory } = await supabaseClient
-        .from("match_players")
-        .select("player_id, hero_id, team, match_number, matches!inner(winner)")
-        .in("player_id", allParticipantIds)
-        .not("hero_id", "is", null);
+      const { wonHeroesByPlayer, ownedBadgesByPlayer: freshOwnedBadgesByPlayer } =
+        await fetchHeroHistoryFor(allParticipantIds);
 
-      const wonHeroesByPlayer = buildWonHeroesByPlayer(heroHistory ?? []);
-      const ownedBadgesByPlayer = new Map<string, Set<string>>(
-        allParticipantIds.map((id) => [
-          id,
-          getOwnedBadgeIds(wonHeroesByPlayer.get(id) ?? new Set()),
-        ]),
+      // Owning Defiant only makes someone eligible to bet — defiantBetByPlayer
+      // (the checkbox state) is who actually chose to this match, filtered
+      // defensively against who really owns it by now.
+      const defiantBetPlayerIds = new Set(
+        [...defiantBetByPlayer].filter((id) => freshOwnedBadgesByPlayer.get(id)?.has("defiant")),
       );
 
       // A bounty hero is one nobody has played in the last several matches —
@@ -340,10 +411,11 @@ function NewMatchPageInner() {
         winner,
         heroIdByPlayer,
         wonHeroesByPlayer,
-        ownedBadgesByPlayer,
+        ownedBadgesByPlayer: freshOwnedBadgesByPlayer,
         bountyHeroIds,
         arcaneBountyHeroIds,
         rookieInputByPlayer,
+        defiantBetPlayerIds,
       });
 
       const { atlantisFinal, titansFinal, bountyBonusByPlayer, rookieBonusByPlayer, newlyEarnedBadges, badgeBonusesByPlayer } = computed;
@@ -721,6 +793,7 @@ function NewMatchPageInner() {
                 onSelect={(h) => setHero(p.player.id, "atlantis", h)}
                 excludeHeroIds={otherAssignedHeroIds(p.player.id)}
               />
+              {renderDefiantBetToggle(p.player.id)}
             </div>
           ))}
         </div>
@@ -794,6 +867,7 @@ function NewMatchPageInner() {
                   excludeHeroIds={otherAssignedHeroIds(p.player.id)}
                 />
               </div>
+              {renderDefiantBetToggle(p.player.id)}
             </div>
           ))}
         </div>

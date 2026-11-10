@@ -34,7 +34,12 @@ export type VoteSessionRow = {
   id: string;
   split_method: VoteSplitMethod;
   player_ids: string[];
-  vote_allowance: Record<string, number>;
+  // How much a single tap from this player is worth when added to
+  // ban_votes/votes — 1 normally, 1.5 for a Base badge owner (see
+  // lib/badges.ts). Everyone gets exactly one tap per round regardless;
+  // this is a weight, not a tap allowance (see votedFully below, and
+  // computeVoteWeight).
+  vote_weight: Record<string, number>;
   splits: Split<VoteSessionPlayer>[];
   total_votes: number;
   stage: VoteStage;
@@ -65,19 +70,21 @@ export type VoteSessionRow = {
 // the group's own house rule for this vote.
 export const BAN_COUNT = 2;
 
-export const computeVoteAllowance = (
+export const computeVoteWeight = (
   playerIds: string[],
   baseOwnerIds: Set<string>,
 ): Record<string, number> => {
-  const allowance: Record<string, number> = {};
+  const weight: Record<string, number> = {};
   playerIds.forEach((id) => {
-    allowance[id] = baseOwnerIds.has(id) ? 2 : 1;
+    weight[id] = baseOwnerIds.has(id) ? 1.5 : 1;
   });
-  return allowance;
+  return weight;
 };
 
-export const totalVotesFromAllowance = (allowance: Record<string, number>): number =>
-  Object.values(allowance).reduce((s, n) => s + n, 0);
+// Every player gets exactly one tap per round (see vote_weight above for
+// how much that one tap is worth) — so the completion threshold is just a
+// plain headcount, not a sum of any kind.
+export const totalVotesFromPlayerIds = (playerIds: string[]): number => playerIds.length;
 
 // Works out exactly which `countToEliminate` indices (by ban-vote count,
 // most-banned first) should be removed. Splits the answer into `locked`
@@ -145,18 +152,17 @@ export function sortBannedLast<T>(splits: T[], bannedIndices: number[]): number[
   return [...indices.filter((i) => !banned.has(i)), ...indices.filter((i) => banned.has(i))];
 }
 
-// Whether `playerId` has cast every vote they're entitled to in whichever
-// round `votersMap` is for (ban_voters or voters — see the migration's own
+// Whether `playerId` has cast their one tap in whichever round
+// `votersMap` is for (ban_voters or voters — see the migration's own
 // column comments) — shared by the shareable-link page's own "you've
-// already voted" tick and the match creator's "who has voted" list, so
-// both agree on what "done" means (their full allowance used, not just
-// "at least one" for a Base-badge owner with two).
+// already voted" tick and the match creator's "who has voted" list. Every
+// player gets exactly one tap regardless of vote_weight (see its own
+// comment), so this is just "have they tapped at all".
 export function votedFully(
   votersMap: Record<string, number>,
-  voteAllowance: Record<string, number>,
   playerId: string,
 ): boolean {
-  return (votersMap[playerId] ?? 0) >= (voteAllowance[playerId] ?? 1);
+  return (votersMap[playerId] ?? 0) >= 1;
 }
 
 // Named shareable-link voters (see ban_picks/choice_picks column comments)
@@ -240,16 +246,21 @@ function removePick(
 // Continue is actually pressed, instead of the round auto-revealing the
 // instant the count happens to reach total_votes.
 //
-// `voterId` is only ever set by the shareable-link page (app/vote/[id]) —
-// the match creator's own device keeps voting anonymously into the same
-// shared counters, exactly as it always has (see ban_voters/voters'
-// column comments in the migration).
+// `voterId` is set by the shareable-link page (app/vote/[id]) for every
+// tap, and by the match creator's own device only for the "I have a Base
+// badge" flow (see armedBaseVoterId in app/teams/vote/page.tsx) — every
+// other tap on that device stays fully anonymous, exactly as it always
+// has (see ban_voters/voters' column comments in the migration). A tap's
+// *weight* (how much it adds to ban_votes, as opposed to ban_votes_cast,
+// which always just counts taps) comes from vote_weight when voterId is
+// known, or a plain 1 for an anonymous tap.
 export function incrementBanVote(
   session: VoteSessionRow,
   optionIndex: number,
   voterId?: string,
 ): Promise<VoteSessionRow | null> {
-  const nextBanVotes = session.ban_votes.map((v, i) => (i === optionIndex ? v + 1 : v));
+  const weight = voterId ? (session.vote_weight[voterId] ?? 1) : 1;
+  const nextBanVotes = session.ban_votes.map((v, i) => (i === optionIndex ? v + weight : v));
   const patch: Record<string, unknown> = {
     ban_votes: nextBanVotes,
     ban_votes_cast: session.ban_votes_cast + 1,
@@ -266,8 +277,9 @@ export function undoBanVote(
   optionIndex: number,
   voterId?: string,
 ): Promise<VoteSessionRow | null> {
+  const weight = voterId ? (session.vote_weight[voterId] ?? 1) : 1;
   const prevBanVotes = session.ban_votes.map((v, i) =>
-    i === optionIndex ? Math.max(0, v - 1) : v,
+    i === optionIndex ? Math.max(0, v - weight) : v,
   );
   const patch: Record<string, unknown> = {
     ban_votes: prevBanVotes,
@@ -305,7 +317,8 @@ export function incrementChooseVote(
   optionIndex: number,
   voterId?: string,
 ): Promise<VoteSessionRow | null> {
-  const nextVotes = session.votes.map((v, i) => (i === optionIndex ? v + 1 : v));
+  const weight = voterId ? (session.vote_weight[voterId] ?? 1) : 1;
+  const nextVotes = session.votes.map((v, i) => (i === optionIndex ? v + weight : v));
   const patch: Record<string, unknown> = { votes: nextVotes, votes_cast: session.votes_cast + 1 };
   if (voterId) {
     patch.voters = { ...session.voters, [voterId]: (session.voters[voterId] ?? 0) + 1 };
@@ -319,7 +332,8 @@ export function undoChooseVote(
   optionIndex: number,
   voterId?: string,
 ): Promise<VoteSessionRow | null> {
-  const prevVotes = session.votes.map((v, i) => (i === optionIndex ? Math.max(0, v - 1) : v));
+  const weight = voterId ? (session.vote_weight[voterId] ?? 1) : 1;
+  const prevVotes = session.votes.map((v, i) => (i === optionIndex ? Math.max(0, v - weight) : v));
   const patch: Record<string, unknown> = {
     votes: prevVotes,
     votes_cast: Math.max(0, session.votes_cast - 1),

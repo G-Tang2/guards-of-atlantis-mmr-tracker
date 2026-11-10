@@ -21,6 +21,29 @@ export type UpdateEntry = {
 
 export const UPDATES: UpdateEntry[] = [
   {
+    date: "Nov 10",
+    title: "Badges & Legends",
+    summary: "Defiant and Base reworked, plus two new records on the Legends tab.",
+    details: [
+      {
+        label: "Defiant",
+        text: "No longer a standing team effect (+1 MMR to your team on a win, -1 to your opponents on a loss). It's now an optional personal bet: a \"Place Defiant bet?\" checkbox appears next to any Defiant owner when recording or editing a battle. Checking it wagers 5 MMR on yourself for that match — win and gain 5 MMR, lose and lose 5 MMR, on top of the usual result. Void on a draw.",
+      },
+      {
+        label: "Base Badge",
+        text: "No longer grants a second vote in Ranked Balance/Balanced team-split voting. It now grants a single, heavier vote instead: your one tap counts for 1.5x. On a shared device, a Base owner taps their own name under \"Base badge — is one of these you?\" first, then taps their choice as usual.",
+      },
+      {
+        label: "Legends: Milestones",
+        text: "A new section at the top of the Legends tab tracks who was first, league-wide and all-time, to reach each 100 MMR threshold — climbing from 1100 upward, with the next unclaimed milestone always shown.",
+      },
+      {
+        label: "Legends: Most Versatile Wins",
+        text: "A new record for the most distinct heroes a player has actually won with, separate from the existing Most Versatile record (which counts heroes played, regardless of result).",
+      },
+    ],
+  },
+  {
     date: "Nov 9",
     title: "Balanced Vote",
     summary: "Balanced now offers 4 MMR-balanced options to vote on, instead of applying one split instantly.",

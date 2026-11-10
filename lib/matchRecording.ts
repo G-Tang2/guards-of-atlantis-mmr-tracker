@@ -41,6 +41,10 @@ export type MatchComputationInput = {
   arcaneBountyHeroIds: Set<string>;
   // matches_played and rookie_eligible as of *before* this match.
   rookieInputByPlayer: Map<string, { matchesPlayedBefore: number; rookieEligible: boolean }>;
+  // Which Defiant badge owners actually chose to place their bet for this
+  // match — see applyBadgeRewards' own comment. Optional since most
+  // matches have no Defiant owner at all.
+  defiantBetPlayerIds?: Set<string>;
 };
 
 export type MatchComputationResult = {
@@ -60,7 +64,7 @@ export type MatchComputationResult = {
 };
 
 export function computeMatchOutcome(input: MatchComputationInput): MatchComputationResult {
-  const { atlantis, titans, winner, heroIdByPlayer, wonHeroesByPlayer, ownedBadgesByPlayer, bountyHeroIds, arcaneBountyHeroIds, rookieInputByPlayer } = input;
+  const { atlantis, titans, winner, heroIdByPlayer, wonHeroesByPlayer, ownedBadgesByPlayer, bountyHeroIds, arcaneBountyHeroIds, rookieInputByPlayer, defiantBetPlayerIds } = input;
 
   const toMmrPlayer = (p: RosterPlayer): MmrPlayer => ({ id: p.id, name: p.name, mmr: p.mmr });
   const atlMmrPlayers = atlantis.map(toMmrPlayer);
@@ -121,10 +125,15 @@ export function computeMatchOutcome(input: MatchComputationInput): MatchComputat
   const atlantisAfterHeroBonus = applyHeroBonus(atlantisResults);
   const titansAfterHeroBonus = applyHeroBonus(titansResults);
 
-  // Renowned/Devoted/Defiant — must run last (before the rookie cushion),
-  // since Defiant is the only cross-team effect and needs to see
-  // everyone's otherwise-final numbers.
-  const badgeRewards = applyBadgeRewards(atlantisAfterHeroBonus, titansAfterHeroBonus, winner, ownedBadgesByPlayer);
+  // Renowned/Devoted/Defiant — runs after bounty/hero-win bonuses, before
+  // the rookie cushion, so each stacks on an otherwise-final number.
+  const badgeRewards = applyBadgeRewards(
+    atlantisAfterHeroBonus,
+    titansAfterHeroBonus,
+    winner,
+    ownedBadgesByPlayer,
+    defiantBetPlayerIds,
+  );
 
   // A genuinely new player still within their first few matches gets a
   // flat MMR cushion, unaffected by any of the multiplicative bonuses

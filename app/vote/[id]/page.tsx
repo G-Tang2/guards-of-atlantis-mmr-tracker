@@ -139,10 +139,10 @@ export default function RemoteVotePage() {
   // pop-up (that's reserved for the "vote counted" moment of casting a
   // fresh vote), and never settles the round itself: a retraction only
   // ever moves votes_cast *down*, so it can't be the tap that completes a
-  // tally. Once it goes through, this voter drops back below their
-  // allowance and the ballot's own active-voting view reappears, letting
-  // them tap a different option the normal way — that's the whole "change
-  // your selection" flow, just two ordinary taps instead of one.
+  // tally. Once it goes through, this voter drops back below their one
+  // tap and the ballot's own active-voting view reappears, letting them
+  // tap a different option the normal way — that's the whole "change your
+  // selection" flow, just two ordinary taps instead of one.
   const retractBan = async (index: number) => {
     if (!session || !voterId) return;
     const updated = await undoBanVote(session, index, voterId);
@@ -211,7 +211,10 @@ export default function RemoteVotePage() {
   // side — session.splits[0] alone already has the full roster.
   const roster = [...session.splits[0].atlantis, ...session.splits[0].titans];
   const voter = voterId ? roster.find((p) => p.id === voterId) : undefined;
-  const allowance = voterId ? (session.vote_allowance[voterId] ?? 1) : 1;
+  // How much this voter's one tap is worth (1 or 1.5, for a Base badge
+  // owner) — purely for display; the actual weighting happens server-side
+  // in incrementBanVote/incrementChooseVote (see lib/rankedVoteSession.ts).
+  const voteWeight = voterId ? (session.vote_weight[voterId] ?? 1) : 1;
   const banUsed = voterId ? (session.ban_voters[voterId] ?? 0) : 0;
   const choiceUsed = voterId ? (session.voters[voterId] ?? 0) : 0;
   const myBanPicks = voterId ? (session.ban_picks[voterId] ?? []) : [];
@@ -227,8 +230,8 @@ export default function RemoteVotePage() {
   // current round's own voters map, or nobody-done for a stage where no
   // round is actively open (setup/ban_results/results/impossible).
   const votedInCurrentRound = (playerId: string): boolean => {
-    if (session.stage === "ban_ballot") return votedFully(session.ban_voters, session.vote_allowance, playerId);
-    if (session.stage === "ballot") return votedFully(session.voters, session.vote_allowance, playerId);
+    if (session.stage === "ban_ballot") return votedFully(session.ban_voters, playerId);
+    if (session.stage === "ballot") return votedFully(session.voters, playerId);
     return false;
   };
 
@@ -359,11 +362,11 @@ export default function RemoteVotePage() {
             </span>
             <VoteDots total={session.total_votes} cast={session.ban_votes_cast} variant="ban" />
           </div>
-          {banUsed >= allowance ? (
+          {banUsed >= 1 ? (
             <>
               <p className="draft-note">
-                You've cast your ban vote{allowance > 1 ? "s" : ""} — waiting
-                for everyone else. Tap your own pick below to change it.
+                You've cast your ban vote — waiting for everyone else. Tap
+                your own pick below to change it.
               </p>
               <div className="goa-vote-options">
                 {session.splits.map((split, i) => {
@@ -405,8 +408,7 @@ export default function RemoteVotePage() {
             <>
               <p className="draft-note">
                 Tap the option you'd most like to remove.
-                {allowance > 1 &&
-                  ` You have ${allowance} votes — use them on two different options.`}
+                {voteWeight > 1 && " Your vote counts for 1.5× (Base badge)."}
               </p>
               <div className="goa-vote-options">
                 {session.splits.map((split, i) => (
@@ -442,11 +444,11 @@ export default function RemoteVotePage() {
             </span>
             <VoteDots total={session.total_votes} cast={session.votes_cast} />
           </div>
-          {choiceUsed >= allowance ? (
+          {choiceUsed >= 1 ? (
             <>
               <p className="draft-note">
-                You've cast your vote{allowance > 1 ? "s" : ""} — waiting for
-                everyone else. Tap your own pick below to change it.
+                You've cast your vote — waiting for everyone else. Tap your
+                own pick below to change it.
               </p>
               <div className="goa-vote-options">
                 {session.active_indices.map((i) => {
@@ -488,8 +490,7 @@ export default function RemoteVotePage() {
             <>
               <p className="draft-note">
                 Tap the option you'd like to vote for.
-                {allowance > 1 &&
-                  ` You have ${allowance} votes — use them on two different options.`}
+                {voteWeight > 1 && " Your vote counts for 1.5× (Base badge)."}
               </p>
               <div className="goa-vote-options">
                 {session.active_indices.map((i) => (
