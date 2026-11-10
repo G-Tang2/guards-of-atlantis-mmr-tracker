@@ -127,10 +127,6 @@ export function ChroniclesPanel() {
         ))}
       </div>
 
-      <p className="goa-funstat-desc" style={{ margin: "0 0.75rem 0.5rem" }}>
-        {formatSnapshotMonth(selected.snapshot_date, false)}
-      </p>
-
       <div className="goa-checkbox-container">
         <Checkbox
           id="chronicles-show-all-players"
