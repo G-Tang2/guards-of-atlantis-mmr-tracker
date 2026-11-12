@@ -19,16 +19,16 @@ const SKILL_RANK_POINTS: Record<string, number> = {
   garvin: 10,
   harry: 10,
   eddy: 9,
-  han: 7,
-  bao: 6.5,
-  gordon: 6.5,
-  tu: 6,
-  peter: 6,
+  han: 8,
+  bao: 8,
+  gordon: 7.5,
+  tu: 7,
+  peter: 7,
   amy: 6,
   vincent: 5,
   sam: 5,
+  jenny: 5,
   dave: 4,
-  jenny: 4,
   jason: 3,
   stella: 2,
 };
@@ -41,10 +41,10 @@ const skillPointsOf = (p: SkillPlayer) =>
 // average nudges their composite weight by about one skill point. Tuned
 // to be a real but secondary signal alongside hand-assigned skill points
 // (which span roughly 0-10): a tight group (a ~150-250 MMR spread, typical
-// of a real session) nudges by under a point each, while a genuinely
-// lopsided one can swing a point or more — enough to catch a stale or
+// of a real session) nudges by around a point each, while a genuinely
+// lopsided one can swing several points — enough to catch a stale or
 // missing skill rank without overriding a deliberate one.
-const MMR_POINTS_PER_SKILL_POINT = 150;
+const MMR_POINTS_PER_SKILL_POINT = 100;
 
 // Skill points nudged by how far above/below the pool's own average MMR
 // each player sits — pool-relative (not a fixed MMR anchor like 1000)

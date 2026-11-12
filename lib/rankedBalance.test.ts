@@ -154,9 +154,9 @@ describe("rankedBalancedSplits composite weight (skill points nudged by pool-rel
     // Neither name is in SKILL_RANK_POINTS, so both default to 0 skill
     // points — pure skill weighting would call this a perfectly even
     // (diff 0) split regardless of MMR. Pool average is 1000, so Alice
-    // sits +150 MMR above it and Bob -150 below: at the documented 150
-    // MMR-per-skill-point rate, that's a +1/-1 nudge each, a real (and
-    // correctly detected) diff of 2 instead of 0.
+    // sits +150 MMR above it and Bob -150 below: at the documented 100
+    // MMR-per-skill-point rate, that's a +1.5/-1.5 nudge each, a real (and
+    // correctly detected) diff of 3 instead of 0.
     const pool = [
       { id: "1", name: "Alice", mmr: 1150 },
       { id: "2", name: "Bob", mmr: 850 },
@@ -167,9 +167,9 @@ describe("rankedBalancedSplits composite weight (skill points nudged by pool-rel
 
   it("rejects a split that's skill-tied but badly MMR-lopsided, where the old skill-only weighting would have allowed it", () => {
     // Same idea, stretched further: a 300/-300 MMR gap around the pool
-    // average nudges each side's weight by a full 2 points either way —
-    // a 4-point total diff, right at MAX_SKILL_POINT_DIFF's cutoff, so
-    // this composite-balanced "tie" is correctly refused rather than
+    // average nudges each side's weight by a full 3 points either way —
+    // a 6-point total diff, well past MAX_SKILL_POINT_DIFF's cutoff of 4,
+    // so this composite-balanced "tie" is correctly refused rather than
     // offered as a fake "perfectly balanced" split.
     const pool = [
       { id: "1", name: "Alice", mmr: 1300 },
@@ -178,15 +178,31 @@ describe("rankedBalancedSplits composite weight (skill points nudged by pool-rel
     expect(rankedBalancedSplits(pool, 4)).toEqual([]);
   });
 
-  it("still lets a hand-assigned skill rank dominate a modest MMR gap", () => {
+  it("still lets a hand-assigned skill rank dominate a genuinely modest MMR gap", () => {
     // "keith" (10) vs "stella" (2) is an 8-point skill gap on its own —
-    // already past MAX_SKILL_POINT_DIFF — so a realistic MMR nudge (a few
-    // hundred points either way) isn't anywhere near enough to pull this
-    // back into range. The hand-curated judgment still wins.
+    // already past MAX_SKILL_POINT_DIFF. A ±150 MMR gap (a tight, typical
+    // session spread) nudges each side by ±1.5, narrowing the gap to 5 —
+    // still over the cutoff, so the hand-curated judgment still wins here.
+    const pool = [
+      { id: "1", name: "Keith", mmr: 1150 },
+      { id: "2", name: "Stella", mmr: 850 },
+    ];
+    expect(rankedBalancedSplits(pool, 4)).toEqual([]);
+  });
+
+  it("lets a big enough MMR disagreement override even a large skill gap — the real tradeoff of a smaller MMR_POINTS_PER_SKILL_POINT", () => {
+    // Same 8-point skill gap as above, but stretched to a ±300 MMR
+    // disagreement (Keith underperforming his rank, Stella overperforming
+    // hers) — at the 100 MMR-per-skill-point rate that's a ±3 nudge each,
+    // narrowing the 8-point skill gap to 2, which now clears
+    // MAX_SKILL_POINT_DIFF. Unlike the ±150 case above, here the hand-
+    // curated judgment is overridden: a smaller divisor makes MMR a
+    // stronger signal, so it takes less MMR disagreement to do this than
+    // it used to (a ±300 gap was still blocked at the old 150 rate).
     const pool = [
       { id: "1", name: "Keith", mmr: 700 },
       { id: "2", name: "Stella", mmr: 1300 },
     ];
-    expect(rankedBalancedSplits(pool, 4)).toEqual([]);
+    expect(rankedBalancedSplits(pool, 4)).toHaveLength(1);
   });
 });
