@@ -165,6 +165,22 @@ export function votedFully(
   return (votersMap[playerId] ?? 0) >= 1;
 }
 
+// ban_votes[i]/votes[i] are sums of per-tap weights (1, or 1.5 for a Base
+// badge owner's tap — see vote_weight), so displaying the exact value
+// would reopen the exact anonymity problem incrementBanVote/
+// incrementChooseVote's `recordPick` already closes for named picks: any
+// option whose count has a .5 in it can only mean a Base owner's tap
+// landed there, and Base ownership is public, so that alone can single
+// someone out even without a "voted by" list naming them. Every caller
+// that shows a vote count to players routes it through this first, so a
+// weighted tap's option displays identically to a genuine whole-number
+// tally. The real election/tie-break logic below (computeElimination,
+// resolveBanElimination, resolveChooseWinner) still runs on the exact,
+// unrounded value — only the display is affected.
+export function formatVoteCount(count: number): number {
+  return Math.round(count);
+}
+
 // Named shareable-link voters (see ban_picks/choice_picks column comments)
 // who picked `optionIndex` — used by the remote page's waiting screen to
 // show each option's own "voted by" list.
@@ -254,10 +270,24 @@ function removePick(
 // *weight* (how much it adds to ban_votes, as opposed to ban_votes_cast,
 // which always just counts taps) comes from vote_weight when voterId is
 // known, or a plain 1 for an anonymous tap.
+//
+// `recordPick` gates ban_picks/choice_picks specifically — the shareable-
+// link page passes the default `true` (voting through your own personal
+// link was never anonymous, and the "voted by" list on that page is a
+// deliberate feature for it), but the shared device's armed-Base-voter
+// flow passes `false`: that tap needs voterId to apply the right weight
+// and to mark this player as having voted (so their chip disables and
+// "Base badge voters have all voted" can trigger), but which OPTION they
+// picked must stay just as anonymous as every other shared-device tap.
+// Recording it into ban_picks/choice_picks would otherwise deanonymize a
+// Base owner the moment anyone opens this session's shareable link, since
+// votersWhoPicked below can't tell a weighted-but-anonymous tap apart from
+// a genuine personal-link vote once it's in that map.
 export function incrementBanVote(
   session: VoteSessionRow,
   optionIndex: number,
   voterId?: string,
+  recordPick: boolean = true,
 ): Promise<VoteSessionRow | null> {
   const weight = voterId ? (session.vote_weight[voterId] ?? 1) : 1;
   const nextBanVotes = session.ban_votes.map((v, i) => (i === optionIndex ? v + weight : v));
@@ -267,7 +297,7 @@ export function incrementBanVote(
   };
   if (voterId) {
     patch.ban_voters = { ...session.ban_voters, [voterId]: (session.ban_voters[voterId] ?? 0) + 1 };
-    patch.ban_picks = addPick(session.ban_picks, voterId, optionIndex);
+    if (recordPick) patch.ban_picks = addPick(session.ban_picks, voterId, optionIndex);
   }
   return guardedUpdate(session.id, "ban_votes_cast", session.ban_votes_cast, patch);
 }
@@ -276,6 +306,7 @@ export function undoBanVote(
   session: VoteSessionRow,
   optionIndex: number,
   voterId?: string,
+  recordPick: boolean = true,
 ): Promise<VoteSessionRow | null> {
   const weight = voterId ? (session.vote_weight[voterId] ?? 1) : 1;
   const prevBanVotes = session.ban_votes.map((v, i) =>
@@ -290,7 +321,7 @@ export function undoBanVote(
       ...session.ban_voters,
       [voterId]: Math.max(0, (session.ban_voters[voterId] ?? 1) - 1),
     };
-    patch.ban_picks = removePick(session.ban_picks, voterId, optionIndex);
+    if (recordPick) patch.ban_picks = removePick(session.ban_picks, voterId, optionIndex);
   }
   return guardedUpdate(session.id, "ban_votes_cast", session.ban_votes_cast, patch);
 }
@@ -312,17 +343,20 @@ export function settleBanIfComplete(session: VoteSessionRow): Promise<VoteSessio
   });
 }
 
+// See incrementBanVote's own comment on `recordPick` — same anonymity
+// gate, for the choose round's choice_picks.
 export function incrementChooseVote(
   session: VoteSessionRow,
   optionIndex: number,
   voterId?: string,
+  recordPick: boolean = true,
 ): Promise<VoteSessionRow | null> {
   const weight = voterId ? (session.vote_weight[voterId] ?? 1) : 1;
   const nextVotes = session.votes.map((v, i) => (i === optionIndex ? v + weight : v));
   const patch: Record<string, unknown> = { votes: nextVotes, votes_cast: session.votes_cast + 1 };
   if (voterId) {
     patch.voters = { ...session.voters, [voterId]: (session.voters[voterId] ?? 0) + 1 };
-    patch.choice_picks = addPick(session.choice_picks, voterId, optionIndex);
+    if (recordPick) patch.choice_picks = addPick(session.choice_picks, voterId, optionIndex);
   }
   return guardedUpdate(session.id, "votes_cast", session.votes_cast, patch);
 }
@@ -331,6 +365,7 @@ export function undoChooseVote(
   session: VoteSessionRow,
   optionIndex: number,
   voterId?: string,
+  recordPick: boolean = true,
 ): Promise<VoteSessionRow | null> {
   const weight = voterId ? (session.vote_weight[voterId] ?? 1) : 1;
   const prevVotes = session.votes.map((v, i) => (i === optionIndex ? Math.max(0, v - weight) : v));
@@ -343,7 +378,7 @@ export function undoChooseVote(
       ...session.voters,
       [voterId]: Math.max(0, (session.voters[voterId] ?? 1) - 1),
     };
-    patch.choice_picks = removePick(session.choice_picks, voterId, optionIndex);
+    if (recordPick) patch.choice_picks = removePick(session.choice_picks, voterId, optionIndex);
   }
   return guardedUpdate(session.id, "votes_cast", session.votes_cast, patch);
 }

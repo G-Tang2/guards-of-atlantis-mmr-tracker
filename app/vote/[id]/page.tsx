@@ -20,6 +20,7 @@ import {
   sortBannedLast,
   votedFully,
   votersWhoPicked,
+  formatVoteCount,
   incrementBanVote,
   undoBanVote,
   settleBanIfComplete,
@@ -269,7 +270,7 @@ export default function RemoteVotePage() {
               banned
               headExtra={
                 <span className="vote-results-count">
-                  {session.ban_votes[i]} of {session.total_votes} ban votes
+                  {formatVoteCount(session.ban_votes[i])} of {session.total_votes} ban votes
                 </span>
               }
             />
@@ -382,7 +383,7 @@ export default function RemoteVotePage() {
                       disabled={voteConfirmVisible || !isMine}
                       headExtra={
                         <span className="vote-results-count">
-                          {session.ban_votes[i] ?? 0} of {session.total_votes} ban votes
+                          {formatVoteCount(session.ban_votes[i] ?? 0)} of {session.total_votes} ban votes
                         </span>
                       }
                       footer={
@@ -464,7 +465,7 @@ export default function RemoteVotePage() {
                       disabled={voteConfirmVisible || !isMine}
                       headExtra={
                         <span className="vote-results-count">
-                          {session.votes[i] ?? 0} of {session.total_votes} votes
+                          {formatVoteCount(session.votes[i] ?? 0)} of {session.total_votes} votes
                         </span>
                       }
                       footer={
@@ -536,7 +537,7 @@ export default function RemoteVotePage() {
                       !session.banned_indices.includes(i) &&
                       !session.choose_round_skipped ? (
                         <span className="vote-results-count">
-                          {session.votes[i]} of {session.total_votes} votes
+                          {formatVoteCount(session.votes[i])} of {session.total_votes} votes
                         </span>
                       ) : undefined
                     }

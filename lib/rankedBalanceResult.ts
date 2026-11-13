@@ -41,6 +41,15 @@ export type RankedBalanceResult = {
   // A vote to ban was held, but banning left only one surviving option —
   // it was applied directly, with no choose-round vote held.
   chooseRoundSkipped: boolean;
+  // Whether the match creator locked in the winner directly (press-and-
+  // hold) instead of letting the vote finish on its own — computed and
+  // stashed at vote time from the real tap headcount (session.votes_cast
+  // vs session.total_votes). Optional only because results saved before
+  // this field existed don't have it; those all predate the Base badge's
+  // 1.5x vote weight too, so re-deriving it from the (weighted) options
+  // below happens to still be correct for them specifically — see
+  // app/matches/[id]/page.tsx's own fallback.
+  wasForced?: boolean;
   winnerIndex: number;
   options: RankedBalanceResultOption[];
 };

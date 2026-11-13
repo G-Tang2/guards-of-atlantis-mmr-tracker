@@ -18,7 +18,7 @@ import {
 import { ScrollText, Swords, MessageCircle, Loader2, RotateCw, ChevronDown, Star, Scale, Ban, Pencil, X, Trash2, Camera, ImagePlus } from "lucide-react";
 import { RankedBalanceResult, RankedBalanceResultPlayer } from "@/lib/rankedBalanceResult";
 import { OptionCard } from "@/components/RankedVoteUI";
-import { VoteSessionPlayer } from "@/lib/rankedVoteSession";
+import { VoteSessionPlayer, formatVoteCount } from "@/lib/rankedVoteSession";
 import {
   buildFirstHeroWinMap,
   isFirstHeroWinMatch,
@@ -298,9 +298,17 @@ function RankedBalanceResultSection({ result }: { result: RankedBalanceResult })
   const hasFullPlayerData = result.options.every((option) =>
     [...option.atlantis, ...option.titans].every((p) => typeof p.mmr === "number"),
   );
+  // result.wasForced is captured at vote time from the real tap headcount
+  // (see its own comment in lib/rankedBalanceResult.ts) — results saved
+  // before that field existed fall back to comparing the (weighted)
+  // option votes against totalVotes instead, which happens to still be
+  // correct for them specifically since they all predate the Base badge's
+  // 1.5x vote weight (every tap was worth exactly 1, so the weighted sum
+  // and the real headcount were always the same number).
   const votesCast = result.options.reduce((sum, o) => sum + o.votes, 0);
   const wasForced =
-    !result.skippedVoting && !result.chooseRoundSkipped && votesCast < result.totalVotes;
+    result.wasForced ??
+    (!result.skippedVoting && !result.chooseRoundSkipped && votesCast < result.totalVotes);
   const toVotePlayer = (p: RankedBalanceResultPlayer): VoteSessionPlayer => ({
     id: p.id,
     name: p.name,
@@ -329,12 +337,12 @@ function RankedBalanceResultSection({ result }: { result: RankedBalanceResult })
               <>
                 {!result.skippedVoting && !result.chooseRoundSkipped && !option.banned && !wasForced && (
                   <span className="vote-results-count">
-                    {option.votes} of {result.totalVotes} votes
+                    {formatVoteCount(option.votes)} of {result.totalVotes} votes
                   </span>
                 )}
                 {result.wantsBan && option.banVotes !== undefined && (
                   <span className="vote-results-count">
-                    {option.banVotes} of {result.totalVotes} ban votes
+                    {formatVoteCount(option.banVotes)} of {result.totalVotes} ban votes
                   </span>
                 )}
               </>

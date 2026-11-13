@@ -22,6 +22,7 @@ import {
   totalVotesFromPlayerIds,
   sortBannedLast,
   votedFully,
+  formatVoteCount,
   incrementBanVote,
   undoBanVote,
   settleBanIfComplete,
@@ -372,7 +373,11 @@ function TeamsVotePageInner() {
     if (!session) return;
     const voterId = armedBaseVoterId ?? undefined;
     const before = session;
-    const updated = await incrementChooseVote(before, index, voterId);
+    // recordPick: false — this tap needs voterId for its 1.5x weight and
+    // to mark this Base owner as having voted, but which option they
+    // picked must stay anonymous (see incrementChooseVote's own comment);
+    // only a genuine shareable-link voter's tap records a pick.
+    const updated = await incrementChooseVote(before, index, voterId, false);
     if (updated) setSession(updated);
     showConfirmationThen(
       async () => {
@@ -383,7 +388,7 @@ function TeamsVotePageInner() {
       async () => {
         setArmedBaseVoterId(null);
         if (!updated) return;
-        const reverted = await undoChooseVote(updated, index, voterId);
+        const reverted = await undoChooseVote(updated, index, voterId, false);
         if (reverted) setSession(reverted);
       },
     );
@@ -393,7 +398,8 @@ function TeamsVotePageInner() {
     if (!session) return;
     const voterId = armedBaseVoterId ?? undefined;
     const before = session;
-    const updated = await incrementBanVote(before, index, voterId);
+    // recordPick: false — see castVote's own comment above.
+    const updated = await incrementBanVote(before, index, voterId, false);
     if (updated) setSession(updated);
     showConfirmationThen(
       async () => {
@@ -404,7 +410,7 @@ function TeamsVotePageInner() {
       async () => {
         setArmedBaseVoterId(null);
         if (!updated) return;
-        const reverted = await undoBanVote(updated, index, voterId);
+        const reverted = await undoBanVote(updated, index, voterId, false);
         if (reverted) setSession(reverted);
       },
     );
@@ -455,6 +461,11 @@ function TeamsVotePageInner() {
       wantsBan: session.wants_ban === true,
       skippedVoting: session.skipped_voting,
       chooseRoundSkipped: session.choose_round_skipped,
+      // Captured from the real tap headcount now, while it's still
+      // available — see wasForced's own comment in lib/rankedBalanceResult.ts
+      // on why the match page can't safely re-derive this once a Base
+      // badge owner's 1.5x weight is involved.
+      wasForced,
       winnerIndex: session.winner_index,
       options: session.splits.map((split, i) => ({
         atlantis: split.atlantis.map((p) => ({ id: p.id, name: p.name, mmr: p.mmr, avatar_url: p.avatar_url ?? null })),
@@ -620,7 +631,7 @@ function TeamsVotePageInner() {
               banned
               headExtra={
                 <span className="vote-results-count">
-                  {session.ban_votes[i]} of {session.total_votes} ban votes
+                  {formatVoteCount(session.ban_votes[i])} of {session.total_votes} ban votes
                 </span>
               }
             />
@@ -854,7 +865,7 @@ function TeamsVotePageInner() {
                     !session.choose_round_skipped &&
                     !wasForced ? (
                       <span className="vote-results-count">
-                        {session.votes[i]} of {session.total_votes} votes
+                        {formatVoteCount(session.votes[i])} of {session.total_votes} votes
                       </span>
                     ) : undefined
                   }
