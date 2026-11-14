@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { rankedBalancedSplits, mmrBalancedSplits, MAX_SKILL_POINT_DIFF } from "@/lib/rankedBalance";
+import { rankedBalancedSplits, mmrBalancedSplits, fitExpectedMmrBySkill, MAX_SKILL_POINT_DIFF, SkillMmrFit } from "@/lib/rankedBalance";
+
+// A flat fit (every skill tier "expected" at the same MMR) — used by
+// tests in the first describe block below, where every player actually
+// sits at that same MMR too, so the composite weight's MMR residual is
+// always exactly 0 and these behave exactly like the pre-composite,
+// skill-points-only splitter.
+const FLAT_FIT: SkillMmrFit = { slope: 0, intercept: 1000 };
 
 describe("mmrBalancedSplits", () => {
   // 4 players, MMR chosen so all 3 possible 2-vs-2 partitions have a
@@ -124,7 +131,7 @@ describe("rankedBalancedSplits (regression after extracting the shared weighted-
       { id: "1", name: "Keith", mmr: 1000 },
       { id: "2", name: "Zzz", mmr: 1000 },
     ];
-    expect(rankedBalancedSplits(pool, 4)).toEqual([]);
+    expect(rankedBalancedSplits(pool, 4, FLAT_FIT)).toEqual([]);
   });
 
   it("still returns balanced options when skill points are close enough", () => {
@@ -135,7 +142,7 @@ describe("rankedBalancedSplits (regression after extracting the shared weighted-
       { id: "3", name: "Zzz", mmr: 1000 },
       { id: "4", name: "Yyy", mmr: 1000 },
     ];
-    const splits = rankedBalancedSplits(pool, 4);
+    const splits = rankedBalancedSplits(pool, 4, FLAT_FIT);
     expect(splits.length).toBeGreaterThan(0);
     splits.forEach((split) => {
       expect(Math.abs(split.atlantis.length - split.titans.length)).toBeLessThanOrEqual(1);
@@ -149,60 +156,120 @@ describe("rankedBalancedSplits (regression after extracting the shared weighted-
   });
 });
 
-describe("rankedBalancedSplits composite weight (skill points nudged by pool-relative MMR)", () => {
+describe("rankedBalancedSplits composite weight (skill points nudged by skill-tier-relative MMR)", () => {
+  // expectedMmr(skill) = 20*skill + 1000, so skill 0 (unranked) expects
+  // 1000 and skill 10 expects 1200 — a fit the tests below pick deviations
+  // against directly, rather than relying on an implicit pool average.
+  const fit: SkillMmrFit = { slope: 20, intercept: 1000 };
+
   it("breaks a skill-points tie using MMR once both players are unranked", () => {
     // Neither name is in SKILL_RANK_POINTS, so both default to 0 skill
-    // points — pure skill weighting would call this a perfectly even
-    // (diff 0) split regardless of MMR. Pool average is 1000, so Alice
-    // sits +150 MMR above it and Bob -150 below: at the documented 100
-    // MMR-per-skill-point rate, that's a +1.5/-1.5 nudge each, a real (and
-    // correctly detected) diff of 3 instead of 0.
+    // points, whose expected MMR is the fit's flat intercept (1000) —
+    // pure skill weighting would call this a perfectly even (diff 0)
+    // split regardless of MMR. Alice sits +150 MMR above that and Bob
+    // -150 below: at the documented 100 MMR-per-skill-point rate, that's
+    // a +1.5/-1.5 nudge each, a real (and correctly detected) diff of 3
+    // instead of 0.
     const pool = [
       { id: "1", name: "Alice", mmr: 1150 },
       { id: "2", name: "Bob", mmr: 850 },
     ];
-    const splits = rankedBalancedSplits(pool, 4);
+    const splits = rankedBalancedSplits(pool, 4, fit);
     expect(splits).toHaveLength(1);
   });
 
   it("rejects a split that's skill-tied but badly MMR-lopsided, where the old skill-only weighting would have allowed it", () => {
-    // Same idea, stretched further: a 300/-300 MMR gap around the pool
-    // average nudges each side's weight by a full 3 points either way —
-    // a 6-point total diff, well past MAX_SKILL_POINT_DIFF's cutoff of 4,
-    // so this composite-balanced "tie" is correctly refused rather than
-    // offered as a fake "perfectly balanced" split.
+    // Same idea, stretched further: a 300/-300 MMR gap around their
+    // shared expected MMR (1000, both unranked) nudges each side's weight
+    // by a full 3 points either way — a 6-point total diff, well past
+    // MAX_SKILL_POINT_DIFF's cutoff of 4, so this composite-balanced "tie"
+    // is correctly refused rather than offered as a fake "perfectly
+    // balanced" split.
     const pool = [
       { id: "1", name: "Alice", mmr: 1300 },
       { id: "2", name: "Bob", mmr: 700 },
     ];
-    expect(rankedBalancedSplits(pool, 4)).toEqual([]);
+    expect(rankedBalancedSplits(pool, 4, fit)).toEqual([]);
   });
 
-  it("still lets a hand-assigned skill rank dominate a genuinely modest MMR gap", () => {
+  it("still lets a hand-assigned skill rank dominate a genuinely modest MMR disagreement", () => {
     // "keith" (10) vs "stella" (2) is an 8-point skill gap on its own —
-    // already past MAX_SKILL_POINT_DIFF. A ±150 MMR gap (a tight, typical
-    // session spread) nudges each side by ±1.5, narrowing the gap to 5 —
-    // still over the cutoff, so the hand-curated judgment still wins here.
+    // already past MAX_SKILL_POINT_DIFF. Their expected MMRs under `fit`
+    // are 1200 and 1040; Keith sits 150 below his (underperforming) and
+    // Stella 150 above hers (overperforming), nudging each by ∓1.5 and
+    // narrowing the gap to 5 — still over the cutoff, so the hand-curated
+    // judgment still wins here.
     const pool = [
-      { id: "1", name: "Keith", mmr: 1150 },
-      { id: "2", name: "Stella", mmr: 850 },
+      { id: "1", name: "Keith", mmr: 1050 },
+      { id: "2", name: "Stella", mmr: 1190 },
     ];
-    expect(rankedBalancedSplits(pool, 4)).toEqual([]);
+    expect(rankedBalancedSplits(pool, 4, fit)).toEqual([]);
   });
 
   it("lets a big enough MMR disagreement override even a large skill gap — the real tradeoff of a smaller MMR_POINTS_PER_SKILL_POINT", () => {
     // Same 8-point skill gap as above, but stretched to a ±300 MMR
-    // disagreement (Keith underperforming his rank, Stella overperforming
-    // hers) — at the 100 MMR-per-skill-point rate that's a ±3 nudge each,
-    // narrowing the 8-point skill gap to 2, which now clears
-    // MAX_SKILL_POINT_DIFF. Unlike the ±150 case above, here the hand-
-    // curated judgment is overridden: a smaller divisor makes MMR a
-    // stronger signal, so it takes less MMR disagreement to do this than
-    // it used to (a ±300 gap was still blocked at the old 150 rate).
+    // disagreement from each one's own expected MMR (Keith underperforming
+    // his rank, Stella overperforming hers) — at the 100 MMR-per-skill-
+    // point rate that's a ∓3 nudge each, narrowing the 8-point skill gap
+    // to 2, which now clears MAX_SKILL_POINT_DIFF. Unlike the modest case
+    // above, here the hand-curated judgment is overridden.
     const pool = [
-      { id: "1", name: "Keith", mmr: 700 },
-      { id: "2", name: "Stella", mmr: 1300 },
+      { id: "1", name: "Keith", mmr: 900 },
+      { id: "2", name: "Stella", mmr: 1340 },
     ];
-    expect(rankedBalancedSplits(pool, 4)).toHaveLength(1);
+    expect(rankedBalancedSplits(pool, 4, fit)).toHaveLength(1);
+  });
+});
+
+describe("fitExpectedMmrBySkill", () => {
+  it("fits a clean line through a sample with an exact linear relationship", () => {
+    // skill 10 -> 1200, skill 2 -> 1040: a perfect line of slope 20,
+    // intercept 1000 (y = 20x + 1000) through these two points.
+    const fit = fitExpectedMmrBySkill([
+      { name: "Keith", mmr: 1200, matchesPlayed: 10 },
+      { name: "Stella", mmr: 1040, matchesPlayed: 10 },
+    ]);
+    expect(fit.slope).toBeCloseTo(20);
+    expect(fit.intercept).toBeCloseTo(1000);
+  });
+
+  it("excludes unranked players — they're not a real 'skill 0' data point", () => {
+    // "Zzz" isn't in SKILL_RANK_POINTS at all; if it were included at
+    // skill 0, it would drag the fit toward a flatter line. With it
+    // correctly excluded, this is the same clean 2-point fit as above.
+    const fit = fitExpectedMmrBySkill([
+      { name: "Keith", mmr: 1200, matchesPlayed: 10 },
+      { name: "Stella", mmr: 1040, matchesPlayed: 10 },
+      { name: "Zzz", mmr: 1, matchesPlayed: 10 },
+    ]);
+    expect(fit.slope).toBeCloseTo(20);
+    expect(fit.intercept).toBeCloseTo(1000);
+  });
+
+  it("excludes players below the matches-played floor", () => {
+    // Same as above, but Stella's sample row hasn't played enough games
+    // yet — her still-noisy MMR shouldn't be allowed to skew the fit.
+    const fit = fitExpectedMmrBySkill([
+      { name: "Keith", mmr: 1200, matchesPlayed: 10 },
+      { name: "Stella", mmr: 99999, matchesPlayed: 1 },
+    ]);
+    expect(fit.slope).toBe(0);
+    expect(fit.intercept).toBe(1200);
+  });
+
+  it("falls back to a flat read of the sample's own average when only one skill tier qualifies", () => {
+    const fit = fitExpectedMmrBySkill([
+      { name: "Keith", mmr: 1100, matchesPlayed: 10 },
+      { name: "Garvin", mmr: 1300, matchesPlayed: 10 },
+    ]);
+    expect(fit.slope).toBe(0);
+    expect(fit.intercept).toBe(1200);
+  });
+
+  it("returns a flat zero fit for an empty or fully-disqualified sample", () => {
+    expect(fitExpectedMmrBySkill([])).toEqual({ slope: 0, intercept: 0 });
+    expect(
+      fitExpectedMmrBySkill([{ name: "Zzz", mmr: 1500, matchesPlayed: 50 }]),
+    ).toEqual({ slope: 0, intercept: 0 });
   });
 });

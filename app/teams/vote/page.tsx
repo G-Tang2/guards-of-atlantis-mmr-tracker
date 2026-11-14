@@ -12,7 +12,7 @@ import {
   RankedBalanceResult,
 } from "@/lib/rankedBalanceResult";
 import { LAST_BATTLE_STEP_STORAGE_KEY } from "@/lib/battleSession";
-import { rankedBalancedSplits, mmrBalancedSplits, MAX_SKILL_POINT_DIFF } from "@/lib/rankedBalance";
+import { rankedBalancedSplits, mmrBalancedSplits, fitExpectedMmrBySkill, MAX_SKILL_POINT_DIFF } from "@/lib/rankedBalance";
 import {
   VoteSessionRow,
   VoteSessionPlayer,
@@ -167,7 +167,13 @@ function TeamsVotePageInner() {
         .select("player_id, hero_id, team, match_number, matches!inner(winner)")
         .in("player_id", saved.playerIds)
         .not("hero_id", "is", null),
-    ]).then(([{ data, error }, { data: heroHistory }]) => {
+      // Every registered player's name/mmr/matches_played — not just
+      // tonight's pool — so Ranked Balance's skill-to-MMR fit (see
+      // fitExpectedMmrBySkill) reflects the league's actual current
+      // relationship instead of whatever handful of players happen to be
+      // voting tonight.
+      supabaseClient.from("players").select("name, mmr, matches_played"),
+    ]).then(([{ data, error }, { data: heroHistory }, { data: allPlayers }]) => {
       if (error || !data) {
         router.replace("/teams");
         return;
@@ -191,8 +197,13 @@ function TeamsVotePageInner() {
       const computedTotalVotes = totalVotesFromPlayerIds(saved.playerIds);
 
       const splitMethod: VoteSplitMethod = saved.method === "balanced" ? "balanced" : "ranked";
+      const skillMmrFit = fitExpectedMmrBySkill(
+        (allPlayers ?? []).map((p) => ({ name: p.name, mmr: p.mmr, matchesPlayed: p.matches_played ?? 0 })),
+      );
       const computedSplits =
-        splitMethod === "balanced" ? mmrBalancedSplits(resolved, 4) : rankedBalancedSplits(resolved, 4);
+        splitMethod === "balanced"
+          ? mmrBalancedSplits(resolved, 4)
+          : rankedBalancedSplits(resolved, 4, skillMmrFit);
       const allIndices = computedSplits.map((_, i) => i);
 
       const initial: Partial<VoteSessionRow> = {

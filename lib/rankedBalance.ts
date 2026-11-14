@@ -33,33 +33,82 @@ const SKILL_RANK_POINTS: Record<string, number> = {
   stella: 2,
 };
 
-const skillPointsOf = (p: SkillPlayer) =>
+const skillPointsOf = (p: { name: string }) =>
   SKILL_RANK_POINTS[p.name.toLowerCase()] ?? 0;
 
+// Same floor the leaderboard itself uses (MINIMUM_MATCHES_FOR_DISPLAY in
+// app/leaderboard/page.tsx) to hide a new player's still-noisy MMR —
+// reused here so the regression below isn't skewed by rookies whose MMR
+// hasn't settled yet.
+const MIN_FIT_SAMPLE_MATCHES = 5;
+
+export type SkillMmrSample = { name: string; mmr: number; matchesPlayed: number };
+export type SkillMmrFit = { slope: number; intercept: number };
+
+// Least-squares fit of MMR against hand-assigned skill points — mmr ≈
+// slope * skillPoints + intercept — over every sample with both a known
+// skill rank (see SKILL_RANK_POINTS; an unranked player is silently
+// excluded here, not treated as a real "skill 0" data point) and at
+// least MIN_FIT_SAMPLE_MATCHES recorded matches. Computed live by the
+// caller from the current full player list (see rankedBalancedSplits'
+// own comment on why), rather than a hardcoded constant, so it tracks
+// the league's actual skill-to-MMR relationship as it evolves instead of
+// drifting stale. Falls back to a flat 0-slope read of the sample's own
+// average MMR when fewer than 2 distinct skill tiers are present to fit
+// a real line through (or the sample is empty, reading 0).
+export function fitExpectedMmrBySkill(sample: SkillMmrSample[]): SkillMmrFit {
+  const points = sample
+    .filter((p) => skillPointsOf(p) > 0 && p.matchesPlayed >= MIN_FIT_SAMPLE_MATCHES)
+    .map((p) => ({ x: skillPointsOf(p), y: p.mmr }));
+
+  const n = points.length;
+  if (n === 0) return { slope: 0, intercept: 0 };
+
+  const sumX = points.reduce((s, p) => s + p.x, 0);
+  const sumY = points.reduce((s, p) => s + p.y, 0);
+  const sumXY = points.reduce((s, p) => s + p.x * p.y, 0);
+  const sumXX = points.reduce((s, p) => s + p.x * p.x, 0);
+  const denominator = n * sumXX - sumX * sumX;
+  if (denominator === 0) {
+    return { slope: 0, intercept: sumY / n };
+  }
+
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / n;
+  return { slope, intercept };
+}
+
 // How much one skill point is "worth" in MMR for the composite weight
-// below — every this-many MMR a player sits above/below the pool's own
-// average nudges their composite weight by about one skill point. Tuned
-// to be a real but secondary signal alongside hand-assigned skill points
-// (which span roughly 0-10): a tight group (a ~150-250 MMR spread, typical
-// of a real session) nudges by around a point each, while a genuinely
+// below — every this-many MMR a player sits above/below what their own
+// skill tier is expected to sit at (fit.slope * skill + fit.intercept)
+// nudges their composite weight by about one skill point. Tuned to be a
+// real but secondary signal alongside hand-assigned skill points (which
+// span roughly 0-10): a tight group (a ~150-250 MMR residual, typical of
+// a real session) nudges by around a point each, while a genuinely
 // lopsided one can swing several points — enough to catch a stale or
 // missing skill rank without overriding a deliberate one.
 const MMR_POINTS_PER_SKILL_POINT = 100;
 
-// Skill points nudged by how far above/below the pool's own average MMR
-// each player sits — pool-relative (not a fixed MMR anchor like 1000)
-// since this app's MMR only ever means anything relative to who's
-// actually being split tonight, not as an absolute scale. Hand-assigned
-// skill points stay the primary signal (an intentional, actively
-// maintained judgment call — see SKILL_RANK_POINTS), with MMR as a
-// secondary correction: it catches a split that looks fine on stale or
-// missing skill numbers but is actually lopsided by recent form, and it
-// gives an unranked player (skillPointsOf defaults to 0) a sensible
-// position from their MMR alone instead of flatly ranking them worst
-// regardless of how they've actually played.
-function compositeWeightOf(pool: MmrPlayer[]): (p: MmrPlayer) => number {
-  const poolAvgMmr = pool.reduce((s, p) => s + p.mmr, 0) / pool.length;
-  return (p) => skillPointsOf(p) + (p.mmr - poolAvgMmr) / MMR_POINTS_PER_SKILL_POINT;
+// Skill points nudged by how far above/below their OWN skill tier's
+// league-wide expected MMR a player sits — not the pool's own average,
+// which would double-penalize a low-skill player for MMR their skill
+// rank already predicts (a low-skill player sitting below a mixed pool's
+// average is expected, not a correction-worthy surprise), and would
+// inflate or deflate everyone's nudge just because of who else happens
+// to be in tonight's pool. Hand-assigned skill points stay the primary
+// signal (an intentional, actively maintained judgment call — see
+// SKILL_RANK_POINTS), with this residual as a secondary correction: it
+// catches a split that looks fine on stale or missing skill numbers but
+// is actually lopsided by recent form, and it gives an unranked player
+// (skillPointsOf defaults to 0) a sensible position from their MMR alone
+// instead of flatly ranking them worst regardless of how they've
+// actually played.
+function compositeWeightOf(fit: SkillMmrFit): (p: MmrPlayer) => number {
+  return (p) => {
+    const skill = skillPointsOf(p);
+    const expectedMmr = fit.slope * skill + fit.intercept;
+    return skill + (p.mmr - expectedMmr) / MMR_POINTS_PER_SKILL_POINT;
+  };
 }
 
 // A split whose two sides differ by this many composite weight points or
@@ -317,12 +366,17 @@ function balancedSplitsByWeight<T extends SkillPlayer>(
 }
 
 // Composite-weighted splits (hand-assigned skill points nudged by
-// pool-relative MMR — see compositeWeightOf) — options this lopsided on
-// paper aren't offered at all (see MAX_SKILL_POINT_DIFF).
+// skill-tier-relative MMR — see compositeWeightOf) — options this
+// lopsided on paper aren't offered at all (see MAX_SKILL_POINT_DIFF).
+// `fit` is live league-wide data, not a constant baked into this file —
+// see fitExpectedMmrBySkill's own comment — so the caller builds it from
+// its own current full player list (every registered player, not just
+// tonight's pool) and passes it in.
 export const rankedBalancedSplits = <T extends MmrPlayer>(
   pool: T[],
   count: number,
-): Split<T>[] => balancedSplitsByWeight(pool, compositeWeightOf(pool), count, MAX_SKILL_POINT_DIFF);
+  fit: SkillMmrFit,
+): Split<T>[] => balancedSplitsByWeight(pool, compositeWeightOf(fit), count, MAX_SKILL_POINT_DIFF);
 
 // MMR-weighted splits — the "Balanced" button's own voted variant. No
 // diff threshold: a plain MMR balance always has a real best option, even
