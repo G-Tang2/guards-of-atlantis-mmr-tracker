@@ -1007,7 +1007,7 @@ function NewMatchPageInner() {
             setWinCondition(null);
           }}
         >
-          <span className="goa-faction-label">Draw</span>
+          <span className="goa-faction-label">Voided</span>
         </button>
       </div>
 

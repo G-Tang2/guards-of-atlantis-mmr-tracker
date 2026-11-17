@@ -53,6 +53,9 @@ type TeamPanelProps = {
   players: MatchPlayer[];
   avgMmr: number;
   mmrChange: number;
+  // A voided match isn't meant to read as "this counted" — see
+  // components/TeamPanel.tsx's own hideMmrChange comment.
+  hideMmrChange?: boolean;
   highlightHeroId: string;
   onSelectPlayer: (id: string) => void;
 };
@@ -84,6 +87,7 @@ function TeamPanel({
   players,
   avgMmr,
   mmrChange,
+  hideMmrChange = false,
   highlightHeroId,
   onSelectPlayer,
 }: TeamPanelProps) {
@@ -91,10 +95,12 @@ function TeamPanel({
     <div className="goa-team">
       <div className="flex justify-between">
         <span className={`goa-team-head ${labelClass}`}>{label}</span>
-        <span className={`goa-delta ${mmrChange >= 0 ? "pos" : "neg"}`}>
-          {mmrChange >= 0 ? "▲" : "▼"}
-          {Math.abs(mmrChange)}
-        </span>
+        {!hideMmrChange && (
+          <span className={`goa-delta ${mmrChange >= 0 ? "pos" : "neg"}`}>
+            {mmrChange >= 0 ? "▲" : "▼"}
+            {Math.abs(mmrChange)}
+          </span>
+        )}
       </div>
       <div className="goa-avg-mmr">Avg {Math.round(avgMmr)} MMR</div>
       {players.map((p) => {
@@ -705,7 +711,7 @@ export default function HeroDetailPage() {
                 <span className="goa-match-winner">
                   <span className={`goa-winner-badge ${match.winner}`}>
                     {match.winner === "none"
-                      ? "DRAW"
+                      ? "VOIDED"
                       : `${match.winner.toUpperCase()} VICTORY`}
                   </span>
                 </span>
@@ -745,7 +751,7 @@ export default function HeroDetailPage() {
                       <span className="goa-hero-used-by-result">
                         (
                         {match.winner == "none"
-                          ? "Draw"
+                          ? "Voided"
                           : mp.team === match.winner
                             ? "Won"
                             : "Lost"}
@@ -763,6 +769,7 @@ export default function HeroDetailPage() {
                   players={atlantis}
                   avgMmr={match.atlantis_avg_mmr}
                   mmrChange={match.atlantis_mmr_change}
+                  hideMmrChange={match.winner === "none"}
                   highlightHeroId={heroId}
                   onSelectPlayer={(id) => router.push(`/players/${id}`)}
                 />
@@ -772,6 +779,7 @@ export default function HeroDetailPage() {
                   players={titans}
                   avgMmr={match.titans_avg_mmr}
                   mmrChange={match.titans_mmr_change}
+                  hideMmrChange={match.winner === "none"}
                   highlightHeroId={heroId}
                   onSelectPlayer={(id) => router.push(`/players/${id}`)}
                 />

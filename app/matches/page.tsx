@@ -428,9 +428,10 @@ export default function MatchHistoryPage() {
                     match.winner === "atlantis"
                       ? formatWinCondition(match.win_condition)
                       : match.winner === "none"
-                        ? "DRAW"
+                        ? "VOIDED"
                         : undefined
                   }
+                  hideMmrChange={match.winner === "none"}
                 />
                 <TeamPanel
                   label="Titans"
@@ -444,9 +445,10 @@ export default function MatchHistoryPage() {
                     match.winner === "titans"
                       ? formatWinCondition(match.win_condition)
                       : match.winner === "none"
-                        ? "DRAW"
+                        ? "VOIDED"
                         : undefined
                   }
+                  hideMmrChange={match.winner === "none"}
                 />
               </div>
             </div>

@@ -1031,7 +1031,7 @@ export default function MatchDetailPage() {
                 setEditWinCondition(null);
               }}
             >
-              <span className="goa-faction-label">Draw</span>
+              <span className="goa-faction-label">Voided</span>
             </button>
           </div>
 
@@ -1197,7 +1197,7 @@ export default function MatchDetailPage() {
       <div className={`goa-match-banner ${match.winner}`}>
         <div className="goa-match-banner-title">
           {match.winner === "none"
-            ? "Draw"
+            ? "Voided"
             : `${match.winner === "atlantis" ? "Atlantis" : "Titans"} Victory`}
         </div>
         {match.win_condition && (
@@ -1313,6 +1313,7 @@ export default function MatchDetailPage() {
             onSelectPlayer={goToProfile}
             showActionTime
             showAllBadges
+            hideMmrChange={match.winner === "none"}
           />
           <TeamPanel
             label="Titans"
@@ -1322,6 +1323,7 @@ export default function MatchDetailPage() {
             onSelectPlayer={goToProfile}
             showActionTime
             showAllBadges
+            hideMmrChange={match.winner === "none"}
           />
         </div>
       </div>

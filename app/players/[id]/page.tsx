@@ -1066,7 +1066,7 @@ export default function PlayerProfilePage() {
               <span className="goa-chart-footer-text">
                 ● <span className="goa-text-gain">Win</span> &nbsp; ●{" "}
                 <span className="goa-text-loss">Loss</span> &nbsp; ●{" "}
-                <span className="goa-text-draw">Draw</span>
+                <span className="goa-text-draw">Voided</span>
               </span>
               <span className="goa-chart-footer-text">
                 {totalMatches} battles charted
@@ -1179,7 +1179,7 @@ export default function PlayerProfilePage() {
                 onClick={() => router.push(`/matches/${m.id}`)}
               >
                 <div className={`goa-match-badge ${m.winner==="none" ? "draw" : won ? "win" : "loss"}`}>
-                  {m.winner==="none"? "Draw" : won ? "Victory" : "Defeat"}
+                  {m.winner==="none"? "Voided" : won ? "Victory" : "Defeat"}
                 </div>
 
                 <div className="goa-match-info">
@@ -1228,12 +1228,14 @@ export default function PlayerProfilePage() {
                 </div>
 
                 <div className="goa-match-delta-col">
-                  <div
-                    className={`goa-match-delta ${delta >= 0 ? "pos" : "neg"}`}
-                  >
-                    {delta >= 0 ? "▲" : "▼"}
-                    {Math.abs(delta)}
-                  </div>
+                  {m.winner !== "none" && (
+                    <div
+                      className={`goa-match-delta ${delta >= 0 ? "pos" : "neg"}`}
+                    >
+                      {delta >= 0 ? "▲" : "▼"}
+                      {Math.abs(delta)}
+                    </div>
+                  )}
                   {me.is_bounty && (
                     <span className="goa-bounty-badge">
                       <Coins size={10} />+{me.bounty_bonus ?? 5}
@@ -1419,7 +1421,7 @@ export default function PlayerProfilePage() {
                             className={`goa-match-badge ${m.winner === "none" ? "draw" : won ? "win" : "loss"}`}
                           >
                             {m.winner === "none"
-                              ? "Draw"
+                              ? "Voided"
                               : won
                                 ? "Victory"
                                 : "Defeat"}
@@ -1427,12 +1429,14 @@ export default function PlayerProfilePage() {
                           <span className="goa-hero-expanded-date">
                             #{m.match_number} · {formatDate(m.created_at)}
                           </span>
-                          <span
-                            className={`goa-hero-expanded-delta ${delta >= 0 ? "pos" : "neg"}`}
-                          >
-                            {delta >= 0 ? "▲" : "▼"}
-                            {Math.abs(delta)}
-                          </span>
+                          {m.winner !== "none" && (
+                            <span
+                              className={`goa-hero-expanded-delta ${delta >= 0 ? "pos" : "neg"}`}
+                            >
+                              {delta >= 0 ? "▲" : "▼"}
+                              {Math.abs(delta)}
+                            </span>
+                          )}
                         </div>
                       );
                     })}

@@ -23,12 +23,18 @@ type TeamPanelProps = {
   // Replaces the old standalone "TITANS VICTORY BY LIFE COUNTER" badge in
   // the match card's own header (see app/matches/page.tsx) — the winning
   // team's own panel gets a colored border instead of a separate banner,
-  // and resultLabel (e.g. "BY LIFE COUNTER", or "DRAW" on both panels for
-  // a draw) sits right-aligned on that same team's name row, so the
+  // and resultLabel (e.g. "BY LIFE COUNTER", or "VOIDED" on both panels
+  // for a draw) sits right-aligned on that same team's name row, so the
   // result reads as part of the team it belongs to rather than a
   // dedicated line that has to repeat which team won.
   isWinner?: boolean;
   resultLabel?: string;
+  // A voided match's base Elo delta is 0 (see DRAW_DELTA in lib/mmr.ts),
+  // but a rookie's own cushion can still apply on top of it — either way,
+  // a voided result isn't meant to read as "this counted," so the
+  // per-player before/after/delta line is hidden rather than shown with a
+  // number (zero or not) that'd suggest otherwise.
+  hideMmrChange?: boolean;
 };
 
 export function TeamPanel({
@@ -41,6 +47,7 @@ export function TeamPanel({
   showAllBadges = false,
   isWinner = false,
   resultLabel,
+  hideMmrChange = false,
 }: TeamPanelProps) {
   return (
     <div className={`goa-team ${labelClass}${isWinner ? " winner" : ""}`}>
@@ -84,15 +91,17 @@ export function TeamPanel({
                   </span>
                 )}
               </span>
-              <span className="goa-mmr-change">
-                {p.mmr_before} → {p.mmr_after}
-                <span
-                  className={`goa-player-delta ${delta >= 0 ? "pos" : "neg"}`}
-                >
-                  {delta >= 0 ? "▲" : "▼"}
-                  {Math.abs(delta)}
+              {!hideMmrChange && (
+                <span className="goa-mmr-change">
+                  {p.mmr_before} → {p.mmr_after}
+                  <span
+                    className={`goa-player-delta ${delta >= 0 ? "pos" : "neg"}`}
+                  >
+                    {delta >= 0 ? "▲" : "▼"}
+                    {Math.abs(delta)}
+                  </span>
                 </span>
-              </span>
+              )}
             </div>
             <span className="goa-display-hero">
               {hero && (
