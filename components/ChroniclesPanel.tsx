@@ -156,7 +156,10 @@ export function ChroniclesPanel() {
           const losses = p.losses ?? 0;
           const draws = p.draws ?? 0;
           const matches = p.matches_played ?? wins + losses + draws;
-          const winRate = matches === 0 ? 0 : (wins / matches) * 100;
+          // A voided match isn't a decisive result either way, so it
+          // shouldn't dilute the win rate like a loss would.
+          const decisiveMatches = wins + losses;
+          const winRate = decisiveMatches === 0 ? 0 : (wins / decisiveMatches) * 100;
           const badges = BADGES.filter((b) => p.badge_ids?.includes(b.id));
           return (
             <div

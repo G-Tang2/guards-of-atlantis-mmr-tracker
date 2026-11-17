@@ -318,7 +318,11 @@ export default function HeroDetailPage() {
     });
 
     const played = wins + losses + draws;
-    const winRate = played === 0 ? 0 : Math.round((wins / played) * 100);
+    // A voided match isn't a decisive result either way, so it shouldn't
+    // dilute the win rate like a loss would — `played` (the games-played
+    // count shown elsewhere) still includes it.
+    const decisive = wins + losses;
+    const winRate = decisive === 0 ? 0 : Math.round((wins / decisive) * 100);
     const players = Array.from(playerMap.values()).sort(
       (a, b) =>
         b.wins + b.losses + b.draws - (a.wins + a.losses + a.draws),
@@ -533,8 +537,10 @@ export default function HeroDetailPage() {
             ) : (
               <div className="goa-hero-players-list">
                 {stats.players.map(({ player, wins, losses, draws }) => {
-                  const played = wins + losses + draws;
-                  const pr = played === 0 ? 0 : Math.round((wins / played) * 100);
+                  // A voided match isn't a decisive result either way, so
+                  // it shouldn't dilute the win rate like a loss would.
+                  const decisive = wins + losses;
+                  const pr = decisive === 0 ? 0 : Math.round((wins / decisive) * 100);
                   const selected = selectedPlayerIds.has(player.id);
                   return (
                     <div
@@ -577,8 +583,10 @@ export default function HeroDetailPage() {
                 {matchupStats.map(({ opponentHeroId, wins, losses, draws }) => {
                   const opponentHero = getHero(opponentHeroId);
                   if (!opponentHero) return null;
-                  const played = wins + losses + draws;
-                  const wr = played === 0 ? 0 : Math.round((wins / played) * 100);
+                  // A voided match isn't a decisive result either way, so
+                  // it shouldn't dilute the win rate like a loss would.
+                  const decisive = wins + losses;
+                  const wr = decisive === 0 ? 0 : Math.round((wins / decisive) * 100);
                   const selected = selectedMatchupHeroIds.has(opponentHeroId);
                   return (
                     <div

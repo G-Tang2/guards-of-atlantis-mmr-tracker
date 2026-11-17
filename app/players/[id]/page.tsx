@@ -618,12 +618,17 @@ export default function PlayerProfilePage() {
       }
 
       const total = w + l + d;
+      // A voided match isn't a decisive result either way, so it
+      // shouldn't dilute the win rate like a loss would — `total`/
+      // `totalMatches` (the games-played count shown elsewhere) still
+      // includes it.
+      const decisive = w + l;
       return {
         wins: w,
         losses: l,
         draws: d,
         totalMatches: total,
-        winRate: total === 0 ? 0 : Math.round((w / total) * 100),
+        winRate: decisive === 0 ? 0 : Math.round((w / decisive) * 100),
         mmrTrend: trend,
         streak,
       };
@@ -741,13 +746,17 @@ export default function PlayerProfilePage() {
         const hero = getHero(heroId);
         if (!hero) return null;
         const played = wins + losses + draws;
+        // A voided match isn't a decisive result either way, so it
+        // shouldn't dilute the win rate like a loss would — `played`
+        // (the games-played count shown elsewhere) still includes it.
+        const decisive = wins + losses;
         return {
           hero,
           played,
           wins,
           losses,
           draws,
-          winRate: played === 0 ? 0 : Math.round((wins / played) * 100),
+          winRate: decisive === 0 ? 0 : Math.round((wins / decisive) * 100),
         };
       })
       .filter((x): x is HeroStat => x !== null)

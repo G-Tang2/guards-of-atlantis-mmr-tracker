@@ -314,7 +314,14 @@ export function computeFunStats(
 
   const duoEntries = Array.from(duoStats.values())
     .filter((d) => d.games >= minDuoGames)
-    .map((d) => ({ ...d, winRate: d.games === 0 ? 0 : (d.wins / d.games) * 100 }));
+    .map((d) => {
+      // A voided match isn't a decisive result either way, so it
+      // shouldn't dilute the win rate like a loss would — but it still
+      // counts toward the minDuoGames eligibility threshold above, same
+      // as any other game they played together.
+      const decisive = d.wins + d.losses;
+      return { ...d, winRate: decisive === 0 ? 0 : (d.wins / decisive) * 100 };
+    });
 
   const reignEntries: ReignEntry[] = Array.from(reignCounts.entries()).map(([playerId, count]) => ({ playerId, count }));
   const podiumEntries: PodiumEntry[] = Array.from(podiumCounts.entries()).map(([playerId, count]) => ({ playerId, count }));

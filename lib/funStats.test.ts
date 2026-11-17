@@ -119,11 +119,14 @@ describe("computeFunStats", () => {
 
   it("finds the best and worst duo once the games-together threshold is lowered to 2", () => {
     const { bestDuo, worstDuo } = computeFunStats(matches, 2);
-    // p2+p3: win (M3), draw (M4) -> 1/2 = 50%
-    // p1+p4: loss (M3), draw (M4) -> 0/2 = 0%
+    // p2+p3: win (M3), draw (M4) -> the draw doesn't count as a decisive
+    // result, so winRate is 1/1 = 100%, not 1/2 = 50%. The draw still
+    // counts toward the games-together eligibility threshold, though,
+    // which is why this pair qualifies at minDuoGames=2 at all.
+    // p1+p4: loss (M3), draw (M4) -> 0/1 = 0% either way.
     // Only 2 qualifying pairs exist, so both make the top-3 cut either way.
     expect(bestDuo).toHaveLength(2);
-    expect(bestDuo[0].winRate).toBe(50);
+    expect(bestDuo[0].winRate).toBe(100);
     expect(bestDuo[0].playerIds.sort()).toEqual(["p2", "p3"]);
 
     expect(worstDuo).toHaveLength(2);

@@ -118,10 +118,12 @@ export default function HeroesPage() {
         });
       });
 
-      const stats = Array.from(map.values()).map((s) => ({
-        ...s,
-        winRate: s.played === 0 ? 0 : Math.round((s.wins / s.played) * 100),
-      }));
+      const stats = Array.from(map.values()).map((s) => {
+        // A voided match isn't a decisive result either way, so it
+        // shouldn't dilute the win rate like a loss would.
+        const decisive = s.wins + s.losses;
+        return { ...s, winRate: decisive === 0 ? 0 : Math.round((s.wins / decisive) * 100) };
+      });
 
       setHeroStats(stats);
       setLoading(false);

@@ -169,7 +169,12 @@ export default function LeaderboardPage() {
         losses: stats.losses,
         draws: stats.draws,
         matches: stats.matches,
-        winRate: stats.matches === 0 ? 0 : (stats.wins / stats.matches) * 100,
+        // A voided match isn't a decisive result either way, so it
+        // shouldn't dilute the win rate like a loss would.
+        winRate:
+          stats.wins + stats.losses === 0
+            ? 0
+            : (stats.wins / (stats.wins + stats.losses)) * 100,
         badges: getCompletedBadges(stats.wonHeroIds),
       };
     });
